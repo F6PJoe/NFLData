@@ -1,12 +1,8 @@
 name: Fetch ADP Data
 
 on:
-  schedule:
-    # Runs daily at 8:00 AM Eastern (12:00 UTC)
-    # Adjust if needed: https://crontab.guru
-    - cron: '0 12 * * *'
   workflow_dispatch:
-    # Also allows manual trigger from the Actions tab anytime
+    # Triggered by cron-job.org daily, or manually from the Actions tab
 
 jobs:
   fetch:
