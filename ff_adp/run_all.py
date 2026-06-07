@@ -453,7 +453,8 @@ def push_to_sheets(rows: list):
 
     # Stamp the Update Date tab B2 with current date/time
     from datetime import datetime
-    now = datetime.now()
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo('America/New_York'))
     ts = f"{now.month}/{now.day} {now.strftime('%I').lstrip('0')}:{now.strftime('%M')}{now.strftime('%p')}"
     sheet.values().update(
         spreadsheetId=SHEET_ID,
