@@ -16,16 +16,17 @@ import csv, os, subprocess, sys, unicodedata, re
 from pathlib import Path
 
 # ── Column config ─────────────────────────────────────────────────────────────
+# (module, csv_file, adp_col, label, extra_args)
 SOURCES = [
-    ('fetch_sleeper_adp',   'sleeper_adp.csv',   'Sleeper',  'Sleeper'),
-    ('fetch_espn_adp',      'espn_adp.csv',      'ESPN',     'ESPN'),
-    ('fetch_yahoo_adp',     'yahoo_adp.csv',      'Yahoo!',   'Yahoo!'),
-    ('fetch_cbs_adp',       'cbs_adp.csv',        'CBS',      'CBS'),
-    ('fetch_fantrax_adp',   'fantrax_adp.csv',    'Fantrax',  'Fantrax'),
-    ('fetch_ffpc_adp',      'ffpc_adp.csv',       'FFPC',     'FFPC'),
-    ('fetch_nffc_adp',      'bb10s_adp.csv',      'BB10s',    'BB10s'),
-    ('fetch_nffc_adp',      'nffc_adp.csv',       'NFFC',     'NFFC'),
-    ('fetch_underdog_adp',  'underdog_adp.csv',   'Underdog', 'Underdog'),
+    ('fetch_sleeper_adp',   'sleeper_adp.csv',   'Sleeper',  'Sleeper',  []),
+    ('fetch_espn_adp',      'espn_adp.csv',      'ESPN',     'ESPN',     []),
+    ('fetch_yahoo_adp',     'yahoo_adp.csv',      'Yahoo!',   'Yahoo!',   []),
+    ('fetch_cbs_adp',       'cbs_adp.csv',        'CBS',      'CBS',      []),
+    ('fetch_fantrax_adp',   'fantrax_adp.csv',    'Fantrax',  'Fantrax',  []),
+    ('fetch_ffpc_adp',      'ffpc_adp.csv',       'FFPC',     'FFPC',     []),
+    ('fetch_nffc_adp',      'bb10s_adp.csv',      'BB10s',    'BB10s',    ['--contest', 'bb10s']),
+    ('fetch_nffc_adp',      'nffc_adp.csv',       'NFFC',     'NFFC',     []),
+    ('fetch_underdog_adp',  'underdog_adp.csv',   'Underdog', 'Underdog', []),
 ]
 
 OUTPUT_COLS = ['Player', 'Position(s)', 'Team',
@@ -247,19 +248,23 @@ def canonical_display_name(name: str) -> str:
 # ── Run fetchers ──────────────────────────────────────────────────────────────
 ALREADY_RUN = set()
 
-def run_fetcher(module_name: str):
-    if module_name in ALREADY_RUN:
+def run_fetcher(module_name: str, extra_args: list = None):
+    """Run a fetcher script once per unique (module, args) combination."""
+    extra_args = extra_args or []
+    run_key = f"{module_name}:{' '.join(extra_args)}"
+    if run_key in ALREADY_RUN:
         return
-    ALREADY_RUN.add(module_name)
+    ALREADY_RUN.add(run_key)
     script = Path(module_name + '.py')
     if not script.exists():
         print(f"  [SKIP] {script} not found")
         return
-    print(f"  Running {script} ...")
-    result = subprocess.run([sys.executable, str(script)],
+    label = f"{script}{' ' + ' '.join(extra_args) if extra_args else ''}"
+    print(f"  Running {label} ...")
+    result = subprocess.run([sys.executable, str(script)] + extra_args,
                             capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"  [WARN] {script} exited {result.returncode}")
+        print(f"  [WARN] {label} exited {result.returncode}")
         if result.stderr:
             print("  stderr:", result.stderr[-400:])
     else:
@@ -471,12 +476,12 @@ def main():
     print("=" * 60)
 
     print("\n[1/4] Fetching data from all sources...")
-    for module_name, csv_file, adp_col, label in SOURCES:
-        run_fetcher(module_name)
+    for module_name, csv_file, adp_col, label, extra_args in SOURCES:
+        run_fetcher(module_name, extra_args)
 
     print("\n[2/4] Loading & filtering CSVs...")
     all_data = []
-    for module_name, csv_file, adp_col, label in SOURCES:
+    for module_name, csv_file, adp_col, label, extra_args in SOURCES:
         data = load_csv(csv_file, adp_col)
         print(f"  {label:10s}: {len(data):>4} players  ({csv_file})")
         all_data.append((label, data))
