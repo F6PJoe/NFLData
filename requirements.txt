@@ -1,0 +1,8 @@
+requests
+beautifulsoup4
+lxml
+python-dotenv
+google-api-python-client
+google-auth
+yahoo-fantasy-api
+yahoo-oauth

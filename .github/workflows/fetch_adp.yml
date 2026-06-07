@@ -1,0 +1,63 @@
+name: Fetch ADP Data
+
+on:
+  schedule:
+    # Runs daily at 8:00 AM Eastern (12:00 UTC)
+    # Adjust if needed: https://crontab.guru
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+    # Also allows manual trigger from the Actions tab anytime
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r ff_adp/requirements.txt
+
+      - name: Write credentials
+        env:
+          YAHOO_CLIENT_ID:          ${{ secrets.YAHOO_CLIENT_ID }}
+          YAHOO_CLIENT_SECRET:      ${{ secrets.YAHOO_CLIENT_SECRET }}
+          YAHOO_REFRESH_TOKEN:      ${{ secrets.YAHOO_REFRESH_TOKEN }}
+          UNDERDOG_EMAIL:           ${{ secrets.UNDERDOG_EMAIL }}
+          UNDERDOG_PASSWORD:        ${{ secrets.UNDERDOG_PASSWORD }}
+          UNDERDOG_REFRESH_TOKEN:   ${{ secrets.UNDERDOG_REFRESH_TOKEN }}
+          FANTRAX_FX_RM:            ${{ secrets.FANTRAX_FX_RM }}
+          GOOGLE_SERVICE_ACCOUNT:   ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+        run: |
+          # Build .env inside the ff_adp subfolder
+          cat > ff_adp/.env <<EOF
+          YAHOO_CLIENT_ID=${YAHOO_CLIENT_ID}
+          YAHOO_CLIENT_SECRET=${YAHOO_CLIENT_SECRET}
+          YAHOO_REFRESH_TOKEN=${YAHOO_REFRESH_TOKEN}
+          UNDERDOG_EMAIL=${UNDERDOG_EMAIL}
+          UNDERDOG_PASSWORD=${UNDERDOG_PASSWORD}
+          UNDERDOG_REFRESH_TOKEN=${UNDERDOG_REFRESH_TOKEN}
+          FANTRAX_FX_RM=${FANTRAX_FX_RM}
+          EOF
+
+          # Write service account JSON from secret
+          echo "${GOOGLE_SERVICE_ACCOUNT}" > ff_adp/triple-baton-456523-e4-b9ec3cbd6e3d.json
+
+      - name: Run ADP fetcher
+        working-directory: ff_adp
+        run: python run_all.py
+
+      - name: Upload CSVs as artifact (optional — for debugging)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adp-csvs
+          path: 'ff_adp/*_adp.csv'
+          retention-days: 7

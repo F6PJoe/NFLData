@@ -1,0 +1,26 @@
+# Credentials — never commit these
+.env
+*.json
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Output CSVs (regenerated on each run)
+*_adp.csv
+combined_adp.csv
+
+# Probe/debug scripts (one-off helpers, not needed in repo)
+probe_*.py
+check_*.py
+
+# OS junk
+.DS_Store
+Thumbs.db
