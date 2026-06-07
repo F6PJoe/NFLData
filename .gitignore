@@ -1,26 +1,44 @@
-# Credentials — never commit these
+# ── Credentials — never commit these ─────────────────────────────────────────
 .env
 *.json
 
-# Virtual environment
+# ── Virtual environment ───────────────────────────────────────────────────────
 .venv/
 venv/
 env/
+ENV/
+env.bak/
+venv.bak/
 
-# Python cache
+# ── Python cache ──────────────────────────────────────────────────────────────
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[codz]
+*$py.class
+*.so
 
-# Output CSVs (regenerated on each run)
+# ── Output CSVs (regenerated on each run) ────────────────────────────────────
 *_adp.csv
 combined_adp.csv
 
-# Probe/debug scripts (one-off helpers, not needed in repo)
+# ── Probe/debug scripts (one-off helpers, not needed in repo) ─────────────────
 probe_*.py
 check_*.py
 
-# OS junk
+# ── Distribution / packaging ──────────────────────────────────────────────────
+build/
+dist/
+*.egg-info/
+*.egg
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+.pytest_cache/
+.coverage
+htmlcov/
+
+# ── OS junk ───────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+
+# ── Tools ────────────────────────────────────────────────────────────────────
+.ruff_cache/
+.mypy_cache/
