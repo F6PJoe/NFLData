@@ -26,9 +26,6 @@ jobs:
           YAHOO_CLIENT_ID:          ${{ secrets.YAHOO_CLIENT_ID }}
           YAHOO_CLIENT_SECRET:      ${{ secrets.YAHOO_CLIENT_SECRET }}
           YAHOO_REFRESH_TOKEN:      ${{ secrets.YAHOO_REFRESH_TOKEN }}
-          UNDERDOG_EMAIL:           ${{ secrets.UNDERDOG_EMAIL }}
-          UNDERDOG_PASSWORD:        ${{ secrets.UNDERDOG_PASSWORD }}
-          UNDERDOG_REFRESH_TOKEN:   ${{ secrets.UNDERDOG_REFRESH_TOKEN }}
           FANTRAX_FX_RM:            ${{ secrets.FANTRAX_FX_RM }}
           GOOGLE_SERVICE_ACCOUNT:   ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
         run: |
@@ -37,9 +34,6 @@ jobs:
           YAHOO_CLIENT_ID=${YAHOO_CLIENT_ID}
           YAHOO_CLIENT_SECRET=${YAHOO_CLIENT_SECRET}
           YAHOO_REFRESH_TOKEN=${YAHOO_REFRESH_TOKEN}
-          UNDERDOG_EMAIL=${UNDERDOG_EMAIL}
-          UNDERDOG_PASSWORD=${UNDERDOG_PASSWORD}
-          UNDERDOG_REFRESH_TOKEN=${UNDERDOG_REFRESH_TOKEN}
           FANTRAX_FX_RM=${FANTRAX_FX_RM}
           EOF
 

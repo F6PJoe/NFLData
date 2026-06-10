@@ -1,13 +1,13 @@
 """
 fetch_underdog_adp.py
-Pull ADP from Underdog Fantasy's CSV download endpoint.
+Pull ADP from Underdog Fantasy's public rankings download endpoint.
 Outputs: underdog_adp.csv  (Player, Position(s), Team, Underdog)
+
+No login/auth required — the rankings CSV download endpoint is public
+and returns Underdog's default ADP-based rankings without any token.
 """
 
-import os, csv, io, re, requests
-from dotenv import load_dotenv, set_key
-
-load_dotenv('.env')
+import csv, io, requests, sys
 
 # ── Team name normalisation ───────────────────────────────────────────────────
 # Underdog returns full franchise names; convert to standard abbreviations.
@@ -43,44 +43,7 @@ def normalise_player_name(first: str, last: str) -> str:
     last  = last.strip()
     return f"{first} {last}".strip()
 
-# ── Auth ──────────────────────────────────────────────────────────────────────
-CLIENT_ID   = 'cQvYz1T2BAFbix4dYR37dyD9O0Thf1s6'
-AUTH0_URL   = 'https://login.underdogsports.com/oauth/token'
-
-def get_access_token():
-    refresh_token = os.environ.get('UNDERDOG_REFRESH_TOKEN', '')
-    if refresh_token:
-        r = requests.post(AUTH0_URL, json={
-            'grant_type':    'refresh_token',
-            'refresh_token': refresh_token,
-            'client_id':     CLIENT_ID,
-        }, timeout=30)
-        if r.status_code == 200:
-            data = r.json()
-            # Persist new refresh token if rotated
-            new_rt = data.get('refresh_token')
-            if new_rt and new_rt != refresh_token:
-                set_key('.env', 'UNDERDOG_REFRESH_TOKEN', new_rt)
-            return data['access_token']
-        print(f"Refresh token failed ({r.status_code}), trying password grant…")
-
-    email    = os.environ.get('UNDERDOG_EMAIL', '')
-    password = os.environ.get('UNDERDOG_PASSWORD', '')
-    r = requests.post(AUTH0_URL, json={
-        'grant_type': 'password',
-        'username':   email,
-        'password':   password,
-        'audience':   'https://api.underdogfantasy.com',
-        'client_id':  CLIENT_ID,
-        'scope':      'offline_access',
-    }, timeout=30)
-    if r.status_code != 200:
-        raise RuntimeError(f"Auth failed: {r.status_code} {r.text[:200]}")
-    data = r.json()
-    set_key('.env', 'UNDERDOG_REFRESH_TOKEN', data['refresh_token'])
-    return data['access_token']
-
-# ── Download endpoint ─────────────────────────────────────────────────────────
+# ── Public download endpoint ──────────────────────────────────────────────────
 SLATE_ID   = 'a9c04e81-1ace-4b16-a31d-4c725a47f16f'
 RANKING_ID = 'ccf300b0-9197-5951-bd96-cba84ad71e86'
 STYLE_ID   = '9e62863e-1b29-53e8-8aca-2aae06aaac5f'
@@ -93,20 +56,16 @@ DOWNLOAD_URL = (
     f'/{SLATE_ID}/{RANKING_ID}/{STYLE_ID}?{PARAMS}'
 )
 
-def fetch_csv(token):
-    headers = {
-        'Authorization': token,
-        'Accept':        'text/csv,*/*',
-        'client-type':   'web',
-        'Origin':        'https://app.underdogsports.com',
-        'Referer':       f'https://app.underdogsports.com/rankings/nfl/{SLATE_ID}',
-        'User-Agent':    ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-                          'AppleWebKit/537.36 (KHTML, like Gecko) '
-                          'Chrome/124.0.0.0 Safari/537.36'),
-    }
-    r = requests.get(DOWNLOAD_URL, headers=headers, timeout=30)
-    if r.status_code != 200:
-        raise RuntimeError(f"Download failed: {r.status_code} {r.text[:300]}")
+HEADERS = {
+    'Accept':     'text/csv,*/*',
+    'User-Agent': ('Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                    'AppleWebKit/537.36 (KHTML, like Gecko) '
+                    'Chrome/124.0.0.0 Safari/537.36'),
+}
+
+def fetch_csv():
+    r = requests.get(DOWNLOAD_URL, headers=HEADERS, timeout=30)
+    r.raise_for_status()
     return r.text
 
 # ── Parse CSV ─────────────────────────────────────────────────────────────────
@@ -151,7 +110,7 @@ def parse(raw_csv):
         try:
             adp_val = round(float(adp), 1)
         except ValueError:
-            continue
+            continue   # e.g. "-" for unranked players
         rows.append({'Player': name, 'Position(s)': pos, 'Team': team, 'Underdog': adp_val})
 
     return rows
@@ -160,22 +119,20 @@ def parse(raw_csv):
 OUT_FILE = 'underdog_adp.csv'
 
 def main():
-    print("Getting access token…")
-    token = get_access_token()
-    print("Token OK. Downloading CSV…")
-
-    raw = fetch_csv(token)
+    print("Downloading Underdog rankings CSV (public endpoint, no login)...")
+    try:
+        raw = fetch_csv()
+    except requests.RequestException as e:
+        sys.exit(f"Download failed: {e}")
     print(f"Downloaded {len(raw):,} chars")
-
-    # Show first 500 chars so we can verify format
-    print("--- raw preview ---")
-    print(raw[:500])
-    print("-------------------")
 
     rows = parse(raw)
     print(f"Parsed {len(rows)} players")
     if rows:
         print("Sample:", rows[:3])
+
+    if not rows:
+        sys.exit("No Underdog ADP data found.")
 
     with open(OUT_FILE, 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=['Player', 'Position(s)', 'Team', 'Underdog'])
