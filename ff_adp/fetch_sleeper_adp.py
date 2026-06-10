@@ -1,29 +1,32 @@
 #!/usr/bin/env python3
 """
-Pull Sleeper ADP from beatadp.com/platform-adp.
+Pull Sleeper ADP directly from Sleeper's own API.
 
-BeatADP aggregates real Sleeper draft data and publishes it as a
-server-rendered HTML table — no login, no API key, updated daily.
+api.sleeper.app/projections/nfl/{season} returns per-player projection
+records that include ADP fields (adp_std, adp_half_ppr, adp_ppr, ...).
+We use adp_ppr to match the PPR scoring used by most other sources in
+this project (NFFC, BB10s, FFPC, Underdog, ESPN).
 
-The table also has ESPN, Yahoo, Underdog, and FantasyPros columns
-but we only extract Sleeper here (other sources have dedicated scripts).
+Note: the underlying ADP numbers in this feed are sourced/labeled
+"rotowire" by Sleeper's API, but they are served directly from
+api.sleeper.app with no scraping or third-party aggregator site involved.
 
 Usage:
-    python fetch_sleeper_adp.py          # -> sleeper_adp.csv
+    python fetch_sleeper_adp.py            # -> sleeper_adp.csv
     python fetch_sleeper_adp.py -o my_sleeper.csv
+    python fetch_sleeper_adp.py --season 2026
 
-Requires: requests, beautifulsoup4, lxml
+Requires: requests
 """
 
 import argparse
 import csv
-import re
 import sys
+from datetime import datetime
 
 import requests
-from bs4 import BeautifulSoup
 
-URL = "https://www.beatadp.com/platform-adp"
+URL_TMPL = "https://api.sleeper.app/projections/nfl/{season}"
 
 HEADERS = {
     "User-Agent": (
@@ -31,69 +34,57 @@ HEADERS = {
         "AppleWebKit/537.36 (KHTML, like Gecko) "
         "Chrome/124.0.0.0 Safari/537.36"
     ),
-    "Accept": "text/html,application/xhtml+xml,*/*",
+    "Accept": "application/json",
 }
 
-# Column index in the table (0-based after rank col)
-# Headers: # | Player | Consensus | Sleeper | ESPN | Yahoo | Underdog | FantasyPros
-SLEEPER_COL = 3
+# Positions we care about (kickers excluded; DEF kept for DST normalisation)
+KEEP_POS = {"QB", "RB", "WR", "TE", "DEF"}
+
+ADP_FIELD = "adp_ppr"
 
 
-def fetch_html():
-    resp = requests.get(URL, headers=HEADERS, timeout=30)
+def fetch_data(season: str):
+    params = {"season_type": "regular", "order_by": ADP_FIELD}
+    resp = requests.get(URL_TMPL.format(season=season), params=params,
+                         headers=HEADERS, timeout=30)
     resp.raise_for_status()
-    return resp.text
+    return resp.json()
 
 
-def parse(html):
-    soup = BeautifulSoup(html, "lxml")
-    table = soup.find("table")
-    if not table:
-        sys.exit("No table found on beatadp.com — page structure may have changed.")
-
-    # Verify column positions from header row
-    headers = [th.get_text(strip=True) for th in table.find_all("th")]
-    print(f"Columns found: {headers}")
-    try:
-        sleeper_idx = headers.index("Sleeper")
-    except ValueError:
-        sys.exit(f"'Sleeper' column not found in headers: {headers}")
-
-    # Also grab player name and try to split team from it
-    # Player cell text is like "Bijan RobinsonATL" — team is the last 2-3 uppercase chars
+def parse(data):
     rows = []
-    for tr in table.find_all("tr")[1:]:   # skip header
-        tds = tr.find_all("td")
-        if len(tds) <= sleeper_idx:
+    for entry in data:
+        player = entry.get("player") or {}
+        pos = (player.get("position") or "").strip().upper()
+        if pos not in KEEP_POS:
             continue
 
-        # Player name + team are run together in td[1]
-        player_td = tds[1]
-        player_link = player_td.find("a")
-        full_text = player_td.get_text(strip=True)
-
-        # Try to get clean name from the link text
-        player_name = player_link.get_text(strip=True) if player_link else full_text
-        # Team is the remaining text after the player name
-        team = full_text.replace(player_name, "").strip()
-        # Clean up any non-alpha chars
-        team = re.sub(r"[^A-Z]", "", team)
-
-        # Position isn't in the table — we'll leave it blank;
-        # player matching in the sheet uses name anyway
-        adp_raw = tds[sleeper_idx].get_text(strip=True)
+        stats = entry.get("stats") or {}
+        adp = stats.get(ADP_FIELD)
+        if adp is None:
+            continue
         try:
-            adp = round(float(adp_raw), 2)
-        except ValueError:
-            continue  # skip players with no Sleeper ADP (shown as —)
-        if adp <= 0:
+            adp = float(adp)
+        except (TypeError, ValueError):
             continue
+
+        # 999 = no ADP available for this player from Sleeper's feed
+        if adp >= 999:
+            continue
+
+        first = (player.get("first_name") or "").strip()
+        last  = (player.get("last_name") or "").strip()
+        name  = f"{first} {last}".strip()
+        if not name:
+            continue
+
+        team = (player.get("team") or "").strip()
 
         rows.append({
-            "Player":      player_name,
-            "Position(s)": "",    # not available in this table
+            "Player":      name,
+            "Position(s)": "DST" if pos == "DEF" else pos,
             "Team":        team,
-            "Sleeper":     adp,
+            "Sleeper":     round(adp, 2),
         })
 
     rows.sort(key=lambda r: r["Sleeper"])
@@ -103,11 +94,13 @@ def parse(html):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-o", "--output", default="sleeper_adp.csv")
+    ap.add_argument("--season", default=str(datetime.now().year),
+                    help="NFL season year (default: current year)")
     args = ap.parse_args()
 
-    print("Fetching Sleeper ADP from beatadp.com...")
-    html  = fetch_html()
-    rows  = parse(html)
+    print(f"Fetching Sleeper {ADP_FIELD} from api.sleeper.app (season {args.season})...")
+    data = fetch_data(args.season)
+    rows = parse(data)
 
     if not rows:
         sys.exit("No Sleeper ADP data found.")
