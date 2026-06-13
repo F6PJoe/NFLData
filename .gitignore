@@ -19,6 +19,7 @@ __pycache__/
 # ── Output CSVs (regenerated on each run) ────────────────────────────────────
 *_adp.csv
 combined_adp.csv
+ff_draft_proj/*.csv
 
 # ── Probe/debug scripts (one-off helpers, not needed in repo) ─────────────────
 probe_*.py

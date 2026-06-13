@@ -1,0 +1,65 @@
+name: Fetch Draft Projections
+
+on:
+  workflow_dispatch:
+    # Triggered by cron-job.org, or manually from the Actions tab
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r ff_draft_proj/requirements.txt
+
+      - name: Write credentials
+        env:
+          FTN_EMAIL:           ${{ secrets.FTN_EMAIL }}
+          FTN_PASSWORD:        ${{ secrets.FTN_PASSWORD }}
+          DRAFTSHARKS_EMAIL:   ${{ secrets.DRAFTSHARKS_EMAIL }}
+          DRAFTSHARKS_PASSWORD: ${{ secrets.DRAFTSHARKS_PASSWORD }}
+          FANTASYDATA_EMAIL:   ${{ secrets.FANTASYDATA_EMAIL }}
+          FANTASYDATA_PASSWORD: ${{ secrets.FANTASYDATA_PASSWORD }}
+          FOR4FOR4_EMAIL:      ${{ secrets.FOR4FOR4_EMAIL }}
+          FOR4FOR4_PASSWORD:   ${{ secrets.FOR4FOR4_PASSWORD }}
+          FANTASYLIFE_EMAIL:   ${{ secrets.FANTASYLIFE_EMAIL }}
+          FANTASYLIFE_PASSWORD: ${{ secrets.FANTASYLIFE_PASSWORD }}
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+        run: |
+          # Build .env inside the ff_draft_proj subfolder
+          cat > ff_draft_proj/.env <<EOF
+          FTN_EMAIL=${FTN_EMAIL}
+          FTN_PASSWORD=${FTN_PASSWORD}
+          DRAFTSHARKS_EMAIL=${DRAFTSHARKS_EMAIL}
+          DRAFTSHARKS_PASSWORD=${DRAFTSHARKS_PASSWORD}
+          FANTASYDATA_EMAIL=${FANTASYDATA_EMAIL}
+          FANTASYDATA_PASSWORD=${FANTASYDATA_PASSWORD}
+          FOR4FOR4_EMAIL=${FOR4FOR4_EMAIL}
+          FOR4FOR4_PASSWORD=${FOR4FOR4_PASSWORD}
+          FANTASYLIFE_EMAIL=${FANTASYLIFE_EMAIL}
+          FANTASYLIFE_PASSWORD=${FANTASYLIFE_PASSWORD}
+          EOF
+
+          # Write service account JSON from secret
+          echo "${GOOGLE_SERVICE_ACCOUNT}" > ff_draft_proj/triple-baton-456523-e4-b9ec3cbd6e3d.json
+
+      - name: Run fetchers, build consensus, and push to Sheets
+        working-directory: ff_draft_proj
+        run: python run_all.py
+
+      - name: Upload CSVs as artifact (optional — for debugging)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: draft-projection-csvs
+          path: 'ff_draft_proj/*.csv'
+          retention-days: 7
