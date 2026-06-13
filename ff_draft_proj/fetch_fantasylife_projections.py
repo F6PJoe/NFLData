@@ -17,11 +17,12 @@ no visible REST endpoint), we sign in directly against Google's Identity
 Toolkit REST API using the app's public Firebase Web API key:
 
   POST https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword
-    ?key=AIzaSyAtYDLhL3ya9gIMYMKHE-9l4--GM6giL0I
+    ?key=<FANTASYLIFE_FIREBASE_API_KEY>
     {"email": ..., "password": ..., "returnSecureToken": true}
 
 This returns an idToken usable as the `bearer-token` header. Requires
-FANTASYLIFE_EMAIL/FANTASYLIFE_PASSWORD from a local .env (see .env.example).
+FANTASYLIFE_EMAIL/FANTASYLIFE_PASSWORD/FANTASYLIFE_FIREBASE_API_KEY from a
+local .env (see .env.example).
 
 Bye weeks come from ESPN's public proTeamSchedules endpoint, keyed off each
 player's team alias.
@@ -48,7 +49,6 @@ PROJECTIONS_URL = (f"{BASE}/api/datatables/projections?limit=65&offset={{offset}
                    "&scoringSystemId=1c56287f-23de-42ca-b077-6b5f09a8f5f1&rosterPositions={pos}"
                    "&projectedProvider=aggregate&projectionPeriod=seasonal&projectionType=avg&perGame=false")
 SCHEDULE_URL = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{year}?view=proTeamSchedules"
-FIREBASE_API_KEY = "AIzaSyAtYDLhL3ya9gIMYMKHE-9l4--GM6giL0I"
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                          "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
@@ -90,7 +90,8 @@ def _load_dotenv():
 def get_token():
     import requests
     resp = requests.post(
-        f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={FIREBASE_API_KEY}",
+        "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword"
+        f"?key={os.environ['FANTASYLIFE_FIREBASE_API_KEY']}",
         json={
             "email": os.environ["FANTASYLIFE_EMAIL"],
             "password": os.environ["FANTASYLIFE_PASSWORD"],

@@ -33,6 +33,7 @@ jobs:
           FOR4FOR4_PASSWORD:   ${{ secrets.FOR4FOR4_PASSWORD }}
           FANTASYLIFE_EMAIL:   ${{ secrets.FANTASYLIFE_EMAIL }}
           FANTASYLIFE_PASSWORD: ${{ secrets.FANTASYLIFE_PASSWORD }}
+          FANTASYLIFE_FIREBASE_API_KEY: ${{ secrets.FANTASYLIFE_FIREBASE_API_KEY }}
           GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
         run: |
           # Build .env inside the ff_draft_proj subfolder
@@ -47,6 +48,7 @@ jobs:
           FOR4FOR4_PASSWORD=${FOR4FOR4_PASSWORD}
           FANTASYLIFE_EMAIL=${FANTASYLIFE_EMAIL}
           FANTASYLIFE_PASSWORD=${FANTASYLIFE_PASSWORD}
+          FANTASYLIFE_FIREBASE_API_KEY=${FANTASYLIFE_FIREBASE_API_KEY}
           EOF
 
           # Write service account JSON from secret
