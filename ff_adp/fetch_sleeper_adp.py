@@ -42,13 +42,6 @@ KEEP_POS = {"QB", "RB", "WR", "TE", "DEF"}
 
 ADP_FIELD = "adp_ppr"
 
-ADP_FIELDS = {
-    "Sleeper_STD":  "adp_std",
-    "Sleeper_Half": "adp_half_ppr",
-    "Sleeper":      "adp_ppr",
-    "Sleeper_2QB":  "adp_2qb",
-}
-
 
 def fetch_data(season: str):
     params = {"season_type": "regular", "order_by": ADP_FIELD}
@@ -79,6 +72,14 @@ def parse(data):
         if adp >= 999:
             continue
 
+        # adp_2qb: Sleeper's 2QB/superflex ADP — 999 if not available
+        try:
+            adp_2qb = float(stats.get("adp_2qb") or 999)
+            if adp_2qb >= 999:
+                adp_2qb = 999.0
+        except (TypeError, ValueError):
+            adp_2qb = 999.0
+
         first = (player.get("first_name") or "").strip()
         last  = (player.get("last_name") or "").strip()
         name  = f"{first} {last}".strip()
@@ -87,19 +88,13 @@ def parse(data):
 
         team = (player.get("team") or "").strip()
 
-        record = {
+        rows.append({
             "Player":      name,
             "Position(s)": "DST" if pos == "DEF" else pos,
             "Team":        team,
-        }
-        for col, field in ADP_FIELDS.items():
-            try:
-                val = float(stats.get(field) or 999)
-            except (TypeError, ValueError):
-                val = 999.0
-            record[col] = round(val, 2) if val < 999 else 999.0
-
-        rows.append(record)
+            "Sleeper":     round(adp, 2),
+            "Sleeper_2QB": round(adp_2qb, 2),
+        })
 
     rows.sort(key=lambda r: r["Sleeper"])
     return rows
@@ -119,7 +114,7 @@ def main():
     if not rows:
         sys.exit("No Sleeper ADP data found.")
 
-    fieldnames = ["Player", "Position(s)", "Team", "Sleeper_STD", "Sleeper_Half", "Sleeper", "Sleeper_2QB"]
+    fieldnames = ["Player", "Position(s)", "Team", "Sleeper", "Sleeper_2QB"]
     with open(args.output, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
