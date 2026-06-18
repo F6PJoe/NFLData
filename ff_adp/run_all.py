@@ -195,7 +195,6 @@ FIRST_NAME_ALIASES = {
     'joseph':      'joe',
     'nicholas':    'nick',
     'samuel':      'sam',
-    'daniel':      'dan',
     'alexander':   'alex',
     'joshua':      'josh',
     'jonathan':    'jon',
