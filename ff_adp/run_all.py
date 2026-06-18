@@ -18,7 +18,8 @@ from pathlib import Path
 # ── Column config ─────────────────────────────────────────────────────────────
 # (module, csv_file, adp_col, label, extra_args)
 SOURCES = [
-    ('fetch_sleeper_adp',   'sleeper_adp.csv',   'Sleeper',  'Sleeper',  []),
+    ('fetch_sleeper_adp',   'sleeper_adp.csv',   'Sleeper',     'Sleeper',     []),
+    ('fetch_sleeper_adp',   'sleeper_adp.csv',   'Sleeper_2QB', 'Sleeper_2QB', []),  # 2QB/SF ADP, not in consensus
     ('fetch_espn_adp',      'espn_adp.csv',      'ESPN',     'ESPN',     []),
     ('fetch_yahoo_adp',     'yahoo_adp.csv',      'Yahoo!',   'Yahoo!',   []),
     ('fetch_cbs_adp',       'cbs_adp.csv',        'CBS',      'CBS',      []),
@@ -26,15 +27,19 @@ SOURCES = [
     ('fetch_ffpc_adp',      'ffpc_adp.csv',       'FFPC',     'FFPC',     []),
     ('fetch_nffc_adp',      'bb10s_adp.csv',      'BB10s',    'BB10s',    ['--contest', 'bb10s']),
     ('fetch_nffc_adp',      'nffc_adp.csv',       'NFFC',     'NFFC',     []),
+    ('fetch_nffc_adp',      'nffc_cutline_adp.csv', 'NFFC Cutline', 'NFFC Cutline', ['--contest', 'cutline']),
+    ('fetch_rts_adp',       'rts_adp.csv',        'RTSports', 'RTSports', []),
     ('fetch_underdog_adp',  'underdog_adp.csv',   'Underdog', 'Underdog', []),
 ]
 
 OUTPUT_COLS = ['Player', 'Position(s)', 'Team',
-               'Sleeper', 'ESPN', 'Yahoo!', 'CBS', 'Fantrax',
-               'NFL', 'FFPC', 'BB10s', 'NFFC', 'Underdog', 'Consensus']
+               'Sleeper', 'Sleeper_2QB', 'ESPN', 'Yahoo!', 'CBS', 'Fantrax',
+               'NFL', 'FFPC', 'BB10s', 'NFFC', 'NFFC Cutline', 'RTSports',
+               'Underdog', 'Consensus']
 
+# Sleeper_2QB is a reference column only — excluded from PPR consensus calculation
 SITE_COLS = [c for c in OUTPUT_COLS
-             if c not in ('Player', 'Position(s)', 'Team', 'NFL', 'Consensus')]
+             if c not in ('Player', 'Position(s)', 'Team', 'NFL', 'Sleeper_2QB', 'Consensus')]
 
 # ── Google Sheets config ──────────────────────────────────────────────────────
 SHEET_ID     = '1fQxZjVIHcvi41wDxGK13Sx4lD3odFV-DBVsNPg8pvyU'
@@ -176,6 +181,7 @@ def normalise_dst_name(raw: str) -> str:
 # ── First-name nickname map (common name → canonical short form) ──────────────
 # Maps the long/formal version to the short version used on most sites.
 FIRST_NAME_ALIASES = {
+    'chigoziem':   'chig',
     'cameron':     'cam',
     'christopher': 'chris',
     'matthew':     'matt',
@@ -235,8 +241,8 @@ def canonical_display_name(name: str) -> str:
     if not parts:
         return name
     first = FIRST_NAME_ALIASES.get(parts[0].lower(), parts[0])
-    # Preserve original capitalisation of the canonical short form
-    first = first.capitalize()
+    # Uppercase only the first character — .capitalize() would lowercase "A.J." → "A.j."
+    first = first[0].upper() + first[1:] if first else first
     result = (first + ' ' + parts[1]) if len(parts) > 1 else first
     # Apply explicit typo map (title-cased lookup)
     result_lower = result.lower()
@@ -394,6 +400,11 @@ def merge(all_data: list) -> list:
             v = site_vals.get(c)
             # 999 for missing/outlier — keeps sheet sorting working
             out[c] = round(v, 1) if v is not None else 999
+
+        # Reference column excluded from consensus — pass through raw value
+        raw_2qb = row.get('Sleeper_2QB')
+        out['Sleeper_2QB'] = round(float(raw_2qb), 1) if raw_2qb else 999
+
         out['Consensus'] = consensus if consensus is not None else ''
         rows.append(out)
 
