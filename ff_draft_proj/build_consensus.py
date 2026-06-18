@@ -75,6 +75,9 @@ NAME_ALIASES = {
     "andrew ogletree": "drew ogletree",
     "m valdes scantling": "marquez valdes scantling",
     "chigoziem okonkwo": "chig okonkwo",
+    "cameron ward": "cam ward",
+    "jamarion miller": "jam miller",
+    "nathaniel dell": "tank dell",
 }
 
 
