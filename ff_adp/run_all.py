@@ -37,6 +37,13 @@ OUTPUT_COLS = ['Player', 'Position(s)', 'Team',
                'NFL', 'FFPC', 'BB10s', 'NFFC', 'NFFC Cutline', 'RTSports',
                'Underdog', 'Consensus']
 
+# Columns written to Google Sheets — must match the header row already in the sheet.
+# Extra columns (Sleeper_2QB, NFFC Cutline, RTSports) stay in combined_adp.csv
+# for the cheatsheet but are NOT pushed to the public ADP Google Sheet tab.
+SHEET_COLS = ['Player', 'Position(s)', 'Team',
+              'Sleeper', 'ESPN', 'Yahoo!', 'CBS', 'Fantrax',
+              'NFL', 'FFPC', 'BB10s', 'NFFC', 'Underdog', 'Consensus']
+
 # Sleeper_2QB is a reference column only — excluded from PPR consensus calculation
 SITE_COLS = [c for c in OUTPUT_COLS
              if c not in ('Player', 'Position(s)', 'Team', 'NFL', 'Sleeper_2QB', 'Consensus')]
@@ -448,7 +455,7 @@ def push_to_sheets(rows: list):
     # column mapping. Add/rename columns in the sheet manually; script just fills data.
     values = []
     for r in rows:
-        values.append([r.get(col, '') for col in OUTPUT_COLS])
+        values.append([r.get(col, '') for col in SHEET_COLS])
 
     print(f"  Clearing data rows in '{SHEET_TAB}' (row 1 header preserved)...")
     sheet.values().clear(
