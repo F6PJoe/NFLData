@@ -73,6 +73,8 @@ NAME_ALIASES = {
     "mitchell tinsley": "mitch tinsley",
     "matthew hibner": "matt hibner",
     "andrew ogletree": "drew ogletree",
+    "m valdes scantling": "marquez valdes scantling",
+    "chigoziem okonkwo": "chig okonkwo",
 }
 
 
