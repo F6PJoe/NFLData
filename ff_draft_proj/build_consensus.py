@@ -78,6 +78,7 @@ NAME_ALIASES = {
     "cameron ward": "cam ward",
     "jamarion miller": "jam miller",
     "nathaniel dell": "tank dell",
+    "christopher brooks": "chris brooks",
 }
 
 
