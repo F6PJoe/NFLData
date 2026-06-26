@@ -12,13 +12,15 @@ Only outputs: QB, RB, WR, TE (offense) + K (kicker) + DST (team defense).
 Defense players are normalised to "<Nickname>" with position DST.
 """
 
-import csv, os, subprocess, sys, unicodedata, re
+import argparse, csv, os, subprocess, sys, unicodedata, re
 from pathlib import Path
 
 # ── Column config ─────────────────────────────────────────────────────────────
 # (module, csv_file, adp_col, label, extra_args)
 SOURCES = [
     ('fetch_sleeper_adp',   'sleeper_adp.csv',   'Sleeper',     'Sleeper',     []),
+    ('fetch_sleeper_adp',   'sleeper_adp.csv',   'Sleeper_STD', 'Sleeper_STD', []),  # STD scoring, not in consensus
+    ('fetch_sleeper_adp',   'sleeper_adp.csv',   'Sleeper_Half','Sleeper_Half',[]),  # Half-PPR, not in consensus
     ('fetch_sleeper_adp',   'sleeper_adp.csv',   'Sleeper_2QB', 'Sleeper_2QB', []),  # 2QB/SF ADP, not in consensus
     ('fetch_espn_adp',      'espn_adp.csv',      'ESPN',     'ESPN',     []),
     ('fetch_yahoo_adp',     'yahoo_adp.csv',      'Yahoo!',   'Yahoo!',   []),
@@ -33,7 +35,8 @@ SOURCES = [
 ]
 
 OUTPUT_COLS = ['Player', 'Position(s)', 'Team',
-               'Sleeper', 'Sleeper_2QB', 'ESPN', 'Yahoo!', 'CBS', 'Fantrax',
+               'Sleeper', 'Sleeper_STD', 'Sleeper_Half', 'Sleeper_2QB',
+               'ESPN', 'Yahoo!', 'CBS', 'Fantrax',
                'NFL', 'FFPC', 'BB10s', 'NFFC', 'NFFC Cutline', 'RTSports',
                'Underdog', 'Consensus']
 
@@ -44,13 +47,14 @@ SHEET_COLS = ['Player', 'Position(s)', 'Team',
               'Sleeper', 'ESPN', 'Yahoo!', 'CBS', 'Fantrax',
               'NFL', 'FFPC', 'BB10s', 'NFFC', 'Underdog', 'Consensus']
 
-# Sleeper_2QB is a reference column only — excluded from PPR consensus calculation
+# Sleeper format variants are reference columns only — only Sleeper (PPR) enters consensus
 SITE_COLS = [c for c in OUTPUT_COLS
-             if c not in ('Player', 'Position(s)', 'Team', 'NFL', 'Sleeper_2QB', 'Consensus')]
+             if c not in ('Player', 'Position(s)', 'Team', 'NFL',
+                          'Sleeper_STD', 'Sleeper_Half', 'Sleeper_2QB', 'Consensus')]
 
 # ── Google Sheets config ──────────────────────────────────────────────────────
 SHEET_ID     = '1fQxZjVIHcvi41wDxGK13Sx4lD3odFV-DBVsNPg8pvyU'
-SERVICE_ACCT = str(Path(__file__).parent / 'triple-baton-456523-e4-b9ec3cbd6e3d.json')
+SERVICE_ACCT = str(Path(__file__).parent.parent / 'triple-baton-456523-e4-b9ec3cbd6e3d.json')
 SHEET_TAB    = 'ADP'
 SHEET_RANGE  = f'{SHEET_TAB}!A1'
 
@@ -204,11 +208,12 @@ FIRST_NAME_ALIASES = {
     'samuel':      'sam',
     'alexander':   'alex',
     'joshua':      'josh',
-    'jonathan':    'jon',
     'timothy':     'tim',
     'anthony':     'tony',
     'steven':      'steve',
     'zachary':     'zach',
+    'kenny':       'kenneth',
+    'jon':         'jonathan',
 }
 
 # Explicit full-name aliases for typos / alternate spellings.
@@ -407,9 +412,10 @@ def merge(all_data: list) -> list:
             # 999 for missing/outlier — keeps sheet sorting working
             out[c] = round(v, 1) if v is not None else 999
 
-        # Reference column excluded from consensus — pass through raw value
-        raw_2qb = row.get('Sleeper_2QB')
-        out['Sleeper_2QB'] = round(float(raw_2qb), 1) if raw_2qb else 999
+        # Reference columns excluded from consensus — pass through raw values
+        for ref_col in ('Sleeper_STD', 'Sleeper_Half', 'Sleeper_2QB'):
+            raw = row.get(ref_col)
+            out[ref_col] = round(float(raw), 1) if raw else 999
 
         out['Consensus'] = consensus if consensus is not None else ''
         rows.append(out)
@@ -488,6 +494,11 @@ def push_to_sheets(rows: list):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--no-sheets", action="store_true",
+                     help="Skip pushing combined_adp.csv to the Google Sheet")
+    args = ap.parse_args()
+
     print("=" * 60)
     print("FF ADP Combined Runner")
     print("=" * 60)
@@ -520,8 +531,11 @@ def main():
         writer.writerows(rows)
     print(f"  Saved -> {out_file}")
 
-    print("\n[4/4] Pushing to Google Sheets...")
-    push_to_sheets(rows)
+    if not args.no_sheets:
+        print("\n[4/4] Pushing to Google Sheets...")
+        push_to_sheets(rows)
+    else:
+        print("\n[4/4] [SKIP] Pushing to Google Sheets (--no-sheets)")
 
     print("\n" + "=" * 60)
     print("Done!")
