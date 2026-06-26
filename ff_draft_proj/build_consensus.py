@@ -79,6 +79,7 @@ NAME_ALIASES = {
     "jamarion miller": "jam miller",
     "nathaniel dell": "tank dell",
     "christopher brooks": "chris brooks",
+    "kenny gainwell": "kenneth gainwell",
 }
 
 
