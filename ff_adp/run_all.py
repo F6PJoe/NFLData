@@ -54,7 +54,7 @@ SITE_COLS = [c for c in OUTPUT_COLS
 
 # ── Google Sheets config ──────────────────────────────────────────────────────
 SHEET_ID     = '1fQxZjVIHcvi41wDxGK13Sx4lD3odFV-DBVsNPg8pvyU'
-SERVICE_ACCT = str(Path(__file__).parent.parent / 'triple-baton-456523-e4-b9ec3cbd6e3d.json')
+SERVICE_ACCT = str(Path(__file__).parent / 'triple-baton-456523-e4-b9ec3cbd6e3d.json')
 SHEET_TAB    = 'ADP'
 SHEET_RANGE  = f'{SHEET_TAB}!A1'
 
