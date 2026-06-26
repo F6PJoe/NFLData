@@ -29,15 +29,16 @@ SOURCES = [
     ('fetch_ffpc_adp',      'ffpc_adp.csv',       'FFPC',     'FFPC',     []),
     ('fetch_nffc_adp',      'bb10s_adp.csv',      'BB10s',    'BB10s',    ['--contest', 'bb10s']),
     ('fetch_nffc_adp',      'nffc_adp.csv',       'NFFC',     'NFFC',     []),
-    ('fetch_nffc_adp',      'nffc_cutline_adp.csv', 'NFFC Cutline', 'NFFC Cutline', ['--contest', 'cutline']),
-    ('fetch_rts_adp',       'rts_adp.csv',        'RTSports', 'RTSports', []),
     ('fetch_underdog_adp',  'underdog_adp.csv',   'Underdog', 'Underdog', []),
 ]
 
+# NFFC Cutline and RTSports are only used by the separate ff_cheatsheet
+# project, which fetches them independently — this project (ADP -> Google
+# Sheet) doesn't reference those sources at all.
 OUTPUT_COLS = ['Player', 'Position(s)', 'Team',
                'Sleeper', 'Sleeper_STD', 'Sleeper_Half', 'Sleeper_2QB',
                'ESPN', 'Yahoo!', 'CBS', 'Fantrax',
-               'NFL', 'FFPC', 'BB10s', 'NFFC', 'NFFC Cutline', 'RTSports',
+               'NFL', 'FFPC', 'BB10s', 'NFFC',
                'Underdog', 'Consensus']
 
 # Columns written to Google Sheets — must match the header row already in the sheet.
