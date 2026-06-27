@@ -43,7 +43,10 @@ CSV_URL = ("https://www.fantasysharks.com/apps/bert/forecasts/projections.php"
            "?csv=1&Sort=&Segment={segment}&Position={pos}&scoring=2&League=&uid=4&uid2=&printable=")
 SCHEDULE_URL = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{year}?view=proTeamSchedules"
 
-HEADERS = {"User-Agent": "Mozilla/5.0 (personal projections tool)"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+}
 
 POSITION_IDS = {"QB": 1, "RB": 2, "WR": 4, "TE": 5}
 
