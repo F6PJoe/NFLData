@@ -89,7 +89,13 @@ def fetch_position(pos, year, league_id):
         table = soup.find("table")
         if table is None:
             break
-        trs = table.find("tbody").find_all("tr")
+        tbody = table.find("tbody")
+        # An offset past the end of the actual player list renders the
+        # table header with no <tbody> at all (not an empty one) — that's
+        # Yahoo's real "no more pages" signal here, same as `table is None`.
+        if tbody is None:
+            break
+        trs = tbody.find_all("tr")
         if not trs:
             break
 
