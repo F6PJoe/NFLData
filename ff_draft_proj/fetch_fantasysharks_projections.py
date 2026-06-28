@@ -1,62 +1,39 @@
 #!/usr/bin/env python3
 """
-Pull Fantasy Sharks' season-long (preseason/draft) "High-Precision" projections
-for QB/RB/WR/TE directly from their own bert/forecasts CSV export. No login
-needed.
+Pull Fantasy Sharks' season-long (preseason/draft) projections for QB/RB/WR/TE
+directly from their public CSV export, no login needed.
 
-Page (for finding the season's "Segment" id and column layout):
-  https://www.fantasysharks.com/apps/bert/forecasts/projections.php?Position=<POS>
-CSV export:
-  https://www.fantasysharks.com/apps/bert/forecasts/projections.php?csv=1&Sort=&Segment=<SEGMENT>&Position=<POS>&scoring=2&League=&uid=4&uid2=&printable=
+  https://www.fantasysharks.com/apps/Projections/SeasonProjections.php?pos=<POS>&format=csv
 
-Position ids: QB=1, RB=2, WR=4, TE=5. "Segment" is a season id that changes
-every year (e.g. 874 = "2026 NFL Season") — found by scraping the <select>
-options on the projections page for "<year> NFL Season".
-
-Fantasy Sharks doesn't report Pass Att... actually it does on this
-high-precision page ("Att" for QB). It does NOT report rush attempts for
-WR/TE, so those are left blank (same treatment as CBS leaving TE rush stats
-blank).
-
-Bye weeks come from ESPN's public proTeamSchedules endpoint (same one used by
-fetch_espn_projections.py) since this page doesn't include bye week.
+This is the simple/legacy CSV export. The site's other projections export
+(bert/forecasts/projections.php, used previously) started returning
+403 Forbidden when called from non-residential IPs (e.g. GitHub Actions
+runners) — confirmed it's IP-based blocking, not a User-Agent issue, since a
+realistic browser UA didn't help. This endpoint includes bye week directly
+(no separate ESPN schedule lookup needed) but does not report Pass Att (QB)
+or Targets (RB/WR/TE) — left blank for those fields, same treatment as other
+sources missing a stat.
 
 Usage:
     python fetch_fantasysharks_projections.py
-    python fetch_fantasysharks_projections.py --year 2026
 
 Requires: requests
 """
 
 import argparse
 import csv
-import datetime
 import io
-import json
-import re
 import sys
 
 import scoring
 
-PROJECTIONS_PAGE = "https://www.fantasysharks.com/apps/bert/forecasts/projections.php?Position=1"
-CSV_URL = ("https://www.fantasysharks.com/apps/bert/forecasts/projections.php"
-           "?csv=1&Sort=&Segment={segment}&Position={pos}&scoring=2&League=&uid=4&uid2=&printable=")
-SCHEDULE_URL = "https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{year}?view=proTeamSchedules"
+CSV_URL = "https://www.fantasysharks.com/apps/Projections/SeasonProjections.php?pos={pos}&format=csv"
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                   "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
 }
 
-POSITION_IDS = {"QB": 1, "RB": 2, "WR": 4, "TE": 5}
-
-ESPN_TEAM = {
-    0: "FA", 1: "ATL", 2: "BUF", 3: "CHI", 4: "CIN", 5: "CLE", 6: "DAL", 7: "DEN",
-    8: "DET", 9: "GB", 10: "TEN", 11: "IND", 12: "KC", 13: "LV", 14: "LAR",
-    15: "MIA", 16: "MIN", 17: "NE", 18: "NO", 19: "NYG", 20: "NYJ", 21: "PHI",
-    22: "ARI", 23: "PIT", 24: "LAC", 25: "SF", 26: "SEA", 27: "TB", 28: "WSH",
-    29: "CAR", 30: "JAX", 33: "BAL", 34: "HOU",
-}
 # Fantasy Sharks uses different team abbreviations than ESPN for some teams.
 TEAM_ALIASES = {
     "GBP": "GB", "KCC": "KC", "LVR": "LV", "NEP": "NE", "NOS": "NO",
@@ -75,51 +52,11 @@ OUT_COLUMNS = {
 }
 
 
-def num(text):
-    text = (text or "").replace(",", "").strip()
-    if not text or text == "-":
+def num(value):
+    value = (value or "").replace(",", "").strip()
+    if not value or value == "-":
         return 0.0
-    return float(text)
-
-
-def load_byes(year, json_file=None):
-    if json_file:
-        with open(json_file, encoding="utf-8") as f:
-            data = json.load(f)
-    else:
-        import requests
-        resp = requests.get(SCHEDULE_URL.format(year=year), headers=HEADERS, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-    teams = data.get("settings", {}).get("proTeams", []) or data.get("proTeams", [])
-    return {ESPN_TEAM.get(t["id"], ""): t.get("byeWeek", "") for t in teams if t["id"] in ESPN_TEAM}
-
-
-def find_segment(year, html_file=None):
-    if html_file:
-        with open(html_file, encoding="utf-8") as f:
-            html = f.read()
-    else:
-        import requests
-        resp = requests.get(PROJECTIONS_PAGE, headers=HEADERS, timeout=30)
-        resp.raise_for_status()
-        html = resp.text
-    for segment, label in re.findall(r'<option value="(\d+)"[^>]*>(\d{4}) NFL Season</option>', html):
-        if int(label) == year:
-            return segment
-    sys.exit(f"Could not find a '{year} NFL Season' segment on the projections page.")
-
-
-def get_csv(segment, pos_id, csv_file=None):
-    if csv_file:
-        with open(csv_file, encoding="utf-8") as f:
-            text = f.read()
-    else:
-        import requests
-        resp = requests.get(CSV_URL.format(segment=segment, pos=pos_id), headers=HEADERS, timeout=30)
-        resp.raise_for_status()
-        text = resp.text
-    return list(csv.DictReader(io.StringIO(text)))
+    return float(value)
 
 
 def format_name(name):
@@ -127,97 +64,96 @@ def format_name(name):
     if "," in name:
         last, first = name.split(",", 1)
         return f"{first.strip()} {last.strip()}"
-    return name
+    return name.strip()
 
 
-def parse_position(pos, rows, byes):
-    out = []
-    for row in rows:
-        name = format_name(row["Player Name"])
-        team = TEAM_ALIASES.get(row["Team"], row["Team"])
-        bye = byes.get(team, "")
+def fetch_csv(pos, csv_file=None):
+    if csv_file:
+        with open(csv_file, encoding="utf-8") as f:
+            text = f.read()
+    else:
+        import requests
+        resp = requests.get(CSV_URL.format(pos=pos), headers=HEADERS, timeout=30)
+        resp.raise_for_status()
+        text = resp.text
+    return list(csv.reader(io.StringIO(text)))
 
-        if pos == "QB":
-            s = {"pass_yds": num(row["Pass Yds"]), "pass_td": num(row["Pass TDs"]),
-                 "pass_int": num(row["Int"]), "rush_yds": num(row["Rush Yds"]),
-                 "rush_td": num(row["Rush TDs"]), "fum": num(row["Fum Lost"])}
-            out.append((scoring.qb_points(s), {
-                "QB": name, "Team": team, "Bye": bye,
-                "Pass Att": scoring.round2(num(row["Att"])),
-                "Pass Comp": scoring.round2(num(row["Comp"])),
-                "Pass Yds": scoring.round2(num(row["Pass Yds"])),
-                "Pass TD": scoring.round2(num(row["Pass TDs"])),
-                "Pass Int": scoring.round2(num(row["Int"])),
-                "Rush Att": scoring.round2(num(row["Rush"])),
-                "Rush Yds": scoring.round2(num(row["Rush Yds"])),
-                "Rush TD": scoring.round2(num(row["Rush TDs"])),
-                "Fumbles": scoring.round2(num(row["Fum Lost"])),
-            }))
-        elif pos == "RB":
-            s = {"rush_yds": num(row["Rush Yds"]), "rush_td": num(row["Rush TDs"]),
-                 "rec": num(row["Rec"]), "rec_yds": num(row["Rec Yds"]),
-                 "rec_td": num(row["Rec TDs"]), "fum": num(row["Fum Lost"])}
-            out.append((scoring.ppr_points(s), {
-                "RB": name, "Team": team, "Bye": bye,
-                "Rush Att": scoring.round2(num(row["Rush"])),
-                "Rush Yds": scoring.round2(num(row["Rush Yds"])),
-                "Rush TD": scoring.round2(num(row["Rush TDs"])),
-                "Targets": scoring.round2(num(row["Tgt"])),
-                "Rec": scoring.round2(num(row["Rec"])),
-                "Rec Yds": scoring.round2(num(row["Rec Yds"])),
-                "Rec TD": scoring.round2(num(row["Rec TDs"])),
-                "Fum": scoring.round2(num(row["Fum Lost"])),
-            }))
-        elif pos == "WR":
-            s = {"rush_yds": num(row["Rush Yds"]), "rush_td": num(row["Rush TDs"]),
-                 "rec": num(row["Rec"]), "rec_yds": num(row["Rec Yds"]),
-                 "rec_td": num(row["Rec TDs"]), "fum": num(row["Fum Lost"])}
-            out.append((scoring.ppr_points(s), {
-                "WR": name, "Team": team, "Bye": bye,
-                "Targets": scoring.round2(num(row["Tgt"])),
-                "Rec": scoring.round2(num(row["Rec"])),
-                "Rec Yds": scoring.round2(num(row["Rec Yds"])),
-                "Rec TD": scoring.round2(num(row["Rec TDs"])),
-                "Rush Att": "",
-                "Rush Yds": scoring.round2(num(row["Rush Yds"])),
-                "Rush TD": scoring.round2(num(row["Rush TDs"])),
-                "Fum": scoring.round2(num(row["Fum Lost"])),
-            }))
-        elif pos == "TE":
-            s = {"rec": num(row["Rec"]), "rec_yds": num(row["Rec Yds"]),
-                 "rec_td": num(row["Rec TDs"]), "fum": num(row["Fum Lost"])}
-            out.append((scoring.ppr_points(s), {
-                "TE": name, "Team": team, "Bye": bye,
-                "Targets": scoring.round2(num(row["Tgt"])),
-                "Rec": scoring.round2(num(row["Rec"])),
-                "Rec Yds": scoring.round2(num(row["Rec Yds"])),
-                "Rec TD": scoring.round2(num(row["Rec TDs"])),
-                "Rush Att": "",
-                "Rush Yds": scoring.round2(num(row["Rush Yds"])),
-                "Rush TD": scoring.round2(num(row["Rush TDs"])),
-            }))
 
-    out.sort(key=lambda r: r[0], reverse=True)
-    return [r for _, r in out]
+def build_record(pos, row):
+    # Columns (by position, no usable header names — several are duplicated
+    # across positions, e.g. "Yards"/"TDs" appear twice with different
+    # meanings): Rank, ADP, ID, Name, Team, Bye, <position-specific...>
+    name = format_name(row[3])
+    team = TEAM_ALIASES.get(row[4].upper(), row[4].upper())
+    bye = row[5]
+
+    if pos == "QB":
+        pass_comp, pass_yds, pass_td, pass_int = num(row[6]), num(row[7]), num(row[8]), num(row[9])
+        rush_yds, rush_td, fum = num(row[10]), num(row[11]), num(row[12])
+        s = {"pass_yds": pass_yds, "pass_td": pass_td, "pass_int": pass_int,
+             "rush_yds": rush_yds, "rush_td": rush_td, "fum": fum}
+        return scoring.qb_points(s), {
+            "QB": name, "Team": team, "Bye": bye,
+            "Pass Att": "", "Pass Comp": scoring.round2(pass_comp),
+            "Pass Yds": scoring.round2(pass_yds), "Pass TD": scoring.round2(pass_td),
+            "Pass Int": scoring.round2(pass_int), "Rush Att": "",
+            "Rush Yds": scoring.round2(rush_yds), "Rush TD": scoring.round2(rush_td),
+            "Fumbles": scoring.round2(fum),
+        }
+    elif pos == "RB":
+        rush_att, rush_yds, rush_td, fum = num(row[6]), num(row[7]), num(row[8]), num(row[9])
+        rec, rec_yds, rec_td = num(row[10]), num(row[11]), num(row[12])
+        s = {"rush_yds": rush_yds, "rush_td": rush_td, "rec": rec,
+             "rec_yds": rec_yds, "rec_td": rec_td, "fum": fum}
+        return scoring.ppr_points(s), {
+            "RB": name, "Team": team, "Bye": bye,
+            "Rush Att": scoring.round2(rush_att), "Rush Yds": scoring.round2(rush_yds),
+            "Rush TD": scoring.round2(rush_td), "Targets": "",
+            "Rec": scoring.round2(rec), "Rec Yds": scoring.round2(rec_yds),
+            "Rec TD": scoring.round2(rec_td), "Fum": scoring.round2(fum),
+        }
+    elif pos == "WR":
+        rec, rec_yds, rec_td = num(row[6]), num(row[7]), num(row[8])
+        rush_att, rush_yds, rush_td, fum = num(row[9]), num(row[10]), num(row[11]), num(row[12])
+        s = {"rush_yds": rush_yds, "rush_td": rush_td, "rec": rec,
+             "rec_yds": rec_yds, "rec_td": rec_td, "fum": fum}
+        return scoring.ppr_points(s), {
+            "WR": name, "Team": team, "Bye": bye,
+            "Targets": "", "Rec": scoring.round2(rec), "Rec Yds": scoring.round2(rec_yds),
+            "Rec TD": scoring.round2(rec_td), "Rush Att": scoring.round2(rush_att),
+            "Rush Yds": scoring.round2(rush_yds), "Rush TD": scoring.round2(rush_td),
+            "Fum": scoring.round2(fum),
+        }
+    elif pos == "TE":
+        rec, rec_yds, rec_td = num(row[6]), num(row[7]), num(row[8])
+        rush_att, rush_yds, rush_td = num(row[9]), num(row[10]), num(row[11])
+        s = {"rec": rec, "rec_yds": rec_yds, "rec_td": rec_td, "fum": num(row[12])}
+        return scoring.ppr_points(s), {
+            "TE": name, "Team": team, "Bye": bye,
+            "Targets": "", "Rec": scoring.round2(rec), "Rec Yds": scoring.round2(rec_yds),
+            "Rec TD": scoring.round2(rec_td), "Rush Att": scoring.round2(rush_att),
+            "Rush Yds": scoring.round2(rush_yds), "Rush TD": scoring.round2(rush_td),
+        }
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--year", type=int, default=datetime.date.today().year)
     ap.add_argument("--prefix", default="fantasysharks")
-    ap.add_argument("--byes-json-file", help="offline ESPN proTeamSchedules JSON")
-    ap.add_argument("--segment-html-file", help="offline saved projections page HTML")
     ap.add_argument("--csv-dir", help="dir with saved <pos>.csv files instead of fetching")
     args = ap.parse_args()
 
-    byes = load_byes(args.year, args.byes_json_file)
-    segment = find_segment(args.year, args.segment_html_file)
-
     wrote_any = False
-    for pos, pos_id in POSITION_IDS.items():
+    for pos in ("QB", "RB", "WR", "TE"):
         csv_file = f"{args.csv_dir}/{pos.lower()}.csv" if args.csv_dir else None
-        rows = get_csv(segment, pos_id, csv_file)
-        recs = parse_position(pos, rows, byes)
+        rows = fetch_csv(pos, csv_file)
+        data_rows = rows[1:]
+        recs = []
+        for row in data_rows:
+            if len(row) < 13 or not row[3].strip():
+                continue
+            recs.append(build_record(pos, row))
+        recs.sort(key=lambda r: r[0], reverse=True)
+        recs = [r for _, r in recs]
         if not recs:
             print(f"No rows parsed for {pos}.")
             continue
