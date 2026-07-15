@@ -26,15 +26,49 @@ from name_match import normalize_name  # noqa: E402
 from tiers import assign_tiers_with_zero_floor  # noqa: E402
 
 PROJ_DIR = BASE / "ff_draft_proj"
-PERSONAL_RANKINGS = BASE / "ff_cheatsheet" / "joe_bond_half_ppr.csv"
+CHEATSHEET_DIR = BASE / "ff_cheatsheet"
+# Joe Bond's personal ranks come in one file PER scoring format (same wide-
+# block layout, different player order per format — genuinely different
+# files, e.g. half-PPR/PPR rank Bijan Robinson #1 RB while standard ranks
+# Jahmyr Gibbs #1 RB instead). Must match whichever format's projected
+# points are being blended, or the "personal preference nudge" is nudging
+# toward the wrong format's preferences entirely.
+PERSONAL_RANKINGS_BY_FORMAT = {
+    "std": CHEATSHEET_DIR / "joe_bond_standard.csv",
+    "half_ppr": CHEATSHEET_DIR / "joe_bond_half_ppr.csv",
+    "ppr": CHEATSHEET_DIR / "joe_bond_ppr.csv",
+}
 OUT_FILE = Path(__file__).resolve().parent / "auction_values_half_ppr.csv"
 
-POINTS_COL = {
-    "QB": "Fantasy Points",
-    "RB": "Fantasy Points (Half-PPR)",
-    "WR": "Fantasy Points (Half)",
-    "TE": "Fantasy Points (Half-PPR)",
+# QB has no format variant (this project's QB scoring doesn't touch
+# receptions at all) — same "Fantasy Points" column regardless of format.
+# TE's STD column was added later (ff_draft_proj originally only computed
+# Half-PPR/PPR/"TE Premium" for TE — see ff_draft_proj/CLAUDE.md).
+POINTS_COL_BY_FORMAT = {
+    "std": {
+        "QB": "Fantasy Points",
+        "RB": "Fantasy Points (STD)",
+        "WR": "Fantasy Points (STD)",
+        "TE": "Fantasy Points (STD)",
+    },
+    "half_ppr": {
+        "QB": "Fantasy Points",
+        "RB": "Fantasy Points (Half-PPR)",
+        "WR": "Fantasy Points (Half)",
+        "TE": "Fantasy Points (Half-PPR)",
+    },
+    "ppr": {
+        "QB": "Fantasy Points",
+        "RB": "Fantasy Points (PPR)",
+        "WR": "Fantasy Points (PPR)",
+        "TE": "Fantasy Points (PPR)",
+    },
 }
+# Backward-compatible default — every other script in this project imports
+# POINTS_COL as a stand-in for "the 4 position keys", not for its values
+# (only load_projections() actually reads the column names), so keeping
+# this as a plain alias means nothing else needs to change.
+POINTS_COL = POINTS_COL_BY_FORMAT["half_ppr"]
 
 # ── League settings (v1 static, standard league) ────────────────────────────
 TEAMS = 12
@@ -178,10 +212,12 @@ VORP_EXPONENT = {"QB": 1.05, "RB": 1.15, "WR": 1.15, "TE": 0.9}
 NUDGE_WEIGHT = 0.4
 
 
-def load_projections():
-    """Return {pos: [{"name":, "team":, "points": float}, ...]} sorted desc by points."""
+def load_projections(fmt="half_ppr"):
+    """Return {pos: [{"name":, "team":, "points": float}, ...]} sorted desc by points.
+    fmt: "std" | "half_ppr" | "ppr" — selects which Fantasy Points column to
+    read per position (see POINTS_COL_BY_FORMAT)."""
     out = {}
-    for pos, col in POINTS_COL.items():
+    for pos, col in POINTS_COL_BY_FORMAT[fmt].items():
         path = PROJ_DIR / f"consensus_{pos.lower()}.csv"
         players = []
         with open(path, newline="", encoding="utf-8-sig") as f:
@@ -199,9 +235,10 @@ def load_projections():
     return out
 
 
-def load_personal_ranks():
-    """Return {pos: {normalized_name: rank}} from the wide joe_bond CSV."""
-    with open(PERSONAL_RANKINGS, newline="", encoding="utf-8-sig") as f:
+def load_personal_ranks(fmt="half_ppr"):
+    """Return {pos: {normalized_name: rank}} from the wide joe_bond CSV for
+    the given format (see PERSONAL_RANKINGS_BY_FORMAT)."""
+    with open(PERSONAL_RANKINGS_BY_FORMAT[fmt], newline="", encoding="utf-8-sig") as f:
         rows = list(csv.reader(f))
     block_labels = rows[0]
     data_rows = rows[2:]
@@ -261,14 +298,20 @@ def replacement_rank(pos, ranks=None):
     return (ranks or REPLACEMENT_RANK)[pos]
 
 
-def compute_auction_values(blended, ranks=None, exponents=None, teams=None, verbose=True):
-    """ranks/exponents/teams: optional overrides for REPLACEMENT_RANK/
-    VORP_EXPONENT/TEAMS (used by calibrate_replacement_rank.py and
-    calibrate_vorp_exponent.py to grid-search without editing the module
-    constants, and by build_teamcount_estimate.py to test a different
-    team count against POSITION_BUDGET_SHARE/VORP_EXPONENT held constant)."""
+def compute_auction_values(blended, ranks=None, exponents=None, teams=None,
+                            budget_share=None, verbose=True):
+    """ranks/exponents/teams/budget_share: optional overrides for
+    REPLACEMENT_RANK/VORP_EXPONENT/TEAMS/POSITION_BUDGET_SHARE (used by
+    calibrate_replacement_rank.py and calibrate_vorp_exponent.py to
+    grid-search without editing the module constants, and by
+    build_teamcount_estimate.py to test a different team count/scoring
+    format). budget_share defaults to the half-PPR-derived
+    POSITION_BUDGET_SHARE — pass an override when calibrating a different
+    scoring format, since real bidding behavior (unlike team count) does
+    shift positional budget allocation by format."""
     exponents = exponents or VORP_EXPONENT
     teams = teams if teams is not None else TEAMS
+    budget_share = budget_share or POSITION_BUDGET_SHARE
     replacement_points = {}
     for pos, players in blended.items():
         curve = [p["blended_points"] for p in players]
@@ -299,7 +342,7 @@ def compute_auction_values(blended, ranks=None, exponents=None, teams=None, verb
             total_weighted_vorp_by_pos[p["position"]] += p["weighted_vorp"]
 
     dollar_per_weighted_vorp = {
-        pos: (discretionary * POSITION_BUDGET_SHARE[pos]) / total_weighted_vorp_by_pos[pos]
+        pos: (discretionary * budget_share[pos]) / total_weighted_vorp_by_pos[pos]
         for pos in POINTS_COL
     }
 
@@ -313,8 +356,8 @@ def compute_auction_values(blended, ranks=None, exponents=None, teams=None, verb
             "replacement_rank": replacement_rank(pos, ranks),
             "replacement_points": replacement_points[pos],
             "exponent": exponents[pos],
-            "budget_share": POSITION_BUDGET_SHARE[pos],
-            "discretionary_dollars": discretionary * POSITION_BUDGET_SHARE[pos],
+            "budget_share": budget_share[pos],
+            "discretionary_dollars": discretionary * budget_share[pos],
             "total_weighted_vorp": total_weighted_vorp_by_pos[pos],
             "dollar_per_weighted_vorp": dollar_per_weighted_vorp[pos],
         }

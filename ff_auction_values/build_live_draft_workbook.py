@@ -6,45 +6,46 @@ uses openpyxl (not win32com like the Cheat Sheet workbook) — simpler, and
 doesn't require Excel to be running.
 
 Sheets:
-  Setup        - league settings. Starting Budget ($) AND Number of Teams
-                 are both live-editable now (Teams via a restricted
-                 dropdown — 8/10/12/14/16, the only team counts with real
-                 calibration behind them, see build_teamcount_estimate.py).
-                 Everything downstream (Static Value AND Live Value, for
-                 every player) recalculates automatically when either
-                 changes.
+  Setup        - league settings. Starting Budget ($), Number of Teams, AND
+                 Scoring Format are all live-editable now. Teams and
+                 Format are both restricted dropdowns (see "Why team count
+                 and scoring format..." below) — Budget is a free
+                 whole-dollar entry. Everything downstream (Static Value
+                 AND Live Value, for every player) recalculates
+                 automatically when any of the three changes.
   Draft Board  - one column-block per position (QB / RB / WR / TE side by
                  side). Enter the real price paid as players are drafted;
                  Live Value updates automatically for everyone still on
                  the board.
   Live Calc    - the actual recalculation math.
   My Team      - personal budget tracker, unrelated to the live recalc
-                 math (see add_my_team_sheet()). Total Budget already
-                 tracked Setup!Budget; now Roster Spots also isn't
-                 team-count-dependent (roster SHAPE per team is fixed
-                 regardless of league size), so nothing else changes here.
+                 math (see add_my_team_sheet()).
 
-## Why team count needed a fundamentally different architecture than budget
+## Why team count AND scoring format need a different architecture than budget
 
 A player's Weighted VORP doesn't depend on BUDGET at all — only the
-dollar-conversion step does, so budget could be one live Excel formula
-covering any value continuously (see the "Phase 2" CLAUDE.md entry).
+dollar-conversion step does, so budget is one live Excel formula covering
+any value continuously (see the "Phase 2" CLAUDE.md entry).
 
-Team count is different: it changes REPLACEMENT_RANK and VORP_EXPONENT
-(both real-market-calibrated per team count — see CLAUDE.md "Round 5" and
-build_teamcount_estimate.py's CALIBRATED dict), which changes Weighted
-VORP itself, not just the $ conversion. Re-deriving REPLACEMENT_RANK's
-rank-cutoff logic as a live Excel formula would be far more error-prone
-than keeping it in Python where it can actually be verified. So instead:
-Weighted VORP (and Tier, which is derived from gaps in the Weighted VORP
-curve — see tiers.py) is precomputed in Python for EACH of the 5
-calibrated team counts and stored as parallel hidden columns per player;
-Setup!Teams (a restricted dropdown, not a free value) picks which pair is
-"active" via a CHOOSE/MATCH formula. Team count is a discrete switch
-between 5 precomputed configurations, not a continuous live recalculation
-like budget is.
+Team count and scoring format are both different: team count changes
+REPLACEMENT_RANK/VORP_EXPONENT (real-market-calibrated per team count —
+see CLAUDE.md "Round 5"), and scoring format changes both the underlying
+POINTS (STD/Half-PPR/PPR score receptions differently) AND
+REPLACEMENT_RANK/VORP_EXPONENT/POSITION_BUDGET_SHARE (real-market-
+calibrated per format — see CLAUDE.md, the STD/PPR round). Both change
+Weighted VORP itself, not just the $ conversion, and POSITION_BUDGET_SHARE
+specifically only varies by format (team count doesn't move it — see
+calibrate_teamcount.py's FORMAT_BUDGET_SHARE). Re-deriving any of this as
+a live Excel formula would be far more error-prone than keeping it in
+Python where it's already verified. So: Weighted VORP and Tier are
+precomputed for EACH of the 15 (team count x format) calibrated
+combinations and stored as parallel hidden columns per player; Setup!Teams
+and Setup!Format (both restricted dropdowns) together pick which pair is
+"active" via a single CHOOSE formula whose index is computed from both
+dropdowns at once (see CONFIG_KEYS/choose_formula below) — 15 precomputed
+configurations, not a continuous live recalculation.
 
-## Live recalibration (unchanged from v1.2): a two-factor model
+## Live recalibration (unchanged since v1.2): a two-factor model
 
 1. TIER-LEVEL market re-rating (same direction, local):
       tier_factor = SUM(real prices paid so far in this tier)
@@ -67,11 +68,11 @@ from openpyxl.worksheet.datavalidation import DataValidation
 
 from build_auction_values import (
     POINTS_COL, STARTERS, FLEX_SLOTS, BENCH_SPOTS, BUDGET, TEAMS,
-    NON_SKILL_SLOTS_PER_TEAM, POSITION_BUDGET_SHARE,
+    NON_SKILL_SLOTS_PER_TEAM,
     blend_with_personal_ranks, load_personal_ranks,
     load_projections, compute_auction_values, assign_position_tiers,
 )
-from build_teamcount_estimate import CALIBRATED, TEAM_COUNTS
+from build_teamcount_estimate import CALIBRATED, TEAM_COUNTS, FORMATS
 
 OUT_FILE = Path(__file__).resolve().parent / "live_draft_board.xlsx"
 
@@ -79,31 +80,47 @@ POSITION_FILL = {
     "QB": "FFE0B2", "RB": "C8E6C9", "WR": "BBDEFB", "TE": "F8BBD0",
 }
 
-# How many players to show per position on the Draft Board — sized for the
-# DEEPEST calibrated team count (16), since the row list is shared across
-# all 5 team-count configurations. Scaled up from the original 12-team
-# depths (40/100/120/50) by 16/12 with a buffer, then rounded.
-BOARD_DEPTH = {"QB": 55, "RB": 140, "WR": 165, "TE": 70}
+FORMAT_LABEL = {"std": "STD", "half_ppr": "Half-PPR", "ppr": "PPR"}
+DEFAULT_FORMAT = "half_ppr"
+
+# All 15 (format, teams) combinations, grouped by format then team count —
+# this exact order is what choose_formula()'s flattened index arithmetic
+# assumes (index = position-within-team-count-block + block-offset, where
+# block = which format). Changing this order requires updating
+# choose_formula() to match.
+CONFIG_KEYS = [(fmt, teams) for fmt in FORMATS for teams in TEAM_COUNTS]
+
+# How many players to show per position on the Draft Board — the fixed row
+# list is the UNION of each of the 15 configs' own top-N by that config's
+# own weighted VORP (not a single reference config), since scoring format
+# (unlike team count alone) actually reorders players within a position —
+# a pass-catching RB/WR ranks higher in PPR than STD. Measured empirically
+# (see CLAUDE.md, the STD/PPR round): the union came out at 55/143/167/72
+# vs a single config's own 55/140/165/70 — QB is exactly invariant (no
+# format variation at all), RB/WR/TE gain a handful of extra rows from
+# format-driven reordering. Depths below add a small buffer past the
+# measured union.
+BOARD_DEPTH = {"QB": 55, "RB": 145, "WR": 170, "TE": 75}
 
 TOTAL_ROSTER_SPOTS_PER_TEAM = (
     sum(STARTERS.values()) + FLEX_SLOTS + BENCH_SPOTS + NON_SKILL_SLOTS_PER_TEAM
 )
 
-# Columns within one position's block. Ten hidden Tier/WeightedVORP pairs
-# (one pair per calibrated team count) feed two "Selected" columns that
-# live-switch based on Setup!Teams via CHOOSE/MATCH.
-PER_TEAM_COLS = []
-for _t in TEAM_COUNTS:
-    PER_TEAM_COLS += [f"Tier ({_t}T)", f"Weighted VORP ({_t}T)"]
+# Columns within one position's block. 15 hidden Tier/WeightedVORP pairs
+# (one pair per (format, teams) combination) feed two "Selected" columns
+# that live-switch based on Setup!Teams + Setup!Format via CHOOSE/MATCH.
+PER_CONFIG_COLS = []
+for _fmt, _t in CONFIG_KEYS:
+    PER_CONFIG_COLS += [f"Tier ({FORMAT_LABEL[_fmt]} {_t}T)", f"Weighted VORP ({FORMAT_LABEL[_fmt]} {_t}T)"]
 
-BLOCK_COLS = (["Player", "Team"] + PER_TEAM_COLS +
+BLOCK_COLS = (["Player", "Team"] + PER_CONFIG_COLS +
               ["Tier (active)", "Weighted VORP (active)",
                "Static Value ($)", "Price Paid ($)", "Live Value ($)"])
 OFF_PLAYER, OFF_TEAM = 0, 1
-# Offsets of each (tier, wvorp) pair within the per-team-count block, keyed by team count
-OFF_TIER = {t: 2 + 2 * i for i, t in enumerate(TEAM_COUNTS)}
-OFF_WVORP = {t: 2 + 2 * i + 1 for i, t in enumerate(TEAM_COUNTS)}
-_after_pairs = 2 + 2 * len(TEAM_COUNTS)
+# Offsets of each (tier, wvorp) pair within the block, keyed by (fmt, teams)
+OFF_TIER = {key: 2 + 2 * i for i, key in enumerate(CONFIG_KEYS)}
+OFF_WVORP = {key: 2 + 2 * i + 1 for i, key in enumerate(CONFIG_KEYS)}
+_after_pairs = 2 + 2 * len(CONFIG_KEYS)
 OFF_SEL_TIER = _after_pairs
 OFF_SEL_WVORP = _after_pairs + 1
 OFF_STATIC = _after_pairs + 2
@@ -113,39 +130,48 @@ BLOCK_WIDTH = len(BLOCK_COLS)
 SPACER_COLS = 1
 
 
-def compute_all_team_counts():
-    """Run the full pipeline once per calibrated team count. Returns
-    {teams: {normalized_key: player_dict_with_tier_and_weighted_vorp}}."""
+def compute_all_configs():
+    """Run the full pipeline once per calibrated (format, teams) combo.
+    Returns {(fmt, teams): {normalized_key: player_dict_with_tier_and_weighted_vorp}}."""
     from name_match import normalize_name
 
-    projections = load_projections()
-    personal_ranks = load_personal_ranks()
-    blended = blend_with_personal_ranks(projections, personal_ranks)
+    blended_by_fmt = {}
+    for fmt in FORMATS:
+        projections = load_projections(fmt)
+        personal_ranks = load_personal_ranks(fmt)
+        blended_by_fmt[fmt] = blend_with_personal_ranks(projections, personal_ranks)
 
-    by_team = {}
-    for teams in TEAM_COUNTS:
-        cal = CALIBRATED[teams]
+    by_config = {}
+    for fmt, teams in CONFIG_KEYS:
+        cal = CALIBRATED[(teams, fmt)]
         players, pos_stats = compute_auction_values(
-            blended, ranks=cal["ranks"], exponents=cal["exponents"], teams=teams, verbose=False)
+            blended_by_fmt[fmt], ranks=cal["ranks"], exponents=cal["exponents"],
+            teams=teams, budget_share=cal["budget_share"], verbose=False)
         players, _ = assign_position_tiers(players, pos_stats)
-        by_team[teams] = {normalize_name(p["name"]): p for p in players}
-    return by_team
+        by_config[(fmt, teams)] = {normalize_name(p["name"]): p for p in players}
+    return by_config
 
 
-def board_player_list(by_team):
-    """Fixed row list per position, sorted/trimmed using the DEEPEST
-    calibrated team count (most demanding on roster depth)."""
+def board_player_list(by_config):
+    """Fixed row list per position: union of each config's own top-N (by
+    that config's own weighted VORP), sorted for display by the MAXIMUM
+    weighted VORP any config assigns that player (always defined for
+    anyone in the union, unlike picking one reference config)."""
     from name_match import normalize_name
 
-    deepest = max(TEAM_COUNTS)
-    by_pos = {}
-    for pos in POINTS_COL:
-        pos_players = sorted(
-            [p for p in by_team[deepest].values() if p["position"] == pos],
-            key=lambda p: -p["weighted_vorp"])
-        trimmed = pos_players[:BOARD_DEPTH[pos]]
-        by_pos[pos] = [normalize_name(p["name"]) for p in trimmed]
-    return by_pos
+    by_pos = {pos: {} for pos in POINTS_COL}  # pos -> {key: max_weighted_vorp}
+    for key in CONFIG_KEYS:
+        players_by_pos = {}
+        for p in by_config[key].values():
+            players_by_pos.setdefault(p["position"], []).append(p)
+        for pos in POINTS_COL:
+            top = sorted(players_by_pos.get(pos, []), key=lambda p: -p["weighted_vorp"])[:BOARD_DEPTH[pos]]
+            for p in top:
+                k = normalize_name(p["name"])
+                by_pos[pos][k] = max(by_pos[pos].get(k, 0.0), p["weighted_vorp"])
+
+    return {pos: [k for k, _ in sorted(by_pos[pos].items(), key=lambda kv: -kv[1])]
+            for pos in POINTS_COL}
 
 
 def build_block_layout(board_keys):
@@ -168,10 +194,18 @@ def block_range(layout, pos, offset):
     return f"'Draft Board'!${col}$2:${col}${last_row}"
 
 
-def choose_formula(cell_refs):
-    """=CHOOSE(MATCH(Setup!Teams, {8,10,...}, 0), ref1, ref2, ...)"""
+def choose_formula(cell_refs_by_config):
+    """=CHOOSE(index, ref1, ..., ref15) where index is computed from BOTH
+    Setup!Teams and Setup!Format at once: MATCH(Teams,{8,10,12,14,16},0)
+    picks a position within a 5-wide block, and
+    (MATCH(Format,{labels},0)-1)*5 picks which block — matching CONFIG_KEYS'
+    [(fmt, teams) for fmt in FORMATS for teams in TEAM_COUNTS] order."""
     teams_list = "{" + ",".join(str(t) for t in TEAM_COUNTS) + "}"
-    return f"CHOOSE(MATCH(Setup!$B$5,{teams_list},0),{','.join(cell_refs)})"
+    fmt_list = "{" + ",".join(f'"{FORMAT_LABEL[f]}"' for f in FORMATS) + "}"
+    index = (f"MATCH(Setup!$B$5,{teams_list},0)"
+             f"+(MATCH(Setup!$B$7,{fmt_list},0)-1)*{len(TEAM_COUNTS)}")
+    refs = [cell_refs_by_config[key] for key in CONFIG_KEYS]
+    return f"CHOOSE({index},{','.join(refs)})"
 
 
 def add_setup_sheet(wb):
@@ -200,31 +234,41 @@ def add_setup_sheet(wb):
     sheet.add_data_validation(dv_teams)
     dv_teams.add("B5")
 
-    for cell in ("B3", "B5"):
+    sheet["A7"] = "Scoring Format"
+    sheet["B7"] = FORMAT_LABEL[DEFAULT_FORMAT]
+    sheet["A7"].font = Font(bold=True)
+    dv_format = DataValidation(
+        type="list", formula1='"' + ",".join(FORMAT_LABEL[f] for f in FORMATS) + '"',
+        allow_blank=False, showErrorMessage=True,
+        errorTitle="Invalid scoring format",
+        error=f"Choose one of: {', '.join(FORMAT_LABEL[f] for f in FORMATS)}.")
+    sheet.add_data_validation(dv_format)
+    dv_format.add("B7")
+
+    for cell in ("B3", "B5", "B7"):
         sheet[cell].fill = PatternFill(start_color="FFF9C4", end_color="FFF9C4", fill_type="solid")
 
-    sheet["A7"] = "Roster Shape (fixed for now)"
-    sheet["B7"] = "1 QB / 2 RB / 2 WR / 1 TE / 1 FLEX / 1 DEF / 1 K / 6 Bench"
+    sheet["A9"] = "Roster Shape (fixed for now)"
+    sheet["B9"] = "1 QB / 2 RB / 2 WR / 1 TE / 1 FLEX / 1 DEF / 1 K / 6 Bench"
 
-    sheet["A9"] = (
-        "Budget and Number of Teams are both fully live — change either and every "
-        "value on the Draft Board updates automatically. Team count is restricted to "
-        f"{', '.join(str(t) for t in TEAM_COUNTS)} because those are the only team "
-        "counts with real market-data calibration behind them (see CLAUDE.md) — "
-        "picking anything else would silently give wrong numbers, not just an error. "
-        "Roster shape isn't editable yet for the same reason: it's also tied to the "
-        "current calibration.")
-    sheet["A9"].font = Font(italic=True)
-    sheet["A9"].alignment = Alignment(wrap_text=True)
-    sheet.row_dimensions[9].height = 60
-    sheet.merge_cells("A9:F9")
+    sheet["A11"] = (
+        "Budget, Number of Teams, and Scoring Format are all fully live — change any of "
+        "them and every value on the Draft Board updates automatically. Teams and Format "
+        "are both restricted to dropdowns because those are the only combinations with "
+        "real market-data calibration behind them (see CLAUDE.md) — picking anything else "
+        "would silently give wrong numbers, not just an error. Roster shape isn't editable "
+        "yet for the same reason: it's also tied to the current calibration.")
+    sheet["A11"].font = Font(italic=True)
+    sheet["A11"].alignment = Alignment(wrap_text=True)
+    sheet.row_dimensions[11].height = 75
+    sheet.merge_cells("A11:F11")
 
     sheet.column_dimensions["A"].width = 32
     sheet.column_dimensions["B"].width = 45
     return sheet
 
 
-def build_draft_board_shell(wb, by_team, board_keys, layout):
+def build_draft_board_shell(wb, by_config, board_keys, layout):
     board = wb.create_sheet("Draft Board", 1)
     board.freeze_panes = "A2"
 
@@ -237,29 +281,32 @@ def build_draft_board_shell(wb, by_team, board_keys, layout):
                             end_color=POSITION_FILL[pos], fill_type="solid")
 
         for i, key in enumerate(board_keys[pos], start=2):
-            ref_player = by_team[max(TEAM_COUNTS)][key]  # name/team don't vary by team count
+            # Name/team don't vary by config — use whichever config has this
+            # player (every board player is in at least one config's top-N,
+            # but not necessarily every config's, by construction).
+            ref_player = next(by_config[ck][key] for ck in CONFIG_KEYS if key in by_config[ck])
             board.cell(i, start + OFF_PLAYER, ref_player["name"]).fill = fill
             board.cell(i, start + OFF_TEAM, ref_player["team"]).fill = fill
-            for t in TEAM_COUNTS:
-                p = by_team[t].get(key)
+            for ck in CONFIG_KEYS:
+                p = by_config[ck].get(key)
                 tier = p["tier"] if p else 999
                 wvorp = round(p["weighted_vorp"], 4) if p else 0.0
-                board.cell(i, start + OFF_TIER[t], tier).fill = fill
-                board.cell(i, start + OFF_WVORP[t], wvorp).fill = fill
+                board.cell(i, start + OFF_TIER[ck], tier).fill = fill
+                board.cell(i, start + OFF_WVORP[ck], wvorp).fill = fill
             board.cell(i, start + OFF_STATIC).fill = fill  # formula, filled in later
             board.cell(i, start + OFF_PRICE).fill = fill  # blank, user entry
             board.cell(i, start + OFF_LIVE).fill = fill  # formula, filled in later
             board.cell(i, start + OFF_SEL_TIER).fill = fill  # formula, filled in later
             board.cell(i, start + OFF_SEL_WVORP).fill = fill  # formula, filled in later
 
-        # Column widths; hide all the per-team-count helper columns
+        # Column widths; hide all the per-config helper columns
         widths = {OFF_PLAYER: 22, OFF_TEAM: 7, OFF_SEL_TIER: 8, OFF_SEL_WVORP: 14,
                   OFF_STATIC: 13, OFF_PRICE: 12, OFF_LIVE: 12}
         for offset, width in widths.items():
             board.column_dimensions[get_column_letter(start + offset)].width = width
-        for t in TEAM_COUNTS:
-            board.column_dimensions[get_column_letter(start + OFF_TIER[t])].hidden = True
-            board.column_dimensions[get_column_letter(start + OFF_WVORP[t])].hidden = True
+        for ck in CONFIG_KEYS:
+            board.column_dimensions[get_column_letter(start + OFF_TIER[ck])].hidden = True
+            board.column_dimensions[get_column_letter(start + OFF_WVORP[ck])].hidden = True
 
         last_row = layout[pos]["last_row"]
         price_col = get_column_letter(start + OFF_PRICE)
@@ -270,22 +317,21 @@ def build_draft_board_shell(wb, by_team, board_keys, layout):
         board.add_data_validation(dv)
         dv.add(f"{price_col}2:{price_col}{last_row}")
 
-        # Selected Tier / Weighted VORP: CHOOSE among the 5 team-count columns
+        # Selected Tier / Weighted VORP: CHOOSE among the 15 config columns
         for i in range(2, last_row + 1):
-            tier_refs = [f"{get_column_letter(start + OFF_TIER[t])}{i}" for t in TEAM_COUNTS]
-            wvorp_refs = [f"{get_column_letter(start + OFF_WVORP[t])}{i}" for t in TEAM_COUNTS]
+            tier_refs = {ck: f"{get_column_letter(start + OFF_TIER[ck])}{i}" for ck in CONFIG_KEYS}
+            wvorp_refs = {ck: f"{get_column_letter(start + OFF_WVORP[ck])}{i}" for ck in CONFIG_KEYS}
             board.cell(i, start + OFF_SEL_TIER).value = f"={choose_formula(tier_refs)}"
             board.cell(i, start + OFF_SEL_WVORP).value = f"={choose_formula(wvorp_refs)}"
 
     return board
 
 
-def build_live_calc(wb, by_team, board_keys, layout):
+def build_live_calc(wb, by_config, board_keys, layout):
     calc = wb.create_sheet("Live Calc")
     row = 1
 
-    # ── $ SETUP: driven directly by Setup!Teams (now a real dropdown) and
-    # Setup!Budget ────────────────────────────────────────────────────────
+    # ── $ SETUP: driven directly by Setup!Teams and Setup!Budget ─────────
     calc.cell(row, 1, "$ SETUP (driven by Setup!Teams and Setup!Budget)").font = Font(bold=True)
     row += 1
     calc.cell(row, 1, "Total Teams")
@@ -305,40 +351,52 @@ def build_live_calc(wb, by_team, board_keys, layout):
     discretionary_row = row
     row += 2
 
-    # ── POSITION RATES: Total Weighted VORP now varies by team count too
-    # (the player pool's weighted VORP values differ per calibration), so
-    # it's a CHOOSE among 5 precomputed sums, same pattern as Draft Board's
-    # Selected Tier/WVORP columns. ───────────────────────────────────────
+    # ── POSITION RATES: Discretionary $ now varies by FORMAT (budget share
+    # only, team count doesn't move it — see calibrate_teamcount.py's
+    # FORMAT_BUDGET_SHARE), Total Weighted VORP varies by BOTH format and
+    # team count. Both are CHOOSE lookups against small side tables on the
+    # same row. ────────────────────────────────────────────────────────
     calc.cell(row, 1, "POSITION RATES").font = Font(bold=True)
     row += 1
     for j, h in enumerate(["Position", "Discretionary $", "Total Weighted VORP", "Rate"]):
         calc.cell(row, 1 + j, h).font = Font(bold=True)
     rate_row = {}
+    fmt_list = "{" + ",".join(f'"{FORMAT_LABEL[f]}"' for f in FORMATS) + "}"
     for pos in POINTS_COL:
         row += 1
         calc.cell(row, 1, pos)
-        calc.cell(row, 2).value = f"=$B${discretionary_row}*{POSITION_BUDGET_SHARE[pos]}"
-        sums = []
-        for t in TEAM_COUNTS:
-            total_wvorp = sum(by_team[t][k]["weighted_vorp"] for k in board_keys[pos]
-                               if k in by_team[t])
-            sums.append(round(total_wvorp, 4))
-        # Write the 5 sums to a small side area (columns F-J of this same
-        # row) then CHOOSE among them — keeps everything self-contained.
-        sum_cells = []
-        for idx, s in enumerate(sums):
-            col = 6 + idx  # F, G, H, I, J
-            calc.cell(row, col, s)
-            sum_cells.append(f"{get_column_letter(col)}{row}")
+
+        # Budget share per format, written to a small side area, CHOOSE'd
+        # by Setup!Format alone (3 values, not 15).
+        share_cells = []
+        for idx, fmt in enumerate(FORMATS):
+            col = 6 + idx  # F, G, H
+            share = CALIBRATED[(TEAM_COUNTS[0], fmt)]["budget_share"][pos]
+            calc.cell(row, col, round(share, 5))
+            share_cells.append(f"{get_column_letter(col)}{row}")
+        calc.cell(row, 2).value = (
+            f"=$B${discretionary_row}*CHOOSE(MATCH(Setup!$B$7,{fmt_list},0),{','.join(share_cells)})"
+        )
+
+        # Total Weighted VORP per (format, teams), written to a wider side
+        # area (columns J onward), CHOOSE'd by both dropdowns.
+        sum_cells = {}
+        for idx, ck in enumerate(CONFIG_KEYS):
+            fmt, teams = ck
+            total_wvorp = sum(by_config[ck][k]["weighted_vorp"] for k in board_keys[pos]
+                               if k in by_config[ck])
+            col = 10 + idx  # J onward, 15 columns
+            calc.cell(row, col, round(total_wvorp, 4))
+            sum_cells[ck] = f"{get_column_letter(col)}{row}"
         calc.cell(row, 3).value = f"={choose_formula(sum_cells)}"
         calc.cell(row, 4).value = f"=IFERROR(B{row}/C{row},0)"
         rate_row[pos] = row
     row += 2
 
     # ── Per-position TIER tables (market re-rating factor). Row set =
-    # union of tier values seen across ALL 5 team-count configs for that
-    # position's board players, so the table covers whichever config is
-    # active regardless of the Setup!Teams selection. ───────────────────
+    # union of tier values seen across ALL 15 configs for that position's
+    # board players, so the table covers whichever config is active
+    # regardless of the Setup!Teams/Format selection. ────────────────────
     tier_table_range = {}
     for pos in POINTS_COL:
         calc.cell(row, 1, f"{pos} tiers").font = Font(bold=True)
@@ -347,9 +405,9 @@ def build_live_calc(wb, by_team, board_keys, layout):
             calc.cell(row, 1 + j, h).font = Font(bold=True)
         table_start = row + 1
         all_tiers = set()
-        for t in TEAM_COUNTS:
+        for ck in CONFIG_KEYS:
             for k in board_keys[pos]:
-                p = by_team[t].get(k)
+                p = by_config[ck].get(k)
                 if p:
                     all_tiers.add(p["tier"])
         tiers = sorted(all_tiers)
@@ -404,16 +462,16 @@ def build_live_calc(wb, by_team, board_keys, layout):
 
 
 def main():
-    by_team = compute_all_team_counts()
-    board_keys = board_player_list(by_team)
+    by_config = compute_all_configs()
+    board_keys = board_player_list(by_config)
     layout = build_block_layout(board_keys)
 
     wb = Workbook()
     wb.remove(wb.active)
 
     add_setup_sheet(wb)
-    board = build_draft_board_shell(wb, by_team, board_keys, layout)
-    calc, rate_row, tier_table_range, g_row = build_live_calc(wb, by_team, board_keys, layout)
+    board = build_draft_board_shell(wb, by_config, board_keys, layout)
+    calc, rate_row, tier_table_range, g_row = build_live_calc(wb, by_config, board_keys, layout)
 
     global_factor_cell = f"'Live Calc'!$J${g_row}"
 
@@ -441,12 +499,13 @@ def main():
 
     wb.save(OUT_FILE)
     print(f"Wrote {OUT_FILE}")
-    print(f"Change Setup!B3 (Budget) or Setup!B5 (Teams, {'/'.join(str(t) for t in TEAM_COUNTS)}) "
-          "to instantly recalculate every value.")
+    print(f"Change Setup!B3 (Budget), Setup!B5 (Teams, {'/'.join(str(t) for t in TEAM_COUNTS)}), "
+          f"or Setup!B7 (Format, {'/'.join(FORMAT_LABEL[f] for f in FORMATS)}) to instantly "
+          "recalculate every value.")
     print("Enter real prices in each position's 'Price Paid ($)' column on Draft Board.")
     print("Board is trimmed to top " +
           ", ".join(f"{BOARD_DEPTH[p]} {p}" for p in POINTS_COL) +
-          f" (sized for the deepest team count, {max(TEAM_COUNTS)}).")
+          " (union of all 15 configs' own top-N).")
     print("Track your own roster/budget on the My Team sheet (independent of Draft Board).")
 
 
@@ -466,9 +525,8 @@ def add_my_team_sheet(wb):
     per remaining spot. Completely independent of Draft Board/Live Calc's
     recalculation math — no formula linkage there — but Total Budget DOES
     reference Setup!Budget, so it stays correct if budget changes. Roster
-    Spots (total) stays a fixed constant regardless of team count — roster
-    SHAPE per team doesn't change with league size, only how many teams
-    there are, which doesn't affect any single team's own roster spots."""
+    Spots (total) stays a fixed constant regardless of team count or
+    scoring format — roster SHAPE per team doesn't change with either."""
     slots = build_roster_slots()
     n = len(slots)
     last_row = n + 1

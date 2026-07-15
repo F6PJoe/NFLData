@@ -993,6 +993,202 @@ edge-of-range issue described above for a team count that needs
 recalibrating again later — widen the candidate lists first if that
 happens, don't trust the file's current defaults blindly.
 
+## Round 6: scoring format (STD/PPR) added to team-count switching (v1.4)
+User's request, once the team-count round shipped: "I would like to get
+the initial values on my site too... this being a bit dynamic due to
+number of teams, total money available" — but before designing a site
+publish pipeline, the user correctly flagged that the site would also need
+STD and full-PPR versions eventually (this project only ever had
+half-PPR), which meant deciding the Sheets/site structure ahead of that
+would be designing around a guess. So: build STD/PPR calibration into the
+Excel tool first (which already had the team-count-switching architecture
+to extend), figure out the true size of the site's matrix once real
+values exist, THEN design publishing. Site publishing itself is still
+parked, pending that.
+
+**TE STD prerequisite**: `ff_draft_proj`'s consensus projections only had
+Half-PPR/PPR/"TE Premium" for TE (STD was deliberately swapped out
+originally to match the live sheet's then-current layout, not an
+oversight) — RB/WR already had all 3 formats. Added TE's STD column
+(`ff_draft_proj/build_consensus.py`, reuses `scoring.std_points()`
+identically to RB/WR — a 2-line change), appended as the LAST column so no
+existing column shifted position on the live Google Sheet. Verified safe
+against every downstream consumer of `consensus_te.csv`
+(`ff_rankings/scoring_adjust.py`, `ff_cheatsheet`'s two updater scripts,
+`ff_sfb16/workbook_common.py`) — all read by column name
+(`csv.DictReader`/`pandas`), none positionally. See `ff_draft_proj/CLAUDE.md`
+for the full account.
+
+### Calibration: 10 new (teams, format) combinations
+User pulled the FULL grid unprompted — all 5 team counts x STD/PPR x 3
+sources (30 new `reference_<source>_<teams>team_<std|ppr>.csv` files,
+matching the existing half-PPR naming with a format suffix added), not
+just the 12-team-first pass that was originally scoped. `POINTS_COL`
+became `POINTS_COL_BY_FORMAT` (`std`/`half_ppr`/`ppr`, keyed the same as
+before for backward compat — every other script imports `POINTS_COL` only
+as a stand-in for "the 4 position keys," so nothing else needed to
+change), `load_projections()` gained an `fmt=` parameter, and
+`compute_auction_values()` gained a `budget_share=` override (mirroring
+the existing `ranks`/`exponents`/`teams` overrides) — needed because,
+unlike team count, real market data shows `POSITION_BUDGET_SHARE`
+genuinely DOES shift by scoring format (STD real budget share ran
+44-50% RB / 37-43% WR across all 5 team counts vs. half-PPR's ~43/43;
+PPR flipped it to 40-44% RB / 43-47% WR) — exactly the well-known
+real-world "PPR favors pass-catchers" pattern, not noise, confirmed by
+being directionally consistent across every team count within a format.
+
+**Real bug caught before trusting any of this** (same discipline as every
+prior round — individual-player verification before the aggregate metric):
+the first calibration pass's rank/exponent grid search used the OLD
+half-PPR `POSITION_BUDGET_SHARE` default the whole time — a `budget_share`
+override parameter had just been added to `compute_auction_values()`, but
+the search loop never actually passed it in; a separate function measured
+the real per-format share and only printed it for reference afterward.
+Since `budget_share` directly scales a position's total dollar pool,
+calibrating rank/exponent against the WRONG pool size let the exponent
+search silently over-concentrate value at the top to hit the top-12 target
+despite too little money — then applying the correct, larger budget share
+afterward overshot for real: Jahmyr Gibbs $67 / Bijan Robinson $66 at
+12-team STD vs. $56-61 / $53-63 real (a $10+ miss on the two most-scrutinized
+RBs in the whole project). Fixed by computing the format-level budget share
+FIRST (`FORMAT_BUDGET_SHARE` in `calibrate_teamcount.py` — the average of
+the real per-team-count measurement across all 5 team counts within a
+format, mirroring how half-PPR's single constant was derived) and using it
+CONSISTENTLY through the entire search, not just for reporting. Re-verified
+after the fix: same two players landed at $61/$61 — squarely inside the
+real FantasyPros/4for4/Draft-Sharks spread, not blown out past it.
+
+**`calibrate_teamcount.py`'s candidate ranges were also widened** (rank/
+exponent both, all 4 positions) — this file previously carried the same
+"never actually widened past the original team-count-only search" gap
+flagged as a known loose end after Round 5. Every one of the 10 new
+combinations hit at least one edge-of-range warning on a first pass at the
+old ranges (16-team STD WR replacement rank eventually needed 90, nearly
+2.5x the original 12-team half-PPR value of 64) — each was re-tested wider
+until the "best" candidate was no longer sitting at the tested edge, using
+a warning the script now prints automatically instead of requiring manual
+inspection of every result.
+
+**Final validated constants** for all 10 new (teams, format) combinations
+live in `build_teamcount_estimate.py`'s `CALIBRATED` dict, now keyed by
+`(teams, format)` tuples (15 entries total) instead of just `teams` —
+`FORMATS = ["std", "half_ppr", "ppr"]`. Each entry also carries its own
+`budget_share` now (previously a single shared module constant) since that
+value is format-, not team-count-, dependent.
+
+### Excel: Scoring Format becomes a third live dropdown (v1.4)
+Same reasoning as team count originally: a player's Weighted VORP depends
+on scoring format (both the underlying POINTS and the calibrated
+rank/exponent/budget-share all change), so format is a discrete switch
+between precomputed configurations, not a continuous formula — same as
+team count, and for the same reason (re-deriving replacement-rank logic
+live in Excel would be far more error-prone than keeping it in Python).
+
+**Architecture generalized from a 1-key to a 2-key CHOOSE lookup.** Every
+player now carries 15 hidden Tier/Weighted-VORP pairs (one per
+`(format, teams)` combination, `CONFIG_KEYS = [(fmt, teams) for fmt in
+FORMATS for teams in TEAM_COUNTS]`) instead of 5. A single flattened
+`CHOOSE` picks among all 15 using one computed index:
+`MATCH(Setup!Teams,{8,10,12,14,16},0) + (MATCH(Setup!Format,{labels},0)-1)*5`
+— the team-count MATCH picks a position within a 5-wide block, the format
+MATCH picks which block, avoiding a genuinely nested `CHOOSE(CHOOSE(...))`
+formula. `Setup!B7` (Scoring Format) is a third restricted dropdown
+(STD/Half-PPR/PPR display labels), alongside Teams (B5, unchanged) and
+Budget (B3, unchanged, still a free continuous value).
+
+**Fixed row list generalized too** — the union of each of the 15 configs'
+own top-N (by that config's own Weighted VORP), not one reference config's
+sort order. This matters in a way it didn't for team-count-only: within a
+single scoring format, sort order among a position's players is provably
+invariant to which team count or exponent is active (VORP = points minus a
+constant, weighted_vorp = VORP^exponent — a monotonic transform for any
+positive exponent, so relative order only depends on POINTS, never on
+replacement level or exponent shape). But POINTS themselves genuinely
+differ by scoring format (a pass-catching RB/WR ranks higher in PPR than
+STD), so a single format's sort order isn't safe to reuse for the others.
+Measured empirically: QB's union came out byte-identical to any single
+config's own top-55 (QB has no format variation at all — same "Fantasy
+Points" column regardless), while RB/WR/TE gained a handful of extra rows
+(140→143, 165→167, 70→72) from format-driven reordering near the cut line.
+`BOARD_DEPTH` bumped slightly to `{"QB":55,"RB":145,"WR":170,"TE":75}` to
+comfortably clear the measured union with a small buffer. Sort key for
+display purposes: the MAXIMUM weighted VORP any of the 15 configs assigns
+a player (always defined for anyone in the union set, unlike anchoring to
+one specific reference config that might not include them).
+
+**`Live Calc`'s POSITION RATES table** also generalized: Discretionary $
+is now a 3-way `CHOOSE` on Format alone (budget share doesn't vary by team
+count), Total Weighted VORP is the same 15-way `CHOOSE` pattern as Draft
+Board's Selected columns. Per-position TIER tables' row set is the union
+of tier values across all 15 configs, same reasoning as before, just more
+configs to union over.
+
+**Verified via `verify_live_workbook.py`** (rewritten for the new 38-
+column-wide block layout — 37 data columns + 1 spacer per position, up
+from 17): switched through all 15 `(format, teams)` combinations,
+confirmed Total Money matched `teams × $200` exactly every single time (no
+exceptions). Spot-checked named players across format/team-count corners
+(8T/16T x STD/PPR, plus 12T for all 3 formats) — every value matched the
+direct Python calibration output exactly, e.g. 12-team STD Gibbs $61
+identical to the terminal verification run. Confirmed PPR correctly raises
+WR/pass-catching-TE values vs. STD at matched team counts (Nacua
+$50→$58, McBride $20→$25 at 8 teams) — the expected real-world direction,
+not just a plausible-looking number. Confirmed budget still works
+independently of both dropdowns (260/200 test at fixed 12T/Half-PPR), and
+a live pick still ripples through the tier/global-factor mechanism
+unchanged. Confirmed 0 leftover filled Price cells both before and after
+the verification run's own test picks.
+
+**Third bug caught, this time by the user asking a clarifying question
+before agreeing to commit** (not by this project's own verification
+discipline — worth being honest about that): `PERSONAL_RANKINGS` was a
+single hardcoded path to `joe_bond_half_ppr.csv`, and `load_personal_ranks()`
+took no format argument — every STD/PPR calibration run above was blending
+STD/PPR projected points against the user's HALF-PPR personal rankings the
+whole time. This wasn't a hypothetical concern: the user has three genuinely
+different personal-rank files (`joe_bond_standard.csv`/`_half_ppr.csv`/
+`_ppr.csv`, confirmed by spot-checking — e.g. the half-PPR/PPR files rank
+Bijan Robinson #1 RB while the standard file ranks Jahmyr Gibbs #1 RB
+instead), reflecting real format-specific preference differences, not
+copies of one file. Fixed: `PERSONAL_RANKINGS_BY_FORMAT` dict, `load_personal_ranks(fmt=)`
+parameter, updated every caller that needed to pass the right format
+(`calibrate_teamcount.py`, `build_teamcount_estimate.py`,
+`build_live_draft_workbook.py`'s `compute_all_configs()` — moved the
+personal-rank load inside the per-format loop instead of once outside it).
+Re-ran all 10 STD/PPR calibrations against the corrected blend — drift was
+real but modest (e.g. 10-team STD RB rank 40→36, 16-team STD TE exponent
+0.9→0.8), consistent with `NUDGE_WEIGHT=0.4` being a damped blend rather
+than a full override; `FORMAT_BUDGET_SHARE` was completely unaffected
+(it's measured from real market $ data alone, with no personal-rank
+involvement at all). Re-verified individually and rebuilt/re-verified the
+Excel workbook end to end again — all 15 combos still landed within the
+real reference spread and Total Money still matched `teams × $200` exactly
+throughout.
+
+**Lesson**: this project's calibration discipline (individual-player
+verification, deterministic scoring, edge-of-range checks) is good at
+catching problems INSIDE the search/scoring math itself, but doesn't catch
+a wrong INPUT feeding a technically-correct search — the STD/PPR
+calibration numbers all looked plausible and landed near the real
+reference spread even with the wrong personal-rank file, because the
+personal-rank nudge is a modest, damped signal on top of real market-
+calibrated projections, not the dominant one. A wrong input that still
+produces plausible-looking output is exactly the kind of bug that
+verification-by-spot-check can miss — this one only surfaced because the
+user asked a direct clarifying question ("this will use the correct
+rankings to blend for the scoring formats right?") before agreeing to
+commit, not because any built-in check caught it.
+
+**Still open / not done this round**: the site-publishing pipeline (Google
+Sheets structure, whether budget becomes a real client-side calculator or
+stays a few fixed reference points) — deliberately parked until the full
+STD/PPR matrix existed to design against, per the user's own instinct.
+`calibrate_teamcount.py`'s `RANK_CANDIDATES`/`EXPONENT_CANDIDATES` are now
+wide enough to have covered all 10 new combinations without a manual
+re-widen, but there's no guarantee they're wide enough forever — the
+edge-of-range warning is now automatic, but widening on demand is still a
+manual step when it fires.
+
 ## Output
 `auction_values_half_ppr.csv` — all QB/RB/WR/TE from the consensus
 projections, sorted by auction value descending.
