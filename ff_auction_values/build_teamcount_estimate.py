@@ -62,8 +62,8 @@ FORMATS = ["std", "half_ppr", "ppr"]
 
 # Format-level budget share — see calibrate_teamcount.py's FORMAT_BUDGET_SHARE
 # comment for why this varies by format but not by team count.
-_STD_SHARE = {"QB": 0.0608, "RB": 0.4629, "WR": 0.4014, "TE": 0.0750}
-_PPR_SHARE = {"QB": 0.0538, "RB": 0.4120, "WR": 0.4584, "TE": 0.0759}
+_STD_SHARE = {"QB": 0.0741, "RB": 0.4349, "WR": 0.4011, "TE": 0.0898}
+_PPR_SHARE = {"QB": 0.0711, "RB": 0.4036, "WR": 0.4370, "TE": 0.0883}
 
 # Real, validated calibration per (teams, format), from calibrate_teamcount.py
 # against actual market data. Every combination here has been verified
@@ -74,78 +74,78 @@ _PPR_SHARE = {"QB": 0.0538, "RB": 0.4120, "WR": 0.4584, "TE": 0.0759}
 # unverified — don't add an entry here without doing the real calibration.
 CALIBRATED = {
     (8, "half_ppr"): {
-        "ranks": {"QB": 15, "RB": 34, "WR": 45, "TE": 16},
-        "exponents": {"QB": 1.15, "RB": 1.2, "WR": 1.15, "TE": 1.0},
+        "ranks": {"QB": 12, "RB": 32, "WR": 40, "TE": 12},
+        "exponents": {"QB": 1.1, "RB": 1.15, "WR": 1.15, "TE": 0.9},
         "budget_share": POSITION_BUDGET_SHARE,
     },
     (10, "half_ppr"): {
-        "ranks": {"QB": 16, "RB": 40, "WR": 54, "TE": 18},
-        "exponents": {"QB": 1.0, "RB": 1.2, "WR": 1.15, "TE": 0.9},
+        "ranks": {"QB": 14, "RB": 36, "WR": 55, "TE": 16},
+        "exponents": {"QB": 0.9, "RB": 1.05, "WR": 1.25, "TE": 0.85},
         "budget_share": POSITION_BUDGET_SHARE,
     },
     (12, "half_ppr"): {
-        "ranks": {"QB": 19, "RB": 44, "WR": 64, "TE": 24},
-        "exponents": {"QB": 1.05, "RB": 1.15, "WR": 1.15, "TE": 0.9},
+        "ranks": {"QB": 16, "RB": 44, "WR": 60, "TE": 20},
+        "exponents": {"QB": 1.1, "RB": 1.2, "WR": 1.2, "TE": 1.0},
         "budget_share": POSITION_BUDGET_SHARE,
     },
     (14, "half_ppr"): {
-        "ranks": {"QB": 19, "RB": 44, "WR": 60, "TE": 24},
-        "exponents": {"QB": 0.9, "RB": 0.85, "WR": 1.0, "TE": 0.7},
+        "ranks": {"QB": 18, "RB": 52, "WR": 65, "TE": 24},
+        "exponents": {"QB": 1.15, "RB": 1.2, "WR": 1.1, "TE": 0.9},
         "budget_share": POSITION_BUDGET_SHARE,
     },
     (16, "half_ppr"): {
-        "ranks": {"QB": 16, "RB": 44, "WR": 60, "TE": 24},
-        "exponents": {"QB": 0.7, "RB": 0.7, "WR": 0.85, "TE": 0.5},
+        "ranks": {"QB": 18, "RB": 56, "WR": 75, "TE": 26},
+        "exponents": {"QB": 1.05, "RB": 1.2, "WR": 1.15, "TE": 0.9},
         "budget_share": POSITION_BUDGET_SHARE,
     },
     (8, "std"): {
-        "ranks": {"QB": 14, "RB": 36, "WR": 40, "TE": 16},
-        "exponents": {"QB": 1.05, "RB": 1.2, "WR": 1.15, "TE": 1.0},
+        "ranks": {"QB": 14, "RB": 32, "WR": 35, "TE": 16},
+        "exponents": {"QB": 1.1, "RB": 1.0, "WR": 1.05, "TE": 0.9},
         "budget_share": _STD_SHARE,
     },
     (10, "std"): {
-        "ranks": {"QB": 16, "RB": 36, "WR": 55, "TE": 18},
-        "exponents": {"QB": 1.1, "RB": 1.05, "WR": 1.15, "TE": 0.9},
+        "ranks": {"QB": 16, "RB": 36, "WR": 50, "TE": 18},
+        "exponents": {"QB": 1.2, "RB": 1.15, "WR": 1.1, "TE": 0.9},
         "budget_share": _STD_SHARE,
     },
     (12, "std"): {
-        "ranks": {"QB": 20, "RB": 44, "WR": 65, "TE": 24},
-        "exponents": {"QB": 1.2, "RB": 1.15, "WR": 1.15, "TE": 0.9},
+        "ranks": {"QB": 18, "RB": 44, "WR": 60, "TE": 24},
+        "exponents": {"QB": 1.15, "RB": 1.3, "WR": 1.2, "TE": 0.9},
         "budget_share": _STD_SHARE,
     },
     (14, "std"): {
-        "ranks": {"QB": 20, "RB": 52, "WR": 70, "TE": 26},
-        "exponents": {"QB": 1.05, "RB": 1.15, "WR": 1.2, "TE": 0.9},
+        "ranks": {"QB": 20, "RB": 48, "WR": 65, "TE": 26},
+        "exponents": {"QB": 1.1, "RB": 1.1, "WR": 1.1, "TE": 0.9},
         "budget_share": _STD_SHARE,
     },
     (16, "std"): {
-        "ranks": {"QB": 18, "RB": 60, "WR": 80, "TE": 30},
-        "exponents": {"QB": 1.05, "RB": 1.15, "WR": 1.15, "TE": 0.8},
+        "ranks": {"QB": 20, "RB": 52, "WR": 70, "TE": 28},
+        "exponents": {"QB": 1.0, "RB": 1.15, "WR": 1.1, "TE": 0.8},
         "budget_share": _STD_SHARE,
     },
     (8, "ppr"): {
-        "ranks": {"QB": 14, "RB": 36, "WR": 45, "TE": 14},
-        "exponents": {"QB": 1.0, "RB": 1.2, "WR": 1.2, "TE": 1.0},
+        "ranks": {"QB": 14, "RB": 32, "WR": 40, "TE": 14},
+        "exponents": {"QB": 1.0, "RB": 1.15, "WR": 1.15, "TE": 1.0},
         "budget_share": _PPR_SHARE,
     },
     (10, "ppr"): {
-        "ranks": {"QB": 18, "RB": 40, "WR": 55, "TE": 18},
-        "exponents": {"QB": 1.2, "RB": 1.3, "WR": 1.15, "TE": 0.9},
+        "ranks": {"QB": 16, "RB": 36, "WR": 50, "TE": 18},
+        "exponents": {"QB": 1.05, "RB": 1.05, "WR": 1.05, "TE": 0.9},
         "budget_share": _PPR_SHARE,
     },
     (12, "ppr"): {
-        "ranks": {"QB": 20, "RB": 44, "WR": 60, "TE": 24},
-        "exponents": {"QB": 1.1, "RB": 1.15, "WR": 1.15, "TE": 1.0},
+        "ranks": {"QB": 20, "RB": 40, "WR": 60, "TE": 22},
+        "exponents": {"QB": 1.15, "RB": 1.05, "WR": 1.25, "TE": 0.85},
         "budget_share": _PPR_SHARE,
     },
     (14, "ppr"): {
-        "ranks": {"QB": 20, "RB": 52, "WR": 65, "TE": 28},
-        "exponents": {"QB": 1.0, "RB": 1.15, "WR": 1.1, "TE": 1.0},
+        "ranks": {"QB": 22, "RB": 48, "WR": 65, "TE": 26},
+        "exponents": {"QB": 1.3, "RB": 1.1, "WR": 1.15, "TE": 0.85},
         "budget_share": _PPR_SHARE,
     },
     (16, "ppr"): {
-        "ranks": {"QB": 20, "RB": 60, "WR": 75, "TE": 30},
-        "exponents": {"QB": 1.0, "RB": 1.15, "WR": 1.15, "TE": 1.0},
+        "ranks": {"QB": 22, "RB": 52, "WR": 70, "TE": 28},
+        "exponents": {"QB": 1.1, "RB": 1.1, "WR": 1.1, "TE": 0.85},
         "budget_share": _PPR_SHARE,
     },
 }

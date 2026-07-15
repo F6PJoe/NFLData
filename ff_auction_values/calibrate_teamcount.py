@@ -71,40 +71,57 @@ RANK_CANDIDATES = {
 # production (or vice versa) reproduces the same overshoot bug this file's
 # docstring describes, just smaller.
 FORMAT_BUDGET_SHARE = {
-    "std": {"QB": 0.0608, "RB": 0.4629, "WR": 0.4014, "TE": 0.0750},
-    "ppr": {"QB": 0.0538, "RB": 0.4120, "WR": 0.4584, "TE": 0.0759},
+    "std": {"QB": 0.0741, "RB": 0.4349, "WR": 0.4011, "TE": 0.0898},
+    "ppr": {"QB": 0.0711, "RB": 0.4036, "WR": 0.4370, "TE": 0.0883},
 }
 
 EXPONENT_CANDIDATES = {
     "QB": [0.6, 0.7, 0.8, 0.9, 1.0, 1.05, 1.1, 1.15, 1.2, 1.3, 1.4, 1.5],
     "RB": [0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 1.0, 1.05, 1.1, 1.15, 1.2, 1.3, 1.4],
-    "WR": [0.6, 0.7, 0.8, 0.85, 0.9, 1.0, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3],
+    "WR": [0.6, 0.7, 0.8, 0.85, 0.9, 1.0, 1.05, 1.1, 1.15, 1.2, 1.25, 1.3, 1.4, 1.5],
     "TE": [0.4, 0.5, 0.6, 0.7, 0.8, 0.85, 0.9, 1.0, 1.1, 1.2],
 }
 
 
 def build_target(teams, fmt):
+    """Blend FantasyPros/4for4/Draft Sharks Market $ on the matched-key
+    (FantasyPros' player list) set. NO per-position total-based rescale of
+    Draft Sharks anymore — a real bug, found while calibrating superflex
+    (see CLAUDE.md, "Round 7"): the original rescale (fp_total/ds_total on
+    the matched set) was designed years ago to fix a genuine coverage-depth
+    artifact (Draft Sharks lists ~1000 players vs FantasyPros' ~150-200, so
+    comparing WHOLE-POOL totals conflated "DS values the top higher" with
+    "DS just lists more $1-$5 filler"). Restricting to the matched-key set
+    (already done here) fully fixes THAT problem on its own. But the
+    rescale kept being applied on top of the fix, and for QB/TE
+    specifically, DS's matched-key total genuinely differs from
+    FantasyPros' by roughly 2x (real disagreement about how much of the
+    budget those positions deserve, not an artifact) — silently forcing
+    DS's total to match FantasyPros' before blending doesn't correct
+    anything real; it just overwrites DS's independent opinion with
+    FantasyPros', dressed up as a 2-3-source blend. Caught because
+    superflex's target (FP+DS only, no 4for4 to dilute it — see below)
+    put Josh Allen at $81, ABOVE both raw sources ($54 FP / $75 DS) — the
+    rescale had inflated DS's already-higher raw value even further to
+    force DS's total up to match FP's. The regular 3-source blends weren't
+    as visibly broken (4for4, never rescaled, anchors the average even
+    when DS's contribution is distorted) but the same erasure-of-DS's-
+    real-opinion was happening there too, just masked."""
     suffix = FILE_SUFFIX[fmt]
     fp = tc.load_fp_raw_export(tc.HERE / f"reference_fantasypros_{teams}team{suffix}.csv")
     for4 = mkt.load_4for4(tc.HERE / f"reference_4for4_{teams}team{suffix}.csv")
     ds_market = mkt.load_draftsharks(tc.HERE / f"reference_draftsharks_{teams}team{suffix}.csv", "Market $")
 
-    def total_on_keys(src, pos, keys):
-        return sum(src[k]["value"] for k in keys if k in src and src[k]["pos"] == pos)
-
     target = {}
     for pos in POINTS_COL:
         fp_keys = {k for k, v in fp.items() if v["pos"] == pos}
-        fp_total = total_on_keys(fp, pos, fp_keys)
-        ds_scale = (fp_total / total_on_keys(ds_market, pos, fp_keys)
-                    if total_on_keys(ds_market, pos, fp_keys) else 1.0)
         pos_target = {}
         for k in fp_keys:
             vals = [fp[k]["value"]]
             if k in for4 and for4[k]["pos"] == pos:
                 vals.append(for4[k]["value"])
             if k in ds_market and ds_market[k]["pos"] == pos:
-                vals.append(ds_market[k]["value"] * ds_scale)
+                vals.append(ds_market[k]["value"])
             pos_target[k] = sum(vals) / len(vals)
         target[pos] = pos_target
     return target

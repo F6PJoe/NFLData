@@ -1189,6 +1189,150 @@ re-widen, but there's no guarantee they're wide enough forever — the
 edge-of-range warning is now automatic, but widening on demand is still a
 manual step when it fires.
 
+## Round 7 (in progress): roster configuration
+User's request: let people type in their own starter counts (QB/RB/WR/TE,
+multiple flex types including superflex/QB-RB-WR-TE, bench, DEF/K) rather
+than being limited to this project's one fixed roster shape. Explicitly
+free-form, not a short curated dropdown list like team count/format —
+which matters architecturally, since real-market calibration (the
+approach used for every dimension so far) can't cover an effectively
+infinite input space the way it could cover 5 team counts or 3 formats.
+
+**Fourth bug found, this time surfaced by the user while scoping the new
+feature, not by this project's own checks**: while confirming what roster
+shape to validate the new feature against, the user clarified their real
+roster is QB1/RB2/**WR3**/TE1/FLEX(RB-WR-TE)1/DEF1/K1/6-bench (16 roster
+spots/team) — but `STARTERS["WR"]` had been `2`, not `3`, since the very
+first round of this entire project. Every reference pull ever calibrated
+against (all 15 team-count/format combinations, going back to the original
+12-team baseline) was real data for a 3-WR-starter league; the constant
+just mislabeled it. Impact confirmed to be narrow: `REPLACEMENT_RANK`/
+`VORP_EXPONENT`/`POSITION_BUDGET_SHARE` are fit directly against real $
+data by grid search, not derived from `STARTERS`, so those calibrated
+values were unaffected. The only real input `STARTERS` feeds is
+`TOTAL_ROSTER_SPOTS_PER_TEAM`, which drives the discretionary-money $1-
+floor deduction — off by 1 spot/team (15 vs. the correct 16), a ~0.5%
+shift in the discretionary pool (12-team: $2220 -> $2208). Re-ran the
+calibration search at 3 representative combinations (12-team half-PPR,
+12-team STD, 16-team PPR) against the corrected pool to confirm the
+optimal rank/exponent candidates didn't move — they didn't (identical
+results both before and after) — so this was a constant fix + rebuild, not
+a full recalibration. `STARTERS = {"QB": 1, "RB": 2, "WR": 3, "TE": 1}` is
+now correct; rebuilt and re-verified `live_draft_board.xlsx` and the
+static table against it.
+
+**Plan for the free-form feature itself** (not yet built — this section
+will grow as the work proceeds):
+1. A formula-based estimate for arbitrary roster shapes — a Harstad-style
+   "required starts" model (`teams x (starters_at_position +
+   flex_share_at_position x flex_slots)`, adjusted for the real bye/injury
+   depth factor already implicit in the calibrated baseline), with the
+   flex-demand split across RB/WR/TE derived by working backward from the
+   now-corrected, real-calibrated 12-team baseline — a principled anchor,
+   not an arbitrary assumption. Same honesty convention as
+   `build_teamcount_estimate.py`'s existing "UNVALIDATED math-only
+   estimate" fallback for uncalibrated team counts: clearly flagged as an
+   estimate for roster shapes without their own real calibration.
+2. Superflex/2QB gets real calibration, not just the formula — real
+   markets are known to push QB budget share to 25-35%+ (vs. this
+   project's single-QB ~5-8%), the same "real bidding behavior, not
+   derivable from roster math alone" category `POSITION_BUDGET_SHARE`
+   already fell into for scoring format. User pulling real
+   `reference_<source>_12team_superflex.csv` data (same 3 sources, 12
+   teams, half-PPR, $200, same RB/WR/TE/flex/bench shape, QB slot ->
+   superflex) to calibrate this properly.
+3. Excel architecture still to be designed — unlike team count/format
+   (discrete dropdown over a small calibrated set), the formula-based tier
+   might be reproducible as a genuine live Excel formula (like Budget
+   already is) rather than a precomputed lookup, since it's real math, not
+   a market-calibrated constant — worth exploring once the formula itself
+   is validated in Python first.
+
+## Fifth bug: the Draft Sharks total-based rescale was silently erasing its own signal for QB/TE (affects everything calibrated before this fix)
+Caught by the user directly questioning a superflex QB1 value ("Josh Allen
+at $80 — that's way over what Draft Sharks and FantasyPros has him at")
+— the single most consequential catch in this project's history, since
+tracing it down revealed the bug wasn't specific to superflex.
+
+**Mechanism**: `calibrate_teamcount.py`'s `build_target()` rescaled Draft
+Sharks so its position TOTAL (on the FantasyPros-matched key set) equaled
+FantasyPros' total, before averaging — `ds_scale = fp_total/ds_total`,
+applied to every player's DS value. This rescale was originally built (much
+earlier in the project) to fix a real, different problem: comparing
+WHOLE-POOL totals conflated "DS values the top higher" with "DS just lists
+~1000 players vs FantasyPros' ~150-200, so of course its raw total is
+bigger." Restricting the total comparison to the matched-key set (done
+years ago) fully fixed that specific problem on its own — but the rescale
+kept being applied on top of the already-fixed comparison, and for QB/TE
+specifically, `ds_scale` turned out to be nowhere near 1.0 even on the
+matched set (QB: 0.47-0.52 in every half-PPR/STD/PPR combo, i.e. Draft
+Sharks values the position's matched players at roughly 2x FantasyPros'
+total; TE: 0.55-0.60). That's not a coverage artifact anymore — it's Draft
+Sharks and FantasyPros genuinely disagreeing by ~2x about how much of the
+budget QB/TE deserve. Forcing DS's total to match FP's before averaging
+doesn't correct anything real at that point; it just silently overwrites
+DS's independent opinion with FantasyPros', which then gets called a
+"3-source blend" when it's effectively FantasyPros' opinion wearing a
+DS-shaped hat.
+
+**Why it wasn't caught by this project's own verification discipline**:
+the regular 3-source blends (FP + 4for4 + DS-scaled) weren't visibly
+broken in spot checks — 4for4 (never rescaled) anchors the average to a
+sane range even when DS's contribution is distorted, and individual-player
+checks kept landing "close enough" to the real spread. Superflex was the
+first calibration to use a 2-source blend (FP + DS only — 4for4 excluded
+for an unrelated, separately-verified data-quality reason, see above) —
+with no 4for4 anchor, the same distortion had nothing masking it, and
+produced a target ABOVE both raw sources ($81 vs. $54 FP / $75 DS,
+mathematically impossible for a genuine average of the two to exceed both).
+That's what made it visible enough for the user to catch on a single
+glance at one player. **Lesson**: an aggregate-blend bug can hide behind
+enough real signals even while actively corrupting one of them — reducing
+the source count (as superflex did, for good reason) removed the camouflage,
+it didn't introduce a new bug.
+
+**Scope check before deciding whether to redo everything**: spot-checked
+QB/TE production values (already-committed, from the 15-combo team-count/
+format round) against raw FP/4for4/DS at a 20% tolerance — zero flags.
+Confirmed empirically that the 4for4-anchoring effect really was masking
+the bug rather than the bug not mattering. Measured the REAL shift the fix
+produces: QB budget share rises ~20-30% relative in every combo (e.g.
+half-PPR 5.9%→7.2% averaged across team counts), TE similarly (7.6%→8.9%)
+— real and worth fixing properly, not within noise.
+
+**Fix**: removed the per-position `ds_scale` rescale entirely from
+`build_target()` (both `calibrate_teamcount.py`'s and
+`calibrate_superflex.py`'s copies) — blend raw FantasyPros + 4for4 +
+Draft-Sharks-Market values directly on the matched-key set. Re-ran the
+FULL calibration (budget share, then rank, then exponent, in that order,
+each depending on the last) for all 15 team-count/format combinations —
+every one converged with no edge-of-range warnings. Re-verified
+individually: Trey McBride now lands almost exactly on FantasyPros
+($28 vs. $28 at 12-team half-PPR) — resolving a TE-undervaluation pattern
+this project had accepted as "honest source disagreement" for multiple
+prior rounds, when it was actually this bug suppressing Draft Sharks'
+(correctly higher) TE opinion the whole time. Josh Allen and other QBs now
+land properly centered between FP and DS instead of hugging FP/4for4's
+level. Updated production constants (`build_auction_values.py`'s
+`REPLACEMENT_RANK`/`VORP_EXPONENT`/`POSITION_BUDGET_SHARE`, all 15 entries
+in `build_teamcount_estimate.py`'s `CALIBRATED` dict, `calibrate_teamcount.py`'s
+`FORMAT_BUDGET_SHARE`), rebuilt the static table and `live_draft_board.xlsx`,
+and re-ran the full end-to-end Excel verification — all 15 combos still
+land on exact `teams × $200` totals, budget still independently live, tier/
+global-factor live-draft mechanics unaffected.
+
+**Superflex re-verified with the fix too**: Josh Allen now $63 (was the
+broken $80), sitting properly between FP $54 and DS $75 instead of
+exceeding both. Real superflex QB budget share corrected from the broken
+37.7% down to **29.7%** — still a massive real premium (~4x single-QB's
+~7%, matching known real-market superflex behavior), just no longer
+artificially inflated by the bug. Final validated superflex numbers (not
+yet wired into the live workbook — that's the roster-configuration
+feature still in progress):
+`ranks={"QB":26,"RB":40,"WR":60,"TE":22}`,
+`exponents={"QB":1.0,"RB":1.2,"WR":1.3,"TE":1.0}`,
+`budget_share={"QB":0.2971,"RB":0.2936,"WR":0.3306,"TE":0.0787}`.
+
 ## Output
 `auction_values_half_ppr.csv` — all QB/RB/WR/TE from the consensus
 projections, sorted by auction value descending.

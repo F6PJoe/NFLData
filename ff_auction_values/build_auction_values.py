@@ -70,11 +70,23 @@ POINTS_COL_BY_FORMAT = {
 # this as a plain alias means nothing else needs to change.
 POINTS_COL = POINTS_COL_BY_FORMAT["half_ppr"]
 
-# ── League settings (v1 static, standard league) ────────────────────────────
+# ── League settings ──────────────────────────────────────────────────────────
+# Corrected WR starters 2->3 (bug found in the roster-configuration round —
+# see CLAUDE.md): every reference pull this project has ever calibrated
+# against (FantasyPros/4for4/Draft Sharks, all rounds, all team counts/
+# formats) was actually for a 3-WR-starter league, but this constant said 2
+# the entire time. The calibrated REPLACEMENT_RANK/VORP_EXPONENT/
+# POSITION_BUDGET_SHARE values themselves are unaffected (they're fit
+# directly against real $ data, not derived from this constant) — only
+# TOTAL_ROSTER_SPOTS_PER_TEAM (and therefore the discretionary-money $1-
+# floor deduction) was silently wrong by 1 spot/team (15 vs the correct 16)
+# this whole time. Small in dollar terms (~0.5% of the discretionary pool
+# at 12 teams) but real; every calibration was re-verified against the
+# corrected pool after this fix, not just assumed fine.
 TEAMS = 12
 BUDGET = 200
 BENCH_SPOTS = 6
-STARTERS = {"QB": 1, "RB": 2, "WR": 2, "TE": 1}
+STARTERS = {"QB": 1, "RB": 2, "WR": 3, "TE": 1}
 FLEX_SLOTS = 1  # RB/WR/TE-eligible
 NON_SKILL_SLOTS_PER_TEAM = 2  # 1 DEF + 1 K, assigned flat $1 (no projections source)
 
@@ -125,7 +137,7 @@ NON_SKILL_SLOTS_PER_TEAM = 2  # 1 DEF + 1 K, assigned flat $1 (no projections so
 # could select a different "top 12" and thus a different "best" candidate
 # on different runs of the identical search — fixed by sorting on
 # (-value, key) instead of just (-value,) in all 3 calibration scripts.
-REPLACEMENT_RANK = {"QB": 19, "RB": 44, "WR": 64, "TE": 24}
+REPLACEMENT_RANK = {"QB": 16, "RB": 44, "WR": 60, "TE": 20}
 
 # Position budget shares: what fraction of the skill-position discretionary
 # pool goes to each position, BEFORE distributing within a position by VORP.
@@ -141,7 +153,7 @@ REPLACEMENT_RANK = {"QB": 19, "RB": 44, "WR": 64, "TE": 24}
 # out of replacement-level choices. Within a position, dollars are still
 # distributed proportional to VORP (using REPLACEMENT_RANK/VORP_EXPONENT
 # below for shape).
-POSITION_BUDGET_SHARE = {"QB": 0.0585, "RB": 0.431, "WR": 0.4345, "TE": 0.076}
+POSITION_BUDGET_SHARE = {"QB": 0.0716, "RB": 0.4179, "WR": 0.4219, "TE": 0.0886}
 
 # Convexity exponent applied to VORP before converting to dollars:
 # weighted_vorp = VORP ** exponent (1.0 = pure linear). Added after
@@ -193,7 +205,7 @@ POSITION_BUDGET_SHARE = {"QB": 0.0585, "RB": 0.431, "WR": 0.4345, "TE": 0.076}
 # change under the iterative method), but this is why the methodology note
 # is here: don't trust a single one-shot exponent search again without
 # iterating to convergence.
-VORP_EXPONENT = {"QB": 1.05, "RB": 1.15, "WR": 1.15, "TE": 0.9}
+VORP_EXPONENT = {"QB": 1.1, "RB": 1.2, "WR": 1.2, "TE": 1.0}
 
 # How much personal rank pulls a player's points toward the personal-rank-
 # implied value. 0 = pure projections, 1 = pure personal rank order.
