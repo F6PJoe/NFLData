@@ -79,6 +79,16 @@ points are calculated.
   local `.env` or config file, never commit them.
 - Output one CSV per source per position (e.g. `espn_qb.csv`,
   `fantasypros_rb.csv`), plus consensus CSVs (`consensus_qb.csv`, etc.).
+- `build_consensus.py`'s `NAME_ALIASES`/`DISPLAY_NAME_OVERRIDES`: when a
+  player's display name in the consensus output changes (e.g. fixing a
+  fetcher that was failing brings a source back online, and that source
+  spells someone differently — this happened with Yahoo abbreviating
+  "M. Valdes-Scantling"), any downstream consumer matching by exact name
+  (like `ff_sfb16`'s workbook scripts) will silently stop recognizing that
+  player as the same person and may add a duplicate row instead of erroring.
+  After any `NAME_ALIASES`/`DISPLAY_NAME_OVERRIDES` change, check
+  `ff_sfb16/workbook_common.py`'s `NAME_ALIASES` for the same player and
+  update it too, then check the live workbook for duplicate rows.
 
 ## Status / next steps
 1. `fetch_espn_projections.py` — **done**. Writes `espn_qb.csv`,
@@ -137,9 +147,29 @@ points are calculated.
    `consensus_te.csv` — each is the per-source schema plus Fantasy Points
    column(s), matching the live Google Sheet's existing column order/names
    (QB: "Fantasy Points"; RB/WR: Half-PPR/PPR/STD — WR's half column is named
-   "Fantasy Points (Half)"; TE: Half-PPR/PPR/"TE Premium" — TE Premium is
+   "Fantasy Points (Half)"; TE: Half-PPR/PPR/"TE Premium"/STD — TE Premium is
    1.5 pts/reception, via `scoring.te_premium_points`), sorted descending by
    the primary fantasy points column.
+
+   **TE's STD column added later, appended at the end.** TE originally only
+   got Half-PPR/PPR/"TE Premium" (STD deliberately swapped out at the time
+   to match the live sheet's then-current layout, not an oversight). Needed
+   for real STD-format calibration in the sibling `ff_auction_values`
+   project, which also wants PPR/STD versions of its auction-value tables —
+   `std_points()` already existed in `scoring.py` and is used identically
+   for RB/WR, so this was a pure two-line addition
+   (`OUT_COLUMNS["TE"]` + `merge_position()`'s TE branch), not a new scoring
+   rule. Appended as the LAST column (after "TE Premium") rather than
+   inserted in RB/WR's Half/PPR/STD order, specifically so every existing
+   column's position on the live Google Sheet stays unchanged — only a new
+   trailing column shows up, nothing shifts. Verified safe against every
+   downstream reader of `consensus_te.csv` (`ff_rankings/scoring_adjust.py`,
+   `ff_cheatsheet`'s two updater scripts, `ff_sfb16/workbook_common.py`) —
+   all read by column name (`csv.DictReader`/`pandas`), none positionally,
+   so a new trailing column doesn't affect any of them. Cheat Sheet in
+   particular is unaffected for a different reason too: it computes points
+   from the league settings the user enters directly in Excel, not from
+   these precomputed consensus columns.
 6. `push_to_sheets.py` — **done**. Pushes each `consensus_<pos>.csv` to the
    live Google Sheet (id `1HoxQZOsM0LFzHxEqCGv5yQJKa_ifdzasZoEHkMGVItQ`),
    tabs "LIVE PROJECTIONS QB/RB/WR/TE", sorted descending by half-PPR points

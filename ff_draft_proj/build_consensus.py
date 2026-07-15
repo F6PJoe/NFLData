@@ -43,7 +43,8 @@ OUT_COLUMNS = {
            "Fantasy Points (Half)", "Fantasy Points (PPR)", "Fantasy Points (STD)"],
     "TE": ["TE", "Team", "Bye", "Targets", "Rec", "Rec Yds", "Rec TD", "Rush Att",
            "Rush Yds", "Rush TD",
-           "Fantasy Points (Half-PPR)", "Fantasy Points (PPR)", "TE Premium"],
+           "Fantasy Points (Half-PPR)", "Fantasy Points (PPR)", "TE Premium",
+           "Fantasy Points (STD)"],
 }
 
 SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
@@ -79,7 +80,29 @@ NAME_ALIASES = {
     "jamarion miller": "jam miller",
     "nathaniel dell": "tank dell",
     "christopher brooks": "chris brooks",
-    "kenny gainwell": "kenneth gainwell",
+    "kenneth gainwell": "kenny gainwell",
+}
+
+# Display-name overrides: for the nickname-preferring entries above, lock
+# the display name to the nickname so the "prefer fuller spelling" logic
+# below (which exists to fix cases like Yahoo's "M. Valdes-Scantling" vs.
+# "Marquez Valdes-Scantling") doesn't fight the opposite direction here.
+# "marquez valdes scantling" is intentionally absent — that one really does
+# want the fullest name, which the length-based fallback already gets right.
+DISPLAY_NAME_OVERRIDES = {
+    "cam skattebo": "Cam Skattebo",
+    "woody marks": "Woody Marks",
+    "mitch trubisky": "Mitch Trubisky",
+    "josh palmer": "Josh Palmer",
+    "mitch tinsley": "Mitch Tinsley",
+    "matt hibner": "Matt Hibner",
+    "drew ogletree": "Drew Ogletree",
+    "chig okonkwo": "Chig Okonkwo",
+    "cam ward": "Cam Ward",
+    "jam miller": "Jam Miller",
+    "tank dell": "Tank Dell",
+    "chris brooks": "Chris Brooks",
+    "kenny gainwell": "Kenny Gainwell",
 }
 
 
@@ -147,6 +170,16 @@ def merge_position(pos):
                 order.append(key)
             player = players[key]
             player["sources"].append(source)
+            # Display name: for explicitly nickname-preferring aliases,
+            # always use that exact nickname. Otherwise prefer the fullest
+            # spelling seen across all sources, not just whichever source
+            # happened to be processed first — some sources (e.g. Yahoo)
+            # abbreviate first names ("M. Valdes-Scantling" vs. "Marquez
+            # Valdes-Scantling"), and SOURCES order shouldn't decide that.
+            if key in DISPLAY_NAME_OVERRIDES:
+                player["name"] = DISPLAY_NAME_OVERRIDES[key]
+            elif len(name) > len(player["name"]):
+                player["name"] = name
             if player["team"] == "FA" and team != "FA":
                 player["team"] = team
             if not player["bye"]:
@@ -186,6 +219,7 @@ def merge_position(pos):
             record["Fantasy Points (Half-PPR)"] = scoring.round2(scoring.half_ppr_points(s))
             record["Fantasy Points (PPR)"] = scoring.round2(scoring.ppr_points(s))
             record["TE Premium"] = scoring.round2(scoring.te_premium_points(s))
+            record["Fantasy Points (STD)"] = scoring.round2(scoring.std_points(s))
             sort_key = record["Fantasy Points (PPR)"]
         elif pos == "WR":
             record["Fantasy Points (Half)"] = scoring.round2(scoring.half_ppr_points(s))
