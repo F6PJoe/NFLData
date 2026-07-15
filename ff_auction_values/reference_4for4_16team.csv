@@ -1,0 +1,87 @@
+QB,,,,,RB,,,,,WR,,,,,TE,,,,
+#,Player,TM,$,BYE,#,Player,TM,$,BYE,#,Player,TM,$,BYE,#,Player,TM,$,BYE
+1,Josh Allen,BUF,$22,7,1,Jahmyr Gibbs,DET,$58,6,1,Ja'Marr Chase,CIN,$54,6,1,Trey McBride,ARI,$20,14
+2,Lamar Jackson,BAL,$15,13,2,Bijan Robinson,ATL,$57,11,2,Puka Nacua,LAR,$52,11,2,Brock Bowers,LV,$17,13
+3,Drake Maye,NE,$9,11,3,Jonathan Taylor,IND,$56,13,3,Jaxon Smith-Njigba,SEA,$51,11,3,Colston Loveland,CHI,$16,10
+4,Jayden Daniels,WAS,$9,7,4,Christian McCaffrey,SF,$54,8,4,Amon-Ra St. Brown,DET,$45,6,4,Tucker Kraft,GB,$15,11
+5,Jalen Hurts,PHI,$9,10,5,De'Von Achane,MIA,$53,6,5,Drake London,ATL,$41,11,5,Tyler Warren,IND,$13,13
+6,Joe Burrow,CIN,$8,6,6,Ashton Jeanty,LV,$42,13,6,A.J. Brown,NE,$35,11,6,Harold Fannin,CLE,$12,11
+7,Justin Herbert,LAC,$7,7,7,James Cook,BUF,$39,7,7,Justin Jefferson,MIN,$35,6,7,Sam LaPorta,DET,$10,6
+8,Trevor Lawrence,JAX,$6,7,8,Kyren Williams,LAR,$38,11,8,CeeDee Lamb,DAL,$32,14,8,George Kittle,SF,$9,8
+9,Dak Prescott,DAL,$6,14,9,Saquon Barkley,PHI,$38,10,9,Nico Collins,HOU,$31,8,9,Kyle Pitts,ATL,$7,11
+10,Caleb Williams,CHI,$6,10,10,Chase Brown,CIN,$38,6,10,George Pickens,DAL,$31,14,10,Travis Kelce,KC,$7,5
+11,Brock Purdy,SF,$5,8,11,Omarion Hampton,LAC,$37,7,11,Chris Olave,NO,$30,8,11,Mark Andrews,BAL,$6,13
+12,Jaxson Dart,NYG,$5,8,12,Derrick Henry,BAL,$37,13,12,DeVonta Smith,PHI,$30,10,12,Dallas Goedert,PHI,$6,10
+13,Patrick Mahomes,KC,$4,5,13,Kenneth Walker,KC,$36,5,13,Tee Higgins,CIN,$29,6,13,Jake Ferguson,DAL,$6,14
+14,Bo Nix,DEN,$3,10,14,Jeremiyah Love,ARI,$35,14,14,Tetairoa McMillan,CAR,$29,5,14,Dalton Kincaid,BUF,$6,7
+15,Jared Goff,DET,$2,6,15,Cam Skattebo,NYG,$34,8,15,Garrett Wilson,NYJ,$29,13,15,Hunter Henry,NE,$3,11
+16,Matthew Stafford,LAR,$1,11,16,Josh Jacobs,GB,$33,11,16,Jaylen Waddle,DEN,$29,10,16,Oronde Gadsden,LAC,$3,7
+17,Kyler Murray,MIN,$1,6,17,Quinshon Judkins,CLE,$33,11,17,Ladd McConkey,LAC,$29,7,17,Isaiah Likely,NYG,$2,8
+18,Jordan Love,GB,$1,11,18,Travis Etienne,NO,$31,8,18,Zay Flowers,BAL,$29,13,18,Juwan Johnson,NO,$1,8
+19,Malik Willis,MIA,$1,6,19,Breece Hall,NYJ,$31,13,19,Rashee Rice,KC,$29,5,19,Chigoziem Okonkwo,WAS,$1,7
+20,Baker Mayfield,TB,$1,10,20,Javonte Williams,DAL,$30,14,20,Davante Adams,LAR,$27,11,20,Brenton Strange,JAX,$1,7
+21,Tyler Shough,NO,$1,8,21,D'Andre Swift,CHI,$29,10,21,Christian Watson,GB,$27,11,21,Kenyon Sadiq,NYJ,$1,13
+ , , , , ,22,David Montgomery,HOU,$29,8,22,Terry McLaurin,WAS,$27,7,22,Dalton Schultz,HOU,$1,8
+ , , , , ,23,TreVeyon Henderson,NE,$28,11,23,Jameson Williams,DET,$24,6,23,AJ Barner,SEA,$1,11
+ , , , , ,24,Bucky Irving,TB,$28,10,24,Luther Burden,CHI,$24,10,24,T.J. Hockenson,MIN,$1,6
+ , , , , ,25,Bhayshul Tuten,JAX,$28,7,25,Emeka Egbuka,TB,$22,10,25,Cade Otton,TB,$1,10
+ , , , , ,26,Jaylen Warren,PIT,$28,9,26,Mike Evans,SF,$20,8,26,Greg Dulcich,MIA,$1,6
+ , , , , ,27,Rhamondre Stevenson,NE,$28,11,27,DK Metcalf,PIT,$20,9,27,Pat Freiermuth,PIT,$1,9
+ , , , , ,28,Rico Dowdle,PIT,$28,9,28,Brian Thomas Jr.,JAX,$20,7,28,David Njoku,LAC,$1,7
+ , , , , ,29,Jadarian Price,SEA,$27,11,29,Rome Odunze,CHI,$19,10, , , , , 
+ , , , , ,30,Tony Pollard,TEN,$26,9,30,D.J. Moore,BUF,$19,7, , , , , 
+ , , , , ,31,Kenneth Gainwell,TB,$23,10,31,Chris Godwin,TB,$19,10, , , , , 
+ , , , , ,32,J.K. Dobbins,DEN,$18,10,32,Carnell Tate,TEN,$18,9, , , , , 
+ , , , , ,33,Chuba Hubbard,CAR,$17,5,33,Parker Washington,JAX,$18,7, , , , , 
+ , , , , ,34,Jonathon Brooks,CAR,$16,5,34,Michael Wilson,ARI,$18,14, , , , , 
+ , , , , ,35,Kyle Monangai,CHI,$16,10,35,Jayden Reed,GB,$18,11, , , , , 
+ , , , , ,36,RJ Harvey,DEN,$16,10,36,Quentin Johnston,LAC,$17,7, , , , , 
+ , , , , ,37,Blake Corum,LAR,$15,11,37,Josh Downs,IND,$17,13, , , , , 
+ , , , , ,38,Chris Rodriguez,JAX,$15,7,38,Malik Nabers,NYG,$17,8, , , , , 
+ , , , , ,39,Rachaad White,WAS,$15,7,39,Michael Pittman Jr.,PIT,$17,9, , , , , 
+ , , , , ,40,Aaron Jones,MIN,$15,6,40,Jordyn Tyson,NO,$17,8, , , , , 
+ , , , , ,41,Jordan Mason,MIN,$14,6,41,Courtland Sutton,DEN,$17,10, , , , , 
+ , , , , ,42,Tyjae Spears,TEN,$13,9,42,Jakobi Meyers,JAX,$16,7, , , , , 
+ , , , , ,43,Isiah Pacheco,DET,$13,6,43,Marvin Harrison Jr.,ARI,$15,14, , , , , 
+ , , , , ,44,Brian Robinson,ATL,$12,11,44,Alec Pierce,IND,$15,13, , , , , 
+ , , , , ,45,Jacory Croskey-Merritt,WAS,$8,7,45,Romeo Doubs,NE,$14,11, , , , , 
+ , , , , ,46,Woody Marks,HOU,$8,8,46,Wan'Dale Robinson,TEN,$14,9, , , , , 
+ , , , , ,47,Braelon Allen,NYJ,$7,13,47,Ricky Pearsall,SF,$13,8, , , , , 
+ , , , , ,48,Justice Hill,BAL,$7,13,48,Jordan Addison,MIN,$13,6, , , , , 
+ , , , , ,49,Ty Johnson,BUF,$7,7,49,Xavier Worthy,KC,$13,5, , , , , 
+ , , , , ,50,Tyrone Tracy,NYG,$6,8,50,Rashid Shaheed,SEA,$13,11, , , , , 
+ , , , , ,51,Samaje Perine,CIN,$6,6,51,Khalil Shakir,BUF,$12,7, , , , , 
+ , , , , ,52,Tyler Allgeier,ARI,$4,14,52,Jayden Higgins,HOU,$12,8, , , , , 
+ , , , , ,53,Emanuel Wilson,SEA,$3,11,53,Matthew Golden,GB,$11,11, , , , , 
+ , , , , ,54,Brashard Smith,KC,$3,5,54,KC Concepcion,CLE,$10,11, , , , , 
+ , , , , ,55,Sean Tucker,TB,$3,10,55,Adonai Mitchell,NYJ,$7,13, , , , , 
+ , , , , ,56,Alvin Kamara,NO,$3,8,56,Tre Tucker,LV,$7,13, , , , , 
+ , , , , ,57,Ray Davis,BUF,$2,7,57,Ryan Flournoy,DAL,$7,14, , , , , 
+ , , , , ,58,Kimani Vidal,LAC,$1,7,58,Tyquan Thornton,KC,$7,5, , , , , 
+ , , , , ,59,DJ Giddens,IND,$1,13,59,Jalen Coker,CAR,$7,5, , , , , 
+ , , , , ,60,Dylan Sampson,CLE,$1,11,60,Isaac TeSlaa,DET,$5,6, , , , , 
+ , , , , ,61,Kaelon Black,SF,$1,8,61,Antonio Williams,WAS,$5,7, , , , , 
+ , , , , ,62,Jonah Coleman,DEN,$1,10,62,Jauan Jennings,MIN,$5,6, , , , , 
+ , , , , ,63,Tank Bigsby,PHI,$1,10,63,Jaylin Noel,HOU,$5,8, , , , , 
+ , , , , ,64,Zach Charbonnet,SEA,$1,11,64,Troy Franklin,DEN,$3,10, , , , , 
+ , , , , ,65,Rasheen Ali,BAL,$1,13,65,Rashod Bateman,BAL,$2,13, , , , , 
+ , , , , ,66,Isaiah Davis,NYJ,$1,13,66,Jalen McMillan,TB,$2,10, , , , , 
+ , , , , , , , , , ,67,Chris Bell,MIA,$2,6, , , , , 
+ , , , , , , , , , ,68,Denzel Boston,CLE,$2,11, , , , , 
+ , , , , , , , , , ,69,Omar Cooper Jr.,NYJ,$2,13, , , , , 
+ , , , , , , , , , ,70,Germie Bernard,PIT,$2,9, , , , , 
+ , , , , , , , , , ,71,Darius Slayton,NYG,$2,8, , , , , 
+ , , , , , , , , , ,72,Andrei Iosivas,CIN,$1,6, , , , , 
+ , , , , , , , , , ,73,Travis Hunter,JAX,$1,7, , , , , 
+ , , , , , , , , , ,74,Jalen Nailor,LV,$1,13, , , , , 
+ , , , , , , , , , ,75,Caleb Douglas,MIA,$1,6, , , , , 
+ , , , , , , , , , ,76,Makai Lemon,PHI,$1,10, , , , , 
+ , , , , , , , , , ,77,Jack Bech,LV,$1,13, , , , , 
+ , , , , , , , , , ,78,Xavier Legette,CAR,$1,5, , , , , 
+ , , , , , , , , , ,79,Cooper Kupp,SEA,$1,11, , , , , 
+ , , , , , , , , , ,80,Ashton Dulin,IND,$1,13, , , , , 
+ , , , , , , , , , ,81,KaVontae Turpin,DAL,$1,14, , , , , 
+ , , , , , , , , , ,82,Joshua Palmer,BUF,$1,7, , , , , 
+ , , , , , , , , , ,83,Hollywood Brown,PHI,$1,10, , , , , 
+ , , , , , , , , , ,84,Malik Washington,MIA,$1,6, , , , , 
+ , , , , , , , , , ,85,Calvin Ridley,TEN,$1,9, , , , , 
