@@ -95,6 +95,10 @@ def main():
 
     print(f"Fetching current content for post {post_id}...")
     resp = requests.get(api, params={"context": "edit"}, auth=auth, timeout=30)
+    if not resp.ok:
+        print(f"GET failed: {resp.status_code} {resp.reason}", file=sys.stderr)
+        print(f"Response headers: {dict(resp.headers)}", file=sys.stderr)
+        print(f"Response body (first 2000 chars): {resp.text[:2000]}", file=sys.stderr)
     resp.raise_for_status()
     post = resp.json()
     content = post["content"]["raw"]
@@ -109,6 +113,10 @@ def main():
 
     print("Pushing updated content back to WordPress...")
     resp = requests.post(api, auth=auth, json={"content": content}, timeout=30)
+    if not resp.ok:
+        print(f"POST failed: {resp.status_code} {resp.reason}", file=sys.stderr)
+        print(f"Response headers: {dict(resp.headers)}", file=sys.stderr)
+        print(f"Response body (first 2000 chars): {resp.text[:2000]}", file=sys.stderr)
     resp.raise_for_status()
     print(f"Done. Post {post_id} updated ({resp.json().get('modified', 'unknown time')}).")
 
