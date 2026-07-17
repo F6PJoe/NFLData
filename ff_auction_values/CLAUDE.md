@@ -1189,7 +1189,7 @@ re-widen, but there's no guarantee they're wide enough forever — the
 edge-of-range warning is now automatic, but widening on demand is still a
 manual step when it fires.
 
-## Round 7 (in progress): roster configuration
+## Round 7: roster configuration
 User's request: let people type in their own starter counts (QB/RB/WR/TE,
 multiple flex types including superflex/QB-RB-WR-TE, bench, DEF/K) rather
 than being limited to this project's one fixed roster shape. Explicitly
@@ -1332,6 +1332,785 @@ feature still in progress):
 `ranks={"QB":26,"RB":40,"WR":60,"TE":22}`,
 `exponents={"QB":1.0,"RB":1.2,"WR":1.3,"TE":1.0}`,
 `budget_share={"QB":0.2971,"RB":0.2936,"WR":0.3306,"TE":0.0787}`.
+
+## Round 7 completion: methodology defense, the 3-flex anchor, and a live-formula roster-shape architecture (v2)
+
+### A methodology challenge, resolved with evidence rather than argument
+Partway through this round the user pushed back hard on the whole
+real-data-calibration approach, prompted by advice from Gemini describing
+a pure VBD formula (find peak VBD, apply one $/point rate, let values
+decrease naturally) as sufficient on its own. Rather than re-assert the
+existing approach, ran the actual comparison with current players/
+projections: pure VBD (no position split, no convexity, naive `teams x
+starters` baseline) put the top overall player at **$93** of $200 — the
+same $91-of-$200 problem from this project's very first round, reproduced
+live with today's data, not old history. Every named player ($20-40 over
+every real source) confirmed it wasn't a fluke. Followed up on two more
+rounds of Gemini's specific suggested fixes (deepen the baseline; re-weight
+QB/TE by a guessed multiplier; account for the flex spot with an assumed
+60/40 WR/RB split): in each case the *direction* was right but the
+*magnitude* was a real, measurable miss when checked against this
+project's already-calibrated numbers (e.g. Gemini's guessed 1.3x QB
+multiplier would have landed at 4.2% budget share against a real 7.2% —
+a needed 2.25x, not 1.3x). The conclusion wasn't "trust me" — it was three
+independently-checked, wrong-by-a-checkable-margin guesses, laid out
+side by side with what real calibration produces. User accepted this and
+asked to proceed.
+
+### The 3-flex anchor: the user's actual league, and the second real data point needed
+User pulled real reference data for their upcoming league (14-team, Full
+PPR, 1QB/2RB/3WR/1TE/**3FLEX**) — `reference_<source>_14team_ppr_3flex.csv`.
+4for4's tool has no genuine FLEX concept (confirmed: only raw
+QB/RB/WR/TE-to-start number fields, which explains retroactively why its
+earlier superflex attempt was broken — there was never a way to represent
+QB-flex-eligibility in that tool at all) — but the user found their tool
+accepts FRACTIONAL starter counts, and approximating 3 RB/WR/TE-flex spots
+as weighted fractional additions (1QB, 3.2RB, 4.2WR, 1.6TE) produced
+values landing plausibly between FantasyPros and Draft Sharks for every
+player checked, unlike superflex's attempt (no fractional workaround
+exists for flex-QB-eligibility, since it isn't "more of the same" the way
+flex-RB/WR/TE volume is). Used all 3 sources. Calibrated
+(`calibrate_3flex.py`, same methodology as every other round — real
+budget share measured first, used consistently through the rank/exponent
+search, individually verified against named players): `ranks=
+{"QB":22,"RB":56,"WR":75,"TE":30}`, `exponents=
+{"QB":1.2,"RB":1.15,"WR":1.2,"TE":1.1}`, `budget_share=
+{"QB":6.0%,"RB":42.1%,"WR":42.8%,"TE":9.1%}`. QB rank landed at EXACTLY
+22, identical to the existing 14-team/PPR/1-flex baseline — a clean
+internal consistency check (QB isn't flex-eligible in this shape, so its
+demand genuinely shouldn't move at all, and it didn't).
+
+### `roster_formula.py`: the general model, with an honest split of what's trustworthy
+Two fundamentally different treatments, because rank and budget-share/
+exponent behave differently under roster changes:
+
+- **`REPLACEMENT_RANK`**: a smooth "required demand" formula,
+  `demand(pos) = starters[pos] + flex_share[pos] * flex_slots`, anchored to
+  whichever (teams, fmt) is already real-calibrated.
+  `FLEX_SHARE_STANDARD` (RB 0.182, WR 0.250, TE 0.083) is solved directly
+  from the 1-flex vs. 3-flex comparison — QB correctly came out exactly 0
+  (not flex-eligible in that shape), confirming the model isn't just
+  curve-fitting noise. `FLEX_SHARE_SUPERFLEX` decomposes a QB-eligible
+  flex slot into a QB portion (0.625, from the superflex vs. baseline
+  comparison) and an RB/WR/TE remainder split using
+  `FLEX_SHARE_STANDARD`'s own proportions — an ASSUMPTION, since the
+  superflex rank data alone is confounded by budget share moving
+  dramatically at the same time and can't isolate the RB/WR/TE split
+  independently. `RB_WR`-only and `WR_TE`-only flex types (added per user
+  request — real leagues use these) are derived by renormalizing
+  `FLEX_SHARE_STANDARD` to exclude the ineligible position — no real
+  reference data exists for either variant, always flagged "estimated."
+- **`VORP_EXPONENT` / `POSITION_BUDGET_SHARE`**: NOT the same smooth
+  formula — proven not to work that way (a naive demand-ratio model
+  predicted superflex QB budget share at ~11.6%; real is 29.7%, a 2.5x
+  miss). Uses a REGIME SWITCH instead: QB starters=1 and 0 superflex slots
+  applies a LINEAR INTERPOLATION by RB/WR/TE-type flex count (see below);
+  QB starters=2 OR >=1 superflex slot applies the real observed superflex
+  shift (a per-position ratio measured once at 12-team/half-PPR) on top of
+  whichever (teams, fmt) baseline is active — an extrapolation for any
+  other (teams, fmt), flagged as such.
+
+**Real bug caught by building the Excel version and checking real numbers,
+not by the Python self-tests alone**: an earlier version of this file flat-
+held exponent/budget_share at the (teams, fmt) baseline for ALL non-
+superflex roster changes, on the reasoning that budget share only drifted
+1-2 points between 1-flex and 3-flex (true — tested directly). But
+exponent was never separately tested, and it turns out TE's exponent
+shifts a full **0.85 -> 1.10** between 1-flex and 3-flex — a real, meaningful
+move that a flat hold missed entirely. First version of the live workbook
+landed $5-6 off the real 3-flex calibration (Gibbs $49 vs. real $54,
+McBride $19 vs. real $24) specifically because of this. Fixed by replacing
+the flat hold with a LINEAR INTERPOLATION by flex count
+(`EXPONENT_SLOPE_PER_FLEX` / `BUDGET_SHARE_SLOPE_PER_FLEX`), fit through
+the two real anchors (1-flex, 3-flex) — only valid for RB/WR/TE-type flex
+(the only type with two real data points at different flex counts); an
+`RB_WR`/`WR_TE` flex still flat-holds, since no flex-count-varying data
+exists for either. After the fix, 3-flex landed at $53/$49/$23/$24 vs. the
+real $54/$49/$23/$24 — 3 of 4 exact, 1 off by $1 (rounding noise, not the
+same systematic gap). **Lesson, consistent with this whole project**:
+"verified stable" for one parameter (budget share) doesn't imply another
+(exponent) is also stable — each needs its own check, not inherited
+confidence.
+
+### Excel v2: a live formula, not a bigger precomputed lookup, and why that got SIMPLER not more complex
+Team count and scoring format (15 real combinations total) precompute
+Weighted VORP for all 15 and let Excel pick among them — feasible because
+the combination count is small and every combination has real data.
+Roster shape has hundreds of theoretical combinations, most without real
+data, so v1.4's "precompute every combo" pattern doesn't extend here.
+
+Instead: raw player points (3 columns, one per scoring format) sit
+directly in the sheet, and `LARGE(range, k)` — a single native Excel
+function returning "the k-th largest value" — replaces the need for any
+custom rank-to-points interpolation formula. This is what makes a live
+version of Harstad-style replacement-level lookup safe to build at all:
+no array/dynamic-array construct (the category that corrupted a file
+outright earlier in this project — see the "Big Board" postmortem, v1
+section). `replacement_points(pos) = LARGE(that position's Selected
+Points column, adjusted_rank(pos))`, `weighted_vorp(player) = MAX(0,
+player_points - replacement_points) ^ exponent(pos)` — both computed live,
+per player, from Setup's roster inputs. Net result: the Draft Board block
+went from 37 columns (v1.4, precomputed per 15 configs) down to **11**
+(v2) — genuinely simpler, not just more flexible, because nothing needs
+precomputing anymore except the 15 (teams, fmt) baseline anchors
+themselves (now living in `Live Calc` as a small reference table, not
+per-player hidden columns).
+
+**Tier is simplified, a real and disclosed downgrade**: the natural-gap-
+detection algorithm (`tiers.py`) can't be replicated as a live formula
+without the same array-formula risk. Replaced with fixed-width RANK bands
+(every 5 players by Weighted VORP = one tier) — still gives localized
+live re-rating (a hot pick moves its own band, not the whole position),
+just with mechanically fixed band sizes instead of detected natural
+breaks.
+
+**Setup sheet gains a full Roster Shape section**: QB/RB/WR/TE Starters
+(bounded dropdowns matching the user's specified range), Flex Type
+(RB/WR/TE, RB/WR, WR/TE — a dropdown, applies to the "Flex Count" slots),
+Flex Count (0-6), Superflex Count (0-2, always QB/RB/WR/TE-eligible,
+mixable with a same-league standard flex per the user's explicit ask —
+"that flex or one of them changes to a superflex spot, not all of them"),
+DEF/K/Bench (free — mechanical only, no calibration dependency). `My
+Team`'s roster-slot list is now formula-driven from these live inputs
+instead of a fixed constant list.
+
+**Real bug caught during Excel verification, not Python testing**: the
+Tier formula (`RANK.EQ`) showed `#NAME?` on every single row immediately
+after file open, even with zero picks made — traced by checking the exact
+win32com error code (`-2146826259`) against known Excel error constants,
+not guessed. Root cause: `RANK.EQ` is an Excel 2010+ function, and
+openpyxl writes formula strings directly into the XLSX XML without adding
+the `_xlfn.` prefix Excel's own UI silently adds when a formula is typed
+normally — so a formula typed live via COM (which goes through Excel's
+own formula parser) evaluated fine, while the byte-identical text written
+by openpyxl to the file failed on open. Confirmed the diagnosis was right
+before applying the fix (reproduced `#NAME?`'s exact error code with a
+deliberately-unknown function name, matched it byte-for-byte against the
+broken cells) rather than guessing. Fixed by writing `_xlfn.RANK.EQ`
+instead of `RANK.EQ`; checked every other function used in the workbook
+against the Excel-2010-cutoff list and confirmed none of the others
+(`SUMIFS`/`COUNTIFS`/`IFERROR`/`MATCH`/`INDEX`/`CHOOSE`/`LARGE`/etc., all
+2007-or-earlier) needed the same treatment.
+
+**Final verification, after both fixes**: zero formula errors across the
+entire Draft Board (every position, every row — not just a sample).
+Baseline (12-team/half-PPR/standard roster) reproduces the production
+static table exactly (Gibbs $58, Nacua $52, Allen $36, McBride $28).
+3-flex reproduces the real calibration within $1 (3 of 4 exact). Superflex
+reproduces Josh Allen's real calibrated value exactly ($63). QB
+Starters=2 correctly triggers the same regime switch as Superflex Count
+but produces a genuinely different number ($35 vs. $63) since 2 mandatory
+starters create more replacement-level depth demand than 1 optional
+superflex slot even under the same budget-share treatment — a sensible,
+not coincidental, distinction. Budget independence, live-pick tier
+ripple mechanics, and `My Team`'s live roster-slot labels all confirmed
+still working after the full rewrite.
+
+### Round 7 extension: 0/1 for every position, and independent multi-flex-type counts
+User's follow-up ask, after seeing the first version: allow 0 (and 1) as
+options for every starter position, and support MULTIPLE flex types
+active simultaneously in the same league (e.g. 1 RB/WR + 1 WR/TE + 1
+Superflex all at once — "that flex or one of them changes to a superflex
+spot, not all of them"), matching the user's own cheat sheet convention
+of one independent count per flex type rather than a single type-selector.
+
+**Setup redesigned**: QB/RB/WR/TE Starters dropdowns now all include 0
+(RB/WR/TE previously started at 1 or 2, WR at 2). The single "Flex Type +
+Flex Count" pair was replaced with FOUR independent counts — "Flex:
+RB/WR/TE", "Flex: RB/WR", "Flex: WR/TE", "Superflex" — each 0-6,
+combinable freely. `roster_formula.py`'s `_demand()` already summed over
+an arbitrary list of (flex_type, count) pairs from the start, so the
+Python model needed no changes; only the Excel side (which previously
+used a single CHOOSE/MATCH on one type-selector cell) needed rebuilding to
+sum four independent Setup cells directly — actually simpler than before,
+since each flex type's own constant share can be multiplied directly
+against its own dedicated cell with no lookup needed at all.
+
+**Two real bugs found while testing the wider input range, both from
+positions with very little configured demand — not from the mainstream
+range this project has mostly tested**:
+
+1. **A leftover Excel process from earlier automation held a file lock**,
+   causing a `PermissionError` on rebuild. Not a workbook bug, but worth
+   recording the resolution: enumerating the Running Object Table
+   (`pythoncom.GetRunningObjectTable()`) confirmed both stray processes
+   had only `live_draft_board.xlsx` open (one via the OneDrive path, one
+   an Excel-generated temp "Copy of..." artifact) — consistent with
+   leftover COM automation, not a user's own window — closed via
+   `GetActiveObject` + `Workbook.Close()`, not a force process kill.
+
+2. **A real, reproducible calculation bug**: configuring a position with
+   very little real demand (confirmed case: TE Starters=0, only 1 RB/WR/TE
+   flex slot active, everything else at baseline) produced a wildly wrong
+   value ($198) for the position's top player instead of a sensible
+   near-$1 floor. Root cause: `Total Weighted VORP` for that position
+   collapsed to 1.89 (a healthy position's pool runs in the hundreds to
+   thousands), and dividing a real discretionary-$ amount by a
+   near-empty pool produced an absurd rate (104) that then multiplied out
+   to $198 for the one player with any nonzero weighted VORP. An earlier,
+   narrower guard (`IF(TotalWeightedVORP<1,...)`) didn't catch this
+   specific case (1.89 > 1) — widened to a threshold of 20, comfortably
+   below every real baseline pool size measured in this project, still
+   comfortably above what a genuinely-degenerate pool produces.
+   **Caught by disciplined re-testing, not the first pass**: an initial
+   "clean" isolated test of this exact scenario showed a DIFFERENT,
+   plausible-looking number ($96) that masked the bug — traced to cross-
+   script Setup-state leakage (the same well-documented win32com
+   `Close(SaveChanges=False)` flakiness this project has hit multiple
+   times before, see `My Team` sheet history above — this time affecting
+   Setup inputs, not just Draft Board price cells). Only became visible
+   once every test case ran inside a single continuous Excel session with
+   an explicit, complete reset between each one — the standing lesson
+   ("always rebuild fresh and confirm state before trusting a
+   verification pass") applies to Setup state now too, not just leftover
+   price entries.
+
+**Final re-verification after both fixes**, all within one continuous,
+fully-reset session: baseline, 3-flex, superflex, and a 4-simultaneous-
+flex-type test all still land exactly where they did before; the
+reproducible degenerate-TE case now correctly floors to $1 instead of
+spiking to $198; zero formula errors across every test; budget
+independence, live-pick ripple mechanics, and zero leftover price cells
+all confirmed clean.
+
+## Round 8: unbounded tier/global re-rating (real bug, found through actual use)
+
+The user found this by hand-testing the finished v2 workbook (not through
+any of this project's own scripted tests), reporting two symptoms: (1) a
+modest $3 overpay for Ashton Jeanty appeared to lower Jahmyr Gibbs's live
+value, and (2) giving a $1-static player a $5 winning bid pushed "the rest
+of the $1 players in his tier" to $5 too.
+
+**Investigation discipline**: rather than theorize from the formulas alone,
+reproduced both scenarios directly against a scratch copy of the real
+workbook via win32com (never touched the user's own open Excel session —
+it was live, mid-test, on their machine; attaching to or closing someone
+else's in-progress session is not a reasonable move even read-only, so a
+fresh copy was used instead).
+
+**Bug 2 (tier blowup) confirmed and root-caused, worse than reported.**
+`TIER_BAND_SIZE=5` fixed-width bands don't account for value composition —
+directly measured: roughly two-thirds of a 160+-deep RB board sits at the
+$1 static-value floor (107 of 161 rows in the test file), so any
+tier straddling that floor mixes near-zero-differentiation players with
+slightly-better ones. Real example: one 5-player RB tier held statics
+$4/$3/$2/$2/$1. Giving the $1 player (Braelon Allen) a $5 winning bid
+produced `tier_factor = SUM(price)/SUM(static) = 5/1 = 5.0`, applied
+uniformly to the whole tier — the $4 player (Brian Robinson Jr.) jumped to
+$20, not just the other $1 players moving to $5 as the user described (the
+actual effect was broader than what was visible/reported).
+
+**Bug 1 (Jeanty -> Gibbs) not reproducible in isolation.** Directly tested:
+Jeanty and Gibbs sit in different tiers (confirmed via the Tier column —
+RANK.EQ-based tier assignment depends only on points, never on draft
+state, so it can't drift once Setup is fixed), so the tier mechanism
+cannot connect them. The only channel that touches every undrafted player
+at once is the whole-draft global depletion factor, and that was measured
+to need a huge single-pick overpay (~$150-200 over static) to move Gibbs
+by even $1 — a lone $3 overpay produced zero visible change in every
+tested configuration (isolated, after 55 fair-value picks, and under the
+user's real 14-team/PPR/3-flex league shape). Most likely explanation:
+what the user saw was the *cumulative* global depletion effect of a real
+draft session (many picks, not just one) crossing a rounding threshold
+right after the Jeanty entry — a real, working-as-intended signal, just
+surprising when attributed to the single most recent action. Not
+independently confirmed, since reproducing a whole real draft session
+wasn't practical, but the fix below adds a direct safety net against this
+class of problem regardless of root cause.
+
+**Fix**: clamp both multiplicative re-rating factors instead of leaving
+them unbounded — `MEDIAN(lo, hi, raw_ratio)` in Excel is a clean two-sided
+clamp (verified: `MEDIAN(0.5, 2, 5) = 2`, `MEDIAN(0.5, 2, 0.1) = 0.5`,
+`MEDIAN(0.5, 2, 1) = 1`). `TIER_FACTOR_MIN/MAX = 0.5/2.0`,
+`GLOBAL_FACTOR_MIN/MAX = 0.7/1.3` (build_live_draft_workbook.py). Bounds
+were chosen, then verified, against real measurements: normal fair-value
+drafting keeps both factors at/near 1.0 (untouched by the cap), a wild
+single-player $200 overpay (previously measured at global factor 0.9275)
+stays comfortably inside the cap, and a deliberately extreme test
+(15 RBs each overpaid to 3x-static+$20) drove the *uncapped* ratio down to
+0.121 (an 88% board-wide crash) — the capped version correctly held at the
+0.7 floor. Post-fix, the original bug-2 repro (Braelon Allen $1->$5) now
+moves tier-mates from $1 to $2 (capped at 2.0x) instead of $1 to $5, and
+the $4 player moves to $8 instead of $20 — still a real, visible signal,
+no longer an unbounded blowup.
+
+**Not fixed / accepted as-is**: tier granularity itself (`TIER_BAND_SIZE=5`)
+was left unchanged. Reasoned through, not just assumed: even perfect
+natural-gap-detection tiering (the pre-v2 `tiers.py` approach) would still
+group large numbers of near-replacement players into one tier, since
+there's genuinely no differentiation to detect that deep — the instability
+was about unbounded *magnitude*, not tier *boundaries*, so the clamp
+directly addresses the actual mechanism rather than working around it via
+finer-grained tiers.
+
+**Follow-up from the user, same round: the cap wasn't enough.** Pushback,
+verbatim reasoning: "I'm not even sure the $3 player should move to $5,
+even if somebody in their tier was overpaid for... maybe wait for 2+
+players in a tier to get bid on before changing the overall market value
+of players around them." Correct instinct — even bounded, one drafted
+player is one bidder's opinion on one specific player, not evidence about
+the tier as a whole, and the $4/$3/$2/$2/$1 example above shows
+`TIER_BAND_SIZE=5` doesn't guarantee tier-mates are actually similar in
+value. Fixed by requiring a minimum sample: `tier_factor` now stays at
+exactly 1.0 (no re-rating at all) until `TIER_MIN_SAMPLE=2` players in that
+tier have been drafted, added as a `Drafted Count` column in each
+position's Live Calc tier table, gating the (still-clamped) ratio.
+Verified on the real file: a single $1->$5 bid now leaves every tier-mate
+exactly at their static value; drafting a *second* player in the same tier
+(a $4 real overpay on a $3-static player) then correctly moves the
+remaining tier-mates a modest amount ($1 static -> $2 live), showing the
+gate opens as intended once there's an actual second data point.
+
+## Round 8 extension: Setup/Draft Board formatting and renaming
+
+Also from direct use of the finished file, three formatting requests, all
+implemented in `build_live_draft_workbook.py`:
+
+- **Setup sheet now reads as an actual input table**: every configurable
+  `[Label | Value]` row gets a thin box border (`Border`/`Side`, gray
+  `B0B0B0`) via a new `input_row()` helper that consolidated what used to
+  be repeated per-section code; the value column narrowed from width 20 to
+  10 (was sized for nothing in particular, held 1-2 digit numbers or short
+  format labels); the value cells got centered horizontal alignment. The
+  long italic methodology paragraph previously merged across the bottom of
+  the sheet was removed at the user's request — that reasoning now lives
+  only in CLAUDE.md, not duplicated in the workbook.
+- **Draft Board column renames**: `Selected Points` -> `Proj Pts`,
+  `Static Value ($)` -> `Starting Value`, `Price Paid ($)` -> `Price Paid`,
+  `Live Value ($)` -> `Market Value`. User offered two name choices for two
+  of these and asked for a recommendation; picked `Starting Value` over
+  `Proj Value` (pairs with `Market Value` as its live-adjusted counterpart,
+  avoids redundancy with `Proj Pts` sitting right next to it) and
+  `Price Paid` over `Win Bid` (clearer at a glance; length stopped
+  mattering once headers wrap). Note: `Points (STD/Half-PPR/PPR)`, `Tier`,
+  and `Weighted VORP` were already hidden columns before this round — the
+  visible surface was already close to the user's requested 6-column list,
+  this was a rename, not a restructuring.
+- **Header row now wraps** (`Alignment(wrap_text=True, horizontal="center",
+  vertical="bottom")`, row height 30) so multi-word headers like
+  `Starting Value` don't force wide columns — let the visible column
+  widths shrink (Player 22->18, Team 7->6, Proj Pts 11->8, Starting
+  Value/Price Paid/Market Value 12-13->9 each) so more of the position
+  block fits on screen at once, the user's stated goal ("so we can see all
+  positions at once").
+
+Rebuilt and reverified end-to-end after all of the above: zero formula
+errors in Draft Board and Live Calc, headers read correctly, Setup borders/
+width/centering confirmed via COM, tier-gate behavior reconfirmed on the
+real (not scratch-copy) file, zero leftover price cells before save.
+
+## Round 8 second extension: value-proportional tiers, factor dampening, sortable blocks
+
+Three more pieces of user feedback on the same finished file, all correct
+and all implemented in `build_live_draft_workbook.py`:
+
+**1. Tier factor still moved low-value tiers too much.** User: "even if two
+players are overpaid for in a $1 tier, I'm not sure the $3 player should
+almost double... that value really shouldn't change much." Right call —
+the `TIER_MIN_SAMPLE=2` gate from the first Round 8 fix stopped a *single*
+bid from re-rating a tier, but once 2 bids landed, the same unbounded-in-
+spirit ratio still applied. Added `TIER_DAMPEN_BUDGET_FRACTION = 0.10`:
+each tier's factor is now scaled by `MIN(1, tier_avg_static /
+(Setup!Budget * 0.10))` before the existing `[0.5, 2.0]` clamp — a tier
+averaging $20+ (in a $200-budget league) gets the full signal, a tier
+averaging a couple dollars gets almost none. Verified on the real file: in
+a 129-player catch-all tier (avg static ~$1.3), overpaying the tier's two
+highest-static members (+$4 each) moved *zero* of the other 127 members
+even one whole dollar — the dampened effect is real but rounds away at
+that value level, exactly the "shouldn't change much" behavior asked for.
+
+**2. Tier boundaries didn't reflect real value gaps.** User, with a
+specific example: "there is a 90 point VORP difference between Bijan and
+CMC yet they are in the same tier... Tiers are likely smaller at the top
+than the farther you go down the player list, make sense?" Verified the
+90-point gap exactly (615.3 vs 525.4 WVORP) — correct diagnosis. Replaced
+the fixed-5-player-band Tier formula entirely with a value-proportional
+one: `Tier = CEILING(cumulative_share_of_position_WVORP, 5%) / 5%`, where
+cumulative share is computed per-player via
+`SUMIF(wvorp_range,">="&own_wvorp,wvorp_range)/total_wvorp` (no array
+formula, same SUMIF-cumulative trick used elsewhere in this project).
+Because cumulative share always runs 0->1 regardless of position depth or
+Setup, tier count is always exactly `MAX_TIER = 1/TIER_VALUE_BAND = 20` --
+fixed at Python build time, not data-dependent the way the old
+`n_rows/TIER_BAND_SIZE` count was. Verified against real data before and
+after: at 5% bands, Gibbs/Bijan/McCaffrey/Taylor/Cook each land in their
+own separate tier (were previously all tier 1 together); the bottom of a
+160-deep RB board collapses into one ~120-130-player catch-all tier, the
+same shape the pre-Excel gap-detection tiering used to produce. One real
+bug caught and fixed during verification: floating-point drift from the
+CEILING/division math produced values like `3.0000000000000004` instead of
+exactly `3`, which silently broke the Live Calc tier table's exact-match
+`MATCH()` lookup (12 real `#N/A`-class errors on Draft Board, confirmed via
+the same error-scanning check used throughout this project) — fixed by
+wrapping the whole Tier formula in `ROUND(...,0)`.
+
+**3. No way to sort a position block after switching scoring format.**
+Real, independent bug report: switching `Setup!Format` changes each
+player's `Proj Pts` live, but row order was fixed at Python build time
+(sorted once by each player's max points across all 3 formats), so the
+displayed order stops matching the newly-selected format's ranking. User
+asked for a way to re-sort per position. Rather than rebuild rows on
+format change (would need a volatile/array formula, the exact risk
+category this project avoids after the "Big Board" postmortem), gave each
+position its own Excel Table (`openpyxl.worksheet.table.Table`, name
+`f"{pos}Board"`, `TableStyleLight1` with all banding/striping disabled so
+it doesn't fight the existing per-position `POSITION_FILL` header colors)
+-- a plain worksheet `AutoFilter` can't do this since Excel restricts it to
+one range per sheet, but independent Tables have no such limit. This adds
+native sort/filter dropdown buttons to each position's own header row,
+scoped only to that block. Verified this is safe for a formula-heavy
+sheet, not just assumed: sorted the RB block (161 rows) by Proj Pts inside
+one continuous COM session and compared every player's Static Value, Tier,
+and Live Value before vs. after -- zero mismatches, because every cross-
+row formula in this workbook uses absolute whole-column ranges (`SUMIF`,
+`SUMIFS`, `COUNTIFS` over `$col$2:$col$N`), which don't care what order
+the rows are in, and same-row formulas move as a physical unit with the
+row during a native Excel sort. Also confirmed the position color fills
+survive the Table styling untouched (compared `.Interior.Color` byte-for-
+byte against `POSITION_FILL` before/after, matched exactly for all 4
+positions).
+
+**Verification discipline note**: an early combined test script produced a
+misleading "Jahmyr Gibbs's value changed after sorting" result -- traced
+to two separate causes, neither a real bug: (a) the well-documented
+win32com `Close(SaveChanges=False)` flakiness this project has hit several
+times before (a fresh re-open showed stale state from a supposedly-
+discarded prior session), fixed by always rebuilding fresh before a
+verification pass rather than trusting a reopened file's state; and (b) a
+plain off-by-one in the test script's own row-scan range (`range(2,162)`
+excludes row 162, and Gibbs sorted to exactly that row). Re-tested cleanly
+in one continuous session with the correct range: zero mismatches across
+all 161 RB players.
+
+Rebuilt and reverified end-to-end after all three fixes: zero formula
+errors at default settings, at 14-team/PPR/3-flex, and after also adding
+2-QB-starters + 1 superflex slot; zero leftover price cells; Setup reverted
+to defaults before final save.
+
+## Round 8 third extension: value-proportional tiers shipped with no tier 1
+
+Shipped the value-proportional tier formula above, then the user caught a
+real bug immediately by just looking at the sheet: "why is there no tier 1
+in any position? these tiers went too far the other way" -- correct, and a
+structural problem, not a rare edge case.
+
+**Root cause**: the shipped formula was `Tier = CEILING(cum_share, band) /
+band`, where `cum_share` included the player's own Weighted VORP (share of
+value at-or-above them, inclusive). Diagnosed by computing the real number:
+Jahmyr Gibbs alone is ~6.2% of the entire RB pool's total Weighted VORP --
+already past one whole 5% band by himself. `CEILING(0.062, 0.05)/0.05 = 2`,
+so the single most valuable player at a position always got pushed straight
+to tier 2, and tier 1 was mathematically unreachable at every position,
+every time. (A test script written during the earlier verification pass
+had actually already shown this exact symptom -- an empty phantom "tier 1:
+0 players" -- and it was wrongly dismissed as a cosmetic loop artifact
+instead of investigated. Lesson: an unexplained empty bucket in a test
+script's own output is a signal to chase, not wave off, even when the
+headline numbers look right.)
+
+**Fix**: switched to an *exclusive* share -- share of value strictly ABOVE
+this player, i.e. subtract the player's own Weighted VORP before dividing --
+and `FLOOR(...)+ 1` instead of `CEILING(...)`. The single most valuable
+player then always has exactly 0% share above them, so tier 1 always
+exists structurally, not just in the common case. Verified against real
+data: Gibbs=1, Bijan=2, McCaffrey=3, Taylor=4, Cook=5 -- the original
+per-player separation goal is preserved, now correctly starting at tier 1.
+
+**Second bug caught during the SAME fix, before shipping this time**: the
+exclusive-share formula has its own edge case -- every player at or below
+replacement has Weighted VORP = 0, and `SUMIF(range,">="&0,range)` matches
+everyone (nothing is ever negative), so `share_above` computes to exactly
+`1.0`, not just-under-1. `FLOOR(1.0/0.05)+1 = 21`, one past `MAX_TIER=20`,
+which has no row in the Live Calc tier table -- confirmed this produced
+363 real `#N/A`-class errors on Draft Board (every below-replacement
+player, all 4 positions) on the first rebuild after the fix. Fixed by
+wrapping the result in `MIN(MAX_TIER, ...)`. Re-verified clean afterward:
+zero formula errors at default settings, 14-team/PPR/3-flex, and with
+2-QB-starters + 1 superflex added; tier 1 confirmed present and tier
+range confirmed within `[1, MAX_TIER]` at all 4 positions; Setup reverted
+to defaults before final save.
+
+## Round 8 fifth extension: gap-detection tiers replace value-proportional bands entirely
+
+The value-proportional bucket scheme above was still wrong at a design
+level, and the user caught it precisely: "personally I would put Gibbs and
+Bijan in the same tier. they are very close to each other. same with Puka
+and Ja'Marr and McBride and Bowers" and, separately, "Why are there
+missing tiers in QB, I would think it would also go in incremental order
+no matter what the separation is." Both are the same root cause: a
+boundary placed every fixed % of cumulative value has no relationship to
+where the real gaps in the curve actually are.
+
+**Replaced the whole mechanism with genuine nearest-neighbor gap
+detection** in `build_live_draft_workbook.py`. `GAP_THRESHOLD = 0.08`
+(8%) was chosen empirically, not guessed: tested 5/6/8/10/12% against real
+Weighted VORP data until one cleanly matched every case the user named.
+At 8%: Gibbs/Bijan (0.8% gap), Puka Nacua/Ja'Marr Chase, and Trey
+McBride/Brock Bowers all land in the *same* tier; Bijan/McCaffrey (14.6%
+gap) and Jonathan Taylor/James Cook (21.9% gap) correctly split apart —
+exactly the pattern the user described.
+
+New formula, computed with two new hidden Draft Board columns ("Row Num" —
+a literal integer written once at Python build time, not a live formula —
+and "Tier Start", a 0/1 flag):
+```
+Tier Start(i) = 1 if i is the canonical (lowest-Row-Num) player at its own
+                Weighted VORP AND EITHER no one ranks above it OR the
+                relative drop from the player immediately above exceeds
+                GAP_THRESHOLD; else 0
+Tier(i) = COUNTIFS(wvorp_range, ">="&own_wvorp, tier_start_range, 1)
+```
+Tier is a running *count* of gap-crossings, not a bucket-index computation,
+so tier numbers are consecutive by construction — no skip is possible
+regardless of how large any individual gap is. This structurally fixes the
+QB complaint as a side effect of fixing the Gibbs/Bijan one; both were
+never going to be independently patchable within the bucket-scheme design.
+
+**Real bug caught before shipping this time (not after)**: the "canonical
+representative" tie-break exists because `MINIFS(">"&own)` skips over
+exactly-tied values (most commonly Weighted VORP = 0, at/below
+replacement — confirmed 100+ tied players at zero on a 160-deep RB board)
+to the next *distinct* value, so without picking one canonical
+representative per tied group, every tied player would independently see
+the same gap and each flag as its own tier start, fragmenting the intended
+single catch-all tier into dozens. Handled by only running the gap check
+for the player with the smallest Row Num among ties.
+
+**Second real bug, caught the same way the RANK.EQ and MINIFS-adjacent
+issues were caught before**: first rebuild after implementing this showed
+998 formula errors, all `#NAME?` (`-2146826259`). Root cause: `MINIFS` is
+an Excel 2019+ function, same class of issue as `RANK.EQ` earlier in this
+project — openpyxl writes formula text directly into the XLSX XML without
+adding the `_xlfn.` prefix Excel's own UI adds silently, so it shows
+`#NAME?` on open. Fixed by prefixing every `MINIFS` call; re-verified zero
+errors immediately after.
+
+**Also fixed in this round**: default row order on load. Independent bug
+report — switching `Setup!Format` changes each player's `Proj Pts` live,
+but row order was fixed at Python build time using each player's *max*
+points across all 3 formats, so it stopped matching the newly-selected
+format's ranking. Since `DEFAULT_FORMAT` (Half-PPR) is what's selected on
+load, `board_player_list()` now sorts each position's initial row order by
+that format's own points specifically (falling back to the max-across-
+formats value only for players who don't appear in that format's own top-N
+depth cut). Verified: every position's default row order is descending by
+`Proj Pts` on a fresh open.
+
+**Verification discipline note, again**: after one clean verification pass
+(zero errors, all 5 named pairs correct, tier table consecutive at all 4
+positions, Table sort re-tested safe with the 2 new helper columns), a
+final read-only re-open showed the RB block in the *wrong* (sorted, not
+default) order — the same well-documented win32com `Close(SaveChanges=
+False)` flakiness this project has hit repeatedly, this time apparently
+persisting a sort-test's changes despite the explicit no-save close.
+Rebuilt fresh from Python (which always starts from an empty Workbook, so
+it can't inherit stale state) and did one final read-only check with zero
+further modifications — confirmed clean. Standing lesson reinforced: don't
+trust a reopened file's state, even your own just-closed one: rebuild
+fresh before the verification that actually gets reported to the user.
+
+## Round 8 sixth extension: cumulative tier-width cap
+
+Immediately after the gap-detection tiers above shipped and tested clean,
+the user found a real, legitimate follow-on issue by using the file: a
+15-player RB tier spanned James Cook ($39) down to Cam Skattebo ($25) — a
+56% swing — because every *individual* neighbor gap in that chain was
+under GAP_THRESHOLD (8%), even though the *cumulative* range was wide.
+Confirmed the exact gaps: Cook→Achane 0.7%, Achane→Jeanty 5.5%, ...,
+Etienne→Skattebo 0.6% — no single link over 7.6%, but 15 links add up.
+User: "not sure a max width cap is the right call here, but a 15 player
+tier 3 that has a 50 proj point gap is quite large. What advice do you
+have?"
+
+Recommended and implemented a second, independent trigger: a tier also
+splits wherever the cumulative range from its own top exceeds
+`MAX_TIER_WIDTH`, even with no single big neighbor gap. Tested 20/25/30/
+35% against the real Cook-Skattebo chain and confirmed none of the pairs
+named earlier in this round were affected: **25%** split the chain into
+Cook-Jacobs (406→318 Weighted VORP, 9 players) and Love-Skattebo
+(301→258, 6 players) -- reasonably sized, and Gibbs/Bijan, Puka/Chase, and
+McBride/Bowers all stayed together.
+
+**Implementation required a real design decision to keep it non-recursive.**
+A naive single-pass check ("is this player >25% below the ORIGINAL
+gap-tier's top") would fragment the tail of a long chain into one-player
+tiers, since every player past the first split point is independently
+>25% below the original top. What's actually needed is *sequential*
+behavior (each split resets the reference point for what follows), which
+would normally require row-by-row recursion -- unsafe in this project's
+Excel-formula-only approach. Solved without recursion by comparing
+*width-bucket indices* instead of raw thresholds: `own_bucket =
+FLOOR((gaptier_top - own_wvorp)/gaptier_top / MAX_TIER_WIDTH, 1)`, and a
+split fires when `own_bucket <> prev_bucket` (the same computation for
+whoever's ranked immediately above). Because bucket index is a smooth,
+monotonically-increasing step function of value, comparing it to the
+immediate neighbor's bucket reproduces correct sequential-split behavior
+using only single-pass aggregations (`MINIFS`) -- verified by hand against
+the real Cook-Skattebo numbers before implementing, and confirmed to match
+exactly after.
+
+Two new hidden Draft Board columns: "Gap Start" (the pure gap-only flag,
+renamed from what was simply "Tier Start" before this round) and "Gap
+Tier Top" (`MINIFS(wvorp_range, wvorp_range, ">="&own, gapstart_range, 1)`
+-- the Weighted VORP of this player's own gap-tier starter; always
+resolves correctly since gap-tier starters partition the position into
+non-overlapping ranges). "Tier Start" now means the width-refined flag,
+and "Tier" is the same cumulative-COUNTIFS pattern as before, just fed by
+the refined flag instead of the gap-only one. Same canonical-tie handling
+(smallest Row Num) applied to the width check too, since two exactly-tied
+players compute identical own/prev buckets and would otherwise both
+independently flag.
+
+Verified end-to-end: zero formula errors at default settings, 14-team/
+PPR/3-flex, and 2-QB-starters + 1 superflex; all 5 named pairs still
+correct; tier numbers still consecutive with tier 1 present at every
+position; Table sort re-confirmed safe (161 RB players, zero mismatches
+in Static/Tier/Market Value before vs. after sorting) despite the larger
+column layout. Rebuilt fresh from Python one final time before saving,
+per the standing lesson above.
+
+## Round 8 seventh extension: stale REPLACEMENT_RANK caught, 12-team/half-PPR baseline recalibrated
+
+User question, testing the tier work above: "There should not be QB16+ all
+with $1 values in a 12 team half-ppr setup." Investigated before touching
+anything -- this isn't a tiering issue at all (tiers only affect how *live*
+market data re-rates already-drafted-adjacent players; how many players
+hit the $1 floor is purely `REPLACEMENT_RANK`, a calibrated constant with
+no connection to `GAP_THRESHOLD`/`MAX_TIER_WIDTH`).
+
+Re-ran the actual calibration script (`calibrate_teamcount.py 12
+half_ppr`) against current reference data rather than trust the stored
+constant, and it's genuinely stale -- the reference CSVs (FantasyPros/
+4for4/Draft Sharks snapshots) drift over time as this project pulls from
+live sources, and this hadn't been re-verified in a while:
+```
+                 stored    fresh RMSE-best    RMSE(stored)  RMSE(fresh)
+QB rank            16           20               2.89          1.77
+QB exponent        1.1          1.2                -             -
+TE rank             20           24                -             -
+WR exponent         1.2         1.25               -             -
+RB (unchanged)      44/1.2       44/1.2            -             -
+```
+
+**User then re-raised this project's original, already-settled
+methodology question**: "the baseline should be set by the number of
+needed starters right? ... its not like there are undraftable players
+past say QB16 or RB36 ... right?" This is exactly the "pure VBD" argument
+tested and found wrong earlier in this project (see the Gemini-pure-VBD
+discussion further up this file) -- rather than re-argue from memory,
+pulled the actual current market $ data to show it directly: QB12 (pure
+roster-math replacement, 12 teams x 1 starter) still commands real market
+$5.70; RB36 (12 teams x (2 starters+flex)) still commands $7.70; RB50 is
+still $3.70. Value doesn't actually thin to near-zero until QB23-26 /
+well past RB50 -- real bidders pay for bench/bye-week/injury-insurance
+depth that pure roster math has no way to represent, which is the whole
+reason this project calibrates REPLACEMENT_RANK against real auction $
+instead of computing it from roster math directly.
+
+**Scope decision**: fixing this properly for all 15 team/format combos
+plus superflex and 3-flex would mean re-pulling/re-verifying reference
+data for every combo -- a much larger undertaking. User's question stayed
+focused on the 12-team/half-PPR baseline being tested, so that's what got
+fixed: `REPLACEMENT_RANK` (`build_auction_values.py`) QB 16->20, TE 20->24
+(RB/WR ranks unchanged, confirming this is real per-position drift, not a
+global artifact); `VORP_EXPONENT` QB 1.1->1.2, WR 1.2->1.25. Also updated
+the matching hardcoded copy in `build_teamcount_estimate.py`'s
+`CALIBRATED[(12, "half_ppr")]` entry, which doesn't auto-derive from the
+production constants. **The other 14 combos + superflex + 3-flex are
+still on their original calibration and may have the same kind of drift
+-- not yet re-verified, flagged here for a future pass.**
+
+Verified: `build_auction_values.py` standalone CLI run confirms the new
+ranks/exponents (QB replacement 263.6pts, TE replacement 103.2pts) with
+no errors; rebuilt live workbook shows QB16 now at $3 (previously
+floored to $1 at that rank) with real value continuing through ~QB18;
+zero formula errors at default settings, 14-team/PPR/3-flex, and 2-QB/
+superflex; zero leftover price cells; rebuilt fresh from Python one final
+time before saving.
+
+## Round 8 eighth extension: full 15-combo + superflex recalibration
+
+User's direct follow-up to the 12-team/half-PPR fix above: "I would say
+the baseline needs to get fixed across all league sizes and formats."
+Re-ran `calibrate_teamcount.py <teams> <fmt>` for all 5 team counts x 3
+formats = 15 combinations against the existing on-disk reference CSVs (no
+new data pull needed -- these files were already current, the *stored*
+`CALIBRATED` dict was just out of sync with them). No candidate hit the
+edge of `RANK_CANDIDATES`/`EXPONENT_CANDIDATES` in any of the 15 re-runs.
+
+**Drift was systematic, not noise**: nearly every combo moved toward
+deeper ranks and higher exponents, consistent with the same 12-team/
+half-PPR finding repeating everywhere -- real depth/convexity in the
+current reference data genuinely exceeds what was calibrated before.
+Independently re-measured budget share for all 15 combos too, out of
+caution -- found it still accurate everywhere (every fresh aggregate
+share matched `_STD_SHARE`/`_PPR_SHARE`/`POSITION_BUDGET_SHARE` to within
+0.001), so only `ranks`/`exponents` needed updating in
+`build_teamcount_estimate.py`'s `CALIBRATED` dict, not budget shares.
+
+**User re-raised this project's original methodology question, tested
+directly rather than re-argued from memory**: "the baseline should be set
+by the number of needed starters right? ... not like there are
+undraftable players past say QB16 or RB36 ... right?" Pulled current
+blended-target $ data to show directly: QB12 (pure roster math, 12 teams
+x 1 starter) still commands real market $5.70; RB36 (12 teams x (2
+starters+flex)) still $7.70; RB50 still $3.70. Value doesn't thin to
+near-zero until QB23-26 / well past RB50 -- real bidders pay for bench/
+bye-week/injury-insurance depth pure roster math has no way to represent,
+reconfirming (with fresh data, not old test results) why this project
+calibrates against real auction $ instead of computing rank from roster
+math directly.
+
+**Discovered consequence, found during verification, not asked for**:
+`roster_formula.py`'s self-test explicitly proves the roster-shape
+formula exactly reproduces the real 3-flex and superflex anchors (its own
+stated purpose: "do the two REAL anchors round-trip exactly?"). The
+15-combo refresh moved `(14, "ppr")`'s WR/TE ranks (65->70, 26->28) and
+`(12, "half_ppr")`'s QB rank (16->20) -- both anchors the demand-ratio
+rank formula is scaled from -- which silently broke that exact
+round-trip (confirmed: WR off by 8%, TE by 6.7% for 3-flex; QB off by
+14.3% for superflex). Root cause: `FLEX_SHARE_STANDARD` (WR/TE) and
+`_SF_QB_SHARE` were never independently measured constants -- they were
+*solved* to make the demand-ratio formula land exactly on the real 3-flex/
+superflex targets against the *old* baseline ranks. Moving the baseline
+without re-solving these left them solving the wrong equation. Re-solved
+algebraically against the new baselines: `FLEX_SHARE_STANDARD["WR"]`
+0.25->0.1111, `["TE"]` 0.0833->0.037 (RB unchanged at 0.1818 -- its
+baseline rank didn't move, so the old share still round-trips exactly);
+`_SF_QB_SHARE` 0.625->0.40. Verified via the self-test after: 3-flex now
+round-trips exactly on all 4 positions again; superflex QB (the only
+position with real, unconfounded data there) round-trips exactly again.
+Superflex RB/WR/TE are still off (not new -- confirmed the *pre-existing*
+misses were already nonzero before this round, e.g. RB was already 7.5%
+off; this was always documented as "an ASSUMPTION, not independently
+verified" in the module docstring, since the superflex data alone can't
+cleanly isolate the RB/WR/TE split the way the 3-flex comparison could).
+Their exact miss magnitude shifted with this update but their fundamental
+nature (unverified assumption, not real data) didn't change.
+
+**Also updated**: `SUPERFLEX_ANCHOR` in `roster_formula.py` (QB rank
+26->28, QB exponent 1.0->1.4, re-run via `calibrate_superflex.py` against
+current reference data) -- needed regardless of the round-trip fix above,
+since it's an independent real calibration in its own right, not just a
+formula input.
+
+Verified end-to-end: `roster_formula.py` self-test confirms exact
+round-trip restored (3-flex all 4 positions, superflex QB); rebuilt live
+workbook shows **zero formula errors across all 15 team/format combos**
+(swept every one via Setup, not spot-checked); zero errors on the 3-flex
+and superflex roster configs specifically; superflex Josh Allen lands at
+$66, a plausible real-market superflex QB1 price (consistent with the
+"$80 was way over real sources" bug this project caught and fixed much
+earlier); zero leftover price cells; rebuilt fresh from Python one final
+time before saving, per the standing lesson.
+
+**Not done this pass**: 3-flex's own calibration (`calibrate_3flex.py`)
+was re-run and confirmed NOT stale (identical result with current
+candidate ranges), so it was trusted as the correct real target for the
+`FLEX_SHARE_STANDARD` re-solve above rather than independently re-verified
+against fresh reference data pulls. If a future pass finds 3-flex itself
+needs a genuine data refresh (not just a re-run against existing files),
+`FLEX_SHARE_STANDARD` would need re-solving again.
 
 ## Output
 `auction_values_half_ppr.csv` — all QB/RB/WR/TE from the consensus

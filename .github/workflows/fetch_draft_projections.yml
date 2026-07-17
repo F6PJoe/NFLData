@@ -3,6 +3,11 @@ name: Fetch Draft Projections
 on:
   workflow_dispatch:
     # Triggered by cron-job.org, or manually from the Actions tab
+  schedule:
+    # 13:00 UTC = 8:00 AM CT (9:00 AM ET) most of the year -- runs daily,
+    # independent of cron-job.org, so the site doesn't depend on a third
+    # party service to stay current. Adjust the hour if 8am CT isn't right.
+    - cron: '0 13 * * *'
 
 jobs:
   fetch:
@@ -65,3 +70,16 @@ jobs:
           name: draft-projection-csvs
           path: 'ff_draft_proj/*.csv'
           retention-days: 7
+
+      - name: Rebuild auction value chart
+        working-directory: ff_auction_values
+        run: python export_web_chart_data.py && python export_web_chart_teaser.py
+
+      - name: Publish value chart to WordPress
+        working-directory: ff_auction_values
+        env:
+          WP_URL: ${{ secrets.WP_URL }}
+          WP_POST_ID: ${{ secrets.WP_POST_ID }}
+          WP_USERNAME: ${{ secrets.WP_USERNAME }}
+          WP_APP_PASSWORD: ${{ secrets.WP_APP_PASSWORD }}
+        run: python push_to_wordpress.py

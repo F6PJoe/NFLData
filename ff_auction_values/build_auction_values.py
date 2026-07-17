@@ -137,7 +137,19 @@ NON_SKILL_SLOTS_PER_TEAM = 2  # 1 DEF + 1 K, assigned flat $1 (no projections so
 # could select a different "top 12" and thus a different "best" candidate
 # on different runs of the identical search — fixed by sorting on
 # (-value, key) instead of just (-value,) in all 3 calibration scripts.
-REPLACEMENT_RANK = {"QB": 16, "RB": 44, "WR": 60, "TE": 20}
+# Round 8 (2026-07): re-run against refreshed reference data (FantasyPros/
+# 4for4/Draft Sharks snapshots update as the season approaches, so a rank
+# calibrated months ago can drift). Triggered by the user directly
+# questioning QB depth ("There should not be QB16+ all with $1 values in a
+# 12 team half-ppr setup") -- verified against fresh data before touching
+# anything: pure roster math (12 teams x 1 starter = QB12) badly
+# understates real demand (QB12 still real-market $5.70, doesn't thin to
+# near-zero until QB23-26), and a fresh RMSE search now prefers QB=20 over
+# the old QB=16 (RMSE 1.77 vs 2.89) -- confirming genuine drift, not just a
+# different opinion. TE also moved (20->24, see VORP_EXPONENT below for
+# the matching exponent shift). RB/WR ranks unchanged, confirming this is
+# real per-position drift, not a global recalibration artifact.
+REPLACEMENT_RANK = {"QB": 20, "RB": 44, "WR": 60, "TE": 24}
 
 # Position budget shares: what fraction of the skill-position discretionary
 # pool goes to each position, BEFORE distributing within a position by VORP.
@@ -205,7 +217,10 @@ POSITION_BUDGET_SHARE = {"QB": 0.0716, "RB": 0.4179, "WR": 0.4219, "TE": 0.0886}
 # change under the iterative method), but this is why the methodology note
 # is here: don't trust a single one-shot exponent search again without
 # iterating to convergence.
-VORP_EXPONENT = {"QB": 1.1, "RB": 1.2, "WR": 1.2, "TE": 1.0}
+# Round 8 (2026-07): re-derived against the refreshed REPLACEMENT_RANK
+# above (same data-drift finding). QB moved 1.1->1.2, WR moved 1.2->1.25,
+# RB/TE unchanged -- see REPLACEMENT_RANK comment for the full account.
+VORP_EXPONENT = {"QB": 1.2, "RB": 1.2, "WR": 1.25, "TE": 1.0}
 
 # How much personal rank pulls a player's points toward the personal-rank-
 # implied value. 0 = pure projections, 1 = pure personal rank order.
