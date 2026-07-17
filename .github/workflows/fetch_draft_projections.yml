@@ -71,6 +71,10 @@ jobs:
           path: 'ff_draft_proj/*.csv'
           retention-days: 7
 
+      - name: Pull Joe Bond's personal ranks
+        working-directory: ff_auction_values
+        run: python pull_personal_ranks.py
+
       - name: Rebuild auction value chart
         working-directory: ff_auction_values
         run: python export_web_chart_data.py && python export_web_chart_teaser.py
