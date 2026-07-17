@@ -1,16 +1,19 @@
 name: Fetch Draft Projections
+#
+# IMPORTANT: this workflow does more than its name says. In addition to
+# fetching draft projections and pushing them to the Google Sheet, it ALSO
+# rebuilds and publishes the ff_auction_values web chart to WordPress (see
+# the last 3 steps below). One run, two outputs.
+#
+# No native `schedule:` trigger here on purpose -- this repo's daily runs
+# are driven by cron-job.org (see the "FF - Draft Projections" job there),
+# not GitHub's own scheduler, which has been unreliable in the past. Do NOT
+# re-add a `schedule:` trigger without checking cron-job.org first, or this
+# will run twice a day and double-scrape every projection source.
 
 on:
   workflow_dispatch:
-    # Lets you also trigger a run manually from the Actions tab -- not
-    # required for the daily schedule below to work.
-  schedule:
-    # 13:00 UTC = 8:00 AM CT (9:00 AM ET) most of the year -- this is the
-    # ONLY thing that needs to exist for daily automation. GitHub's own
-    # scheduler fires it; no external cron service (e.g. cron-job.org) is
-    # needed or wired up anywhere in this repo. Adjust the hour if 8am CT
-    # isn't right.
-    - cron: '0 13 * * *'
+    # Triggered daily by cron-job.org, or manually from the Actions tab.
 
 jobs:
   fetch:

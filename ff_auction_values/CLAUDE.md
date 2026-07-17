@@ -2112,6 +2112,60 @@ against fresh reference data pulls. If a future pass finds 3-flex itself
 needs a genuine data refresh (not just a re-run against existing files),
 `FLEX_SHARE_STANDARD` would need re-solving again.
 
+## Round 9: web value chart on the site, fully automated (phase 3 begins)
+
+The site-publishing piece deliberately parked at the end of Round 6 finally
+got built: an interactive, client-side value chart (team count/format/
+budget dropdowns, position filters, search, print) embedded directly in a
+WordPress post, member/non-member gated via S2Member's real
+`[s2If-paywall]`/`[s2If-ads]` shortcodes (a top-5 static teaser for
+non-members). Full build/embedding history — the wpautop paragraph-
+injection bug, the `force_balance_tags()` bug (tag-shaped JS string
+literals like `'<td class="rank">'` getting "balanced" by WordPress's
+save-time HTML parser, fixed by building table rows via
+`document.createElement`/`.textContent` instead of `innerHTML` string
+concatenation), and why the base64/`document.currentScript` self-loader
+idea was abandoned — lives in `web_chart_utils.py`'s module docstring, not
+duplicated here.
+
+**IMPORTANT — automation is bundled into `fetch_draft_projections.yml`,
+not its own workflow.** That workflow now does two things in one run:
+fetch projections → Sheets (its original job), AND pull personal ranks →
+rebuild the auction chart → publish to WordPress (added this round). One
+run, two outputs — easy to forget since the workflow's name only mentions
+the first one.
+
+- `pull_personal_ranks.py` — downloads Joe Bond's rankings straight from
+  the same Google Drive folder `ff_cheatsheet/update_joe_bond_ranks.py`
+  reads, using the same (already-configured) `GOOGLE_SERVICE_ACCOUNT`
+  credential, and saves them directly as `ff_cheatsheet/joe_bond_<fmt>.csv`
+  — no Excel/win32com involved (GitHub's Linux runners can't run Excel
+  anyway, and the raw Drive CSV's wide multi-block format already matches
+  what `load_personal_ranks()` expects, so no reformatting is needed
+  either). Means the personal-rank nudge reflects current rankings on
+  every automated run, not a manually-pushed snapshot.
+- `push_to_wordpress.py` — marker-based partial-content REST API update
+  (`<!-- AUCTION_CHART_MEMBER:START/END -->` / `TEASER` comments), targets
+  a WordPress **post** (`/wp/v2/posts/{id}`, not `/pages/`), authenticated
+  via a dedicated `f6p-automation` Editor-role account's Application
+  Password (least-privilege — can't touch plugins/themes/other users if
+  the credential ever leaks). Real deploy bug found via an actual test
+  run: the site's Cloudflare WAF blocks the default
+  `python-requests/x.y.z` User-Agent outright (it's explicitly on a
+  bot/scraper blocklist alongside curl/wget/scan tools) — fixed by
+  sending a real, identifiable User-Agent string on every request, no
+  Cloudflare-side changes needed.
+- **No native GitHub `schedule:` trigger on this workflow, on purpose.**
+  User has had reliability issues with GitHub's own scheduler before and
+  already runs both this workflow and `fetch_adp.yml` via cron-job.org
+  (`workflow_dispatch`, once/day each). A `schedule:` trigger was added
+  and then deliberately removed once this was confirmed — it wasn't a
+  redundant safety net, it was a real double-run risk: `run_all.py`
+  re-scrapes all 10 projection sources fresh on every invocation (Sheets
+  is the *output*, never an input), so running twice a day would have
+  doubled real scraping load on every source, the exact kind of thing
+  that's gotten sources blocked before in this project's history.
+
 ## Output
 `auction_values_half_ppr.csv` — all QB/RB/WR/TE from the consensus
 projections, sorted by auction value descending.
