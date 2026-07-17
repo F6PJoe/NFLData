@@ -2,11 +2,14 @@ name: Fetch Draft Projections
 
 on:
   workflow_dispatch:
-    # Triggered by cron-job.org, or manually from the Actions tab
+    # Lets you also trigger a run manually from the Actions tab -- not
+    # required for the daily schedule below to work.
   schedule:
-    # 13:00 UTC = 8:00 AM CT (9:00 AM ET) most of the year -- runs daily,
-    # independent of cron-job.org, so the site doesn't depend on a third
-    # party service to stay current. Adjust the hour if 8am CT isn't right.
+    # 13:00 UTC = 8:00 AM CT (9:00 AM ET) most of the year -- this is the
+    # ONLY thing that needs to exist for daily automation. GitHub's own
+    # scheduler fires it; no external cron service (e.g. cron-job.org) is
+    # needed or wired up anywhere in this repo. Adjust the hour if 8am CT
+    # isn't right.
     - cron: '0 13 * * *'
 
 jobs:
