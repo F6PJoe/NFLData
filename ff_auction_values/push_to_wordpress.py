@@ -92,9 +92,14 @@ def main():
 
     api = f"{wp_url}/wp-json/wp/v2/posts/{post_id}"
     auth = (username, app_password)
+    # The site's Cloudflare WAF blocks the default "python-requests/x.y.z"
+    # User-Agent outright (it's on a bot blocklist alongside curl/wget/scan
+    # tools) -- a real, identifiable UA string avoids that block entirely,
+    # no Cloudflare-side changes needed.
+    headers = {"User-Agent": "FantasySixPack-AuctionValueChart/1.0 (+https://fantasysixpack.net)"}
 
     print(f"Fetching current content for post {post_id}...")
-    resp = requests.get(api, params={"context": "edit"}, auth=auth, timeout=30)
+    resp = requests.get(api, params={"context": "edit"}, auth=auth, headers=headers, timeout=30)
     if not resp.ok:
         print(f"GET failed: {resp.status_code} {resp.reason}", file=sys.stderr)
         print(f"Response headers: {dict(resp.headers)}", file=sys.stderr)
@@ -112,7 +117,7 @@ def main():
         print(f"  Replaced {name} section ({len(new_inner) / 1024:.0f} KB)")
 
     print("Pushing updated content back to WordPress...")
-    resp = requests.post(api, auth=auth, json={"content": content}, timeout=30)
+    resp = requests.post(api, auth=auth, headers=headers, json={"content": content}, timeout=30)
     if not resp.ok:
         print(f"POST failed: {resp.status_code} {resp.reason}", file=sys.stderr)
         print(f"Response headers: {dict(resp.headers)}", file=sys.stderr)
