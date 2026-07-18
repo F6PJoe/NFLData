@@ -51,6 +51,7 @@ Usage:
     python push_to_wordpress.py
 """
 
+import json
 import os
 import re
 import sys
@@ -64,6 +65,32 @@ SECTIONS = [
     ("AUCTION_CHART_MEMBER", HERE / "value_chart.html"),
     ("AUCTION_CHART_TEASER", HERE / "value_chart_teaser.html"),
 ]
+
+
+def diagnose_and_parse_json(resp, label):
+    """resp.raise_for_status() alone misses a real failure mode this
+    workflow has actually hit: a 200 OK with an empty or non-JSON body
+    (something in front of WordPress -- Cloudflare, host-level caching --
+    serving a stale/blank response while still reporting success). Always
+    prints status/headers/a body preview when either the HTTP status isn't
+    2xx OR the body isn't valid JSON, instead of only on non-2xx like
+    before, so the NEXT failure of either kind leaves real evidence in the
+    Actions log instead of just a bare JSONDecodeError."""
+    problem = None
+    if not resp.ok:
+        problem = f"{label} failed: {resp.status_code} {resp.reason}"
+    try:
+        data = resp.json()
+    except ValueError as e:
+        problem = problem or f"{label} returned {resp.status_code} but body isn't valid JSON: {e}"
+        data = None
+    if problem:
+        print(problem, file=sys.stderr)
+        print(f"Response headers: {dict(resp.headers)}", file=sys.stderr)
+        print(f"Response body (first 2000 chars): {resp.text[:2000]}", file=sys.stderr)
+        resp.raise_for_status()  # raises if the status itself was the problem
+        raise ValueError(problem)  # status was fine, body wasn't -- raise ourselves
+    return data
 
 
 def replace_section(content, name, new_inner):
@@ -100,12 +127,7 @@ def main():
 
     print(f"Fetching current content for post {post_id}...")
     resp = requests.get(api, params={"context": "edit"}, auth=auth, headers=headers, timeout=30)
-    if not resp.ok:
-        print(f"GET failed: {resp.status_code} {resp.reason}", file=sys.stderr)
-        print(f"Response headers: {dict(resp.headers)}", file=sys.stderr)
-        print(f"Response body (first 2000 chars): {resp.text[:2000]}", file=sys.stderr)
-    resp.raise_for_status()
-    post = resp.json()
+    post = diagnose_and_parse_json(resp, "GET")
     content = post["content"]["raw"]
 
     for name, path in SECTIONS:
@@ -118,12 +140,8 @@ def main():
 
     print("Pushing updated content back to WordPress...")
     resp = requests.post(api, auth=auth, headers=headers, json={"content": content}, timeout=30)
-    if not resp.ok:
-        print(f"POST failed: {resp.status_code} {resp.reason}", file=sys.stderr)
-        print(f"Response headers: {dict(resp.headers)}", file=sys.stderr)
-        print(f"Response body (first 2000 chars): {resp.text[:2000]}", file=sys.stderr)
-    resp.raise_for_status()
-    print(f"Done. Post {post_id} updated ({resp.json().get('modified', 'unknown time')}).")
+    result = diagnose_and_parse_json(resp, "POST")
+    print(f"Done. Post {post_id} updated ({result.get('modified', 'unknown time')}).")
 
 
 if __name__ == "__main__":
