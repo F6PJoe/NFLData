@@ -46,8 +46,9 @@ BASE_PAYLOAD = {
 # Map contest slug -> output column name, filename, and any payload overrides
 # BB10s overrides will be filled in once we capture that payload
 CONTEST_MAP = {
-    "nffc":  ("NFFC",  "nffc_adp.csv",  {}),
-    "bb10s": ("BB10s", "bb10s_adp.csv", {"draft_type": "969"}),
+    "nffc":    ("NFFC",         "nffc_adp.csv",         {}),
+    "bb10s":   ("BB10s",        "bb10s_adp.csv",        {"draft_type": "969"}),
+    "cutline": ("NFFC Cutline", "nffc_cutline_adp.csv", {"draft_type": "942"}),
 }
 
 
@@ -110,7 +111,7 @@ def main():
         "--contest",
         default="nffc",
         choices=list(CONTEST_MAP.keys()),
-        help="nffc (default) or bb10s",
+        help="nffc (default), bb10s, or cutline",
     )
     ap.add_argument("-o", "--output", default=None, help="Override output filename")
     ap.add_argument("--html-file", help="Parse a saved HTML response instead of fetching")

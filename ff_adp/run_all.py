@@ -38,19 +38,20 @@ SOURCES = [
 OUTPUT_COLS = ['Player', 'Position(s)', 'Team',
                'Sleeper', 'Sleeper_STD', 'Sleeper_Half', 'Sleeper_2QB',
                'ESPN', 'Yahoo!', 'CBS', 'Fantrax',
-               'NFL', 'FFPC', 'BB10s', 'NFFC',
+               'FFPC', 'BB10s', 'NFFC',
                'Underdog', 'Consensus']
 
 # Columns written to Google Sheets — must match the header row already in the sheet.
 # Extra columns (Sleeper_2QB, NFFC Cutline, RTSports) stay in combined_adp.csv
 # for the cheatsheet but are NOT pushed to the public ADP Google Sheet tab.
+# NFL column removed — NFL.com no longer offers fantasy ADP.
 SHEET_COLS = ['Player', 'Position(s)', 'Team',
               'Sleeper', 'ESPN', 'Yahoo!', 'CBS', 'Fantrax',
-              'NFL', 'FFPC', 'BB10s', 'NFFC', 'Underdog', 'Consensus']
+              'FFPC', 'BB10s', 'NFFC', 'Underdog', 'Consensus']
 
 # Sleeper format variants are reference columns only — only Sleeper (PPR) enters consensus
 SITE_COLS = [c for c in OUTPUT_COLS
-             if c not in ('Player', 'Position(s)', 'Team', 'NFL',
+             if c not in ('Player', 'Position(s)', 'Team',
                           'Sleeper_STD', 'Sleeper_Half', 'Sleeper_2QB', 'Consensus')]
 
 # ── Google Sheets config ──────────────────────────────────────────────────────
@@ -406,7 +407,6 @@ def merge(all_data: list) -> list:
             'Player':      row['Player'],
             'Position(s)': row.get('Position(s)', ''),
             'Team':        row.get('Team', ''),
-            'NFL':         999,   # no fetcher yet; 999 keeps sheet sorting correct
         }
         for c in SITE_COLS:
             v = site_vals.get(c)

@@ -40,11 +40,20 @@ HEADERS = {
 # Positions we care about (kickers excluded; DEF kept for DST normalisation)
 KEEP_POS = {"QB", "RB", "WR", "TE", "DEF"}
 
-ADP_FIELD = "adp_ppr"
+# Primary sort field — PPR is most comparable to other sources in consensus
+ADP_SORT_FIELD = "adp_ppr"
+
+# All four Sleeper scoring formats: output column -> API stats field
+ADP_FIELDS = {
+    "Sleeper":      "adp_ppr",
+    "Sleeper_STD":  "adp_std",
+    "Sleeper_Half": "adp_half_ppr",
+    "Sleeper_2QB":  "adp_2qb",
+}
 
 
 def fetch_data(season: str):
-    params = {"season_type": "regular", "order_by": ADP_FIELD}
+    params = {"season_type": "regular", "order_by": ADP_SORT_FIELD}
     resp = requests.get(URL_TMPL.format(season=season), params=params,
                          headers=HEADERS, timeout=30)
     resp.raise_for_status()
@@ -60,25 +69,17 @@ def parse(data):
             continue
 
         stats = entry.get("stats") or {}
-        adp = stats.get(ADP_FIELD)
-        if adp is None:
+
+        # Must have a valid PPR ADP to include the player at all
+        ppr = stats.get(ADP_SORT_FIELD)
+        if ppr is None:
             continue
         try:
-            adp = float(adp)
+            ppr = float(ppr)
         except (TypeError, ValueError):
             continue
-
-        # 999 = no ADP available for this player from Sleeper's feed
-        if adp >= 999:
+        if ppr >= 999:
             continue
-
-        # adp_2qb: Sleeper's 2QB/superflex ADP — 999 if not available
-        try:
-            adp_2qb = float(stats.get("adp_2qb") or 999)
-            if adp_2qb >= 999:
-                adp_2qb = 999.0
-        except (TypeError, ValueError):
-            adp_2qb = 999.0
 
         first = (player.get("first_name") or "").strip()
         last  = (player.get("last_name") or "").strip()
@@ -86,15 +87,19 @@ def parse(data):
         if not name:
             continue
 
-        team = (player.get("team") or "").strip()
-
-        rows.append({
+        record = {
             "Player":      name,
             "Position(s)": "DST" if pos == "DEF" else pos,
-            "Team":        team,
-            "Sleeper":     round(adp, 2),
-            "Sleeper_2QB": round(adp_2qb, 2),
-        })
+            "Team":        (player.get("team") or "").strip(),
+        }
+        for col, field in ADP_FIELDS.items():
+            try:
+                val = float(stats.get(field) or 999)
+            except (TypeError, ValueError):
+                val = 999.0
+            record[col] = round(val, 2) if val < 999 else 999.0
+
+        rows.append(record)
 
     rows.sort(key=lambda r: r["Sleeper"])
     return rows
@@ -107,20 +112,20 @@ def main():
                     help="NFL season year (default: current year)")
     args = ap.parse_args()
 
-    print(f"Fetching Sleeper {ADP_FIELD} from api.sleeper.app (season {args.season})...")
+    print(f"Fetching Sleeper ADP (all formats) from api.sleeper.app (season {args.season})...")
     data = fetch_data(args.season)
     rows = parse(data)
 
     if not rows:
         sys.exit("No Sleeper ADP data found.")
 
-    fieldnames = ["Player", "Position(s)", "Team", "Sleeper", "Sleeper_2QB"]
+    fieldnames = ["Player", "Position(s)", "Team", "Sleeper", "Sleeper_STD", "Sleeper_Half", "Sleeper_2QB"]
     with open(args.output, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=fieldnames)
         w.writeheader()
         w.writerows(rows)
 
-    print(f"Wrote {len(rows)} players to {args.output}.")
+    print(f"Wrote {len(rows)} players -> {args.output}  (PPR / STD / Half / 2QB)")
 
 
 if __name__ == "__main__":
