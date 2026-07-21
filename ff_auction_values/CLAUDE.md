@@ -2166,6 +2166,71 @@ the first one.
   doubled real scraping load on every source, the exact kind of thing
   that's gotten sources blocked before in this project's history.
 
+## Round 10: a second, unrelated bot block, this time at the host level
+
+Round 9's `push_to_wordpress.py` worked cleanly for a day after the
+Cloudflare `python-requests` User-Agent fix, then broke again on
+2026-07-18 — a *different* failure, not a regression of the first one.
+
+**Symptom**: `FAILED: Expecting value: line 1 column 1 (char 0)` — a bare
+`JSONDecodeError`. The existing `if not resp.ok` diagnostic branch never
+fired because the response was HTTP 200; the problem was an empty/non-JSON
+body on an otherwise-"successful" status, a failure shape the script
+couldn't previously see into. Fixed the diagnostics first, before
+diagnosing the actual bug: added `diagnose_and_parse_json()`, which logs
+status/headers/a body preview whenever *either* the HTTP status isn't 2xx
+*or* the body fails to parse as JSON, not just the first case. Re-ran and
+got the real evidence on the next failure: an `sg-captcha: challenge`
+response header and a redirect to `/.well-known/sgcaptcha/?r=%2Fwp-json%2F...`.
+
+**Root cause**: SiteGround's own hosting-level "AI Anti-Bot" / CAPTCHA
+system (separate from the user's own Cloudflare account and its WAF rules
+— a second, independent layer, hosting-side rather than DNS-side),
+intercepting the REST API request with a CAPTCHA challenge page before it
+ever reached WordPress. Confirmed via `curl`-equivalent evidence, not
+guessed: response `Content-Type: text/html`, a `<meta refresh>` redirect
+to the SG CAPTCHA flow, `Server: cloudflare` (the user's own Cloudflare
+account still sits in front, uninvolved in *this* particular block —
+correctly ruled out early since the earlier User-Agent fix was still
+working the day before).
+
+**Why this one couldn't be fixed client-side at all**: a JS-rendered
+CAPTCHA challenge page fundamentally cannot be solved by a server-to-server
+script — there's no browser to execute the challenge's JavaScript. Unlike
+the Cloudflare block (fixable by changing what the client sends), this
+required a change on SiteGround's own infrastructure. Two rounds of
+guessing at Site Tools' UI for a self-service toggle (a "Security
+Optimizer" WordPress plugin's tabs, then Site Tools' native "Blocked
+Traffic" IP/country blocklist) both turned out to be the wrong feature —
+neither had anything CAPTCHA-related, confirmed by checking rather than
+assuming. Opened a SiteGround support ticket instead, with concrete,
+verifiable specifics rather than a vague description: affected path
+(`/wp-json/wp/v2/posts/165937`), both failure timestamps in UTC, the
+example source IP (`40.65.55.33`) cross-checked against GitHub's own
+published Actions IP ranges (`https://api.github.com/meta`, confirmed
+within `40.65.0.0/18`) with an explicit note that IP allowlisting
+wouldn't work since GitHub Actions rotates across 7,000+ CIDR blocks, the
+exact User-Agent string, both HTTP methods used (`GET ?context=edit` then
+`POST`), and the exact path format (plain `/wp-json/...`, not
+`/index.php/wp-json/...`). SiteGround's support confirmed the diagnosis
+(no matching entries in origin access logs at all, meaning the request
+really was being stopped before reaching WordPress) and applied a
+path-based exemption for `/wp-json/*` on their end.
+
+**Verified, not just assumed fixed**: three consecutive successful daily
+runs (2026-07-19, 07-20, 07-21) after the fix landed, via `gh run list`
+against the real workflow history — not just taking "it should be fixed
+now" at face value, consistent with this project's standing practice
+throughout.
+
+**Lesson for next time a hosting-side block shows up**: don't assume the
+first bot-block found (Cloudflare, in Round 9) is the *only* one. Sites
+behind multiple layers (DNS-level CDN/WAF + host-level anti-bot) can block
+the same-looking traffic for two completely independent reasons at two
+different points in the request path — fixing one doesn't rule out
+needing to separately diagnose the other when a similar-looking failure
+resurfaces days later.
+
 ## Output
 `auction_values_half_ppr.csv` — all QB/RB/WR/TE from the consensus
 projections, sorted by auction value descending.
