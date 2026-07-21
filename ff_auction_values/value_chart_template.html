@@ -230,10 +230,71 @@
     font-size: 14px;
   }
 
+  .scroll-hint {
+    display: none;
+    margin: 0 0 8px;
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    text-align: center;
+  }
+
   @media (max-width: 720px) {
+    .wrap { padding-left: 10px; padding-right: 10px; }
     .control-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .toolbar { flex-direction: column; align-items: stretch; }
     .search-print { justify-content: space-between; }
+
+    /* Value (the whole point of this page) was getting scrolled off-screen
+       by default on a phone -- only #/Player/Team fit in ~375px at the
+       desktop padding/font sizes. Tighter padding and a couple of
+       ID-column shortcuts get Value into view without scrolling for most
+       phones; the hint above covers the rest, since mobile browsers hide
+       scrollbars by default and give no other visual clue the table
+       scrolls sideways. */
+    .scroll-hint { display: block; }
+    thead th { padding: 9px 5px; font-size: 11px; }
+    tbody td { padding: 7px 5px; font-size: 13px; }
+    td.rank { width: 18px; }
+    td.team { font-size: 11.5px; }
+    .pos-chip { padding: 2px 5px; }
+    /* Proj. Pts is reference info, not this page's actual point (Value
+       is) -- hidden on phones specifically so Value fits without a
+       scroll, verified against real measurements (375px viewport) rather
+       than assumed: hiding it plus this tighter padding was needed
+       together, hiding it alone still left Value ~44px short. */
+    th[data-key="points"], td.points { display: none; }
+  }
+
+  @media (max-width: 440px) {
+    /* The 720px tier above was verified in an isolated test page and fit
+       fine there, but the real WordPress theme's own container padding/
+       fonts around the embedded chart eat into usable width beyond what
+       an isolated test can see -- confirmed against the real live page,
+       not assumed: still cut off on a real 412px phone despite fitting
+       cleanly at 457px and up in the same testing session. Rather than
+       chase the exact discrepancy, drop Team too (Player is enough
+       context most of the time; Team is the least essential of what's
+       left) on the narrowest phones specifically, so there's real margin
+       instead of another razor-thin fit.
+
+       table-layout switches to fixed with percentage widths here rather
+       than just tightening padding further -- `max-width` on a <td> is
+       silently ignored under the default `table-layout: auto` (columns
+       size to content, not to any cap you set), confirmed directly: an
+       earlier attempt at capping Player's width this way barely moved
+       the numbers. Percentage widths under `fixed` layout are a real,
+       deterministic cap regardless of how long any single player's name
+       is, instead of another content-dependent guess that could still
+       come up short for a longer name than whatever happened to be in
+       the test data. */
+    table { table-layout: fixed; }
+    th[data-key="team"], td.team { display: none; }
+    th[data-key="rank"], td.rank { width: 8%; padding-left: 3px; padding-right: 3px; }
+    th[data-key="name"], td.player { width: 52%; overflow: hidden; text-overflow: ellipsis; }
+    th[data-key="position"], td:has(.pos-chip) { width: 18%; }
+    th[data-key="value"], td.value { width: 22%; padding-left: 3px; padding-right: 6px; }
+    thead th { padding-top: 8px; padding-bottom: 8px; }
+    tbody td { padding-top: 6px; padding-bottom: 6px; }
   }
 
   @media print {
@@ -283,6 +344,7 @@
     </div>
   </div>
 
+  <p class="scroll-hint">&larr; Swipe table to see Pos / Pts / Value &rarr;</p>
   <div class="table-scroll">
     <table>
       <thead>
