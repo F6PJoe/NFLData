@@ -1,110 +1,68 @@
 #!/usr/bin/env python3
 """
-Pull Yahoo Fantasy ADP from the official Yahoo Fantasy Sports API.
+Pull Yahoo Fantasy ADP from Yahoo's public draft analysis API.
 
-Uses the draft analysis endpoint which returns averagePick (= ADP) for each
-player.  Requires a refresh token in .env (run yahoo_auth.py once to get it).
+Uses the pub-api-ro.fantasysports.yahoo.com endpoint which is public —
+no OAuth or credentials required.
 
-The token is refreshed automatically on every run — no manual re-auth needed.
+Pages through players sorted by average_pick and stops when a page returns
+no players with a valid ADP value.
 
 Usage:
-    python fetch_yahoo_adp.py               # -> yahoo_adp.csv
-    python fetch_yahoo_adp.py --game nfl --season 2026
+    python fetch_yahoo_adp.py          # -> yahoo_adp.csv
+    python fetch_yahoo_adp.py -o my_yahoo.csv
 
-Requires: requests, python-dotenv
+Requires: requests
 """
 
 import argparse
 import csv
-import os
 import sys
+import time
 
 import requests
-from dotenv import load_dotenv, set_key
 
-ENV_FILE = os.path.join(os.path.dirname(__file__), ".env")
-load_dotenv(ENV_FILE)
+BASE_URL = (
+    "https://pub-api-ro.fantasysports.yahoo.com/fantasy/v2"
+    "/league/470.l.public;out=settings"
+    "/players;position=ALL;start={start};count={count};sort=average_pick"
+    ";search=;out=auction_values,ranks;ranks=o-rank"
+    ";out=expert_ranks;expert_ranks.rank_type=projected_season_remaining"
+    "/draft_analysis;cut_types=diamond;slices=last7days"
+    "?format=json_f"
+)
 
-CLIENT_ID     = os.environ.get("YAHOO_CLIENT_ID", "")
-CLIENT_SECRET = os.environ.get("YAHOO_CLIENT_SECRET", "")
-REFRESH_TOKEN = os.environ.get("YAHOO_REFRESH_TOKEN", "")
+PAGE_SIZE = 30
 
-TOKEN_URL = "https://api.login.yahoo.com/oauth2/get_token"
-API_BASE  = "https://fantasysports.yahooapis.com/fantasy/v2"
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/json",
+}
 
-HEADERS = {"Accept": "application/json"}
-
-
-def refresh_access_token():
-    if not REFRESH_TOKEN:
-        sys.exit("No YAHOO_REFRESH_TOKEN in .env — run yahoo_auth.py first.")
-    resp = requests.post(
-        TOKEN_URL,
-        data={"grant_type": "refresh_token", "refresh_token": REFRESH_TOKEN},
-        auth=(CLIENT_ID, CLIENT_SECRET),
-        timeout=30,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    access_token = data["access_token"]
-    new_refresh   = data.get("refresh_token", REFRESH_TOKEN)
-    # Persist the (possibly rotated) refresh token
-    if new_refresh != REFRESH_TOKEN:
-        set_key(ENV_FILE, "YAHOO_REFRESH_TOKEN", new_refresh)
-    return access_token
+KEEP_POS = {"QB", "WR", "RB", "TE", "DEF", "K"}
 
 
-def get_game_key(session, game="nfl"):
-    """Resolve the current season's game key (e.g. '423' for NFL 2026)."""
-    url = f"{API_BASE}/game/{game}"
-    r = session.get(url, params={"format": "json"}, timeout=30)
+def fetch_page(start: int) -> list:
+    url = BASE_URL.format(start=start, count=PAGE_SIZE)
+    r = requests.get(url, headers=HEADERS, timeout=30)
     r.raise_for_status()
-    return r.json()["fantasy_content"]["game"][0]["game_key"]
+    data = r.json()
+    return data.get("fantasy_content", {}).get("league", {}).get("players", [])
 
 
-def fetch_players(session, game_key, start=0, count=25):
-    # ;out=draft_analysis must be part of the path, not a query param
-    url = f"{API_BASE}/game/{game_key}/players;out=draft_analysis"
-    params = {
-        "format": "json",
-        "start":  start,
-        "count":  count,
-        "sort":   "AR",   # sort by All Drafts rank (average pick)
-        "status": "A",    # available players
-    }
-    r = session.get(url, params=params, timeout=30)
-    r.raise_for_status()
-    return r.json()
-
-
-def _flatten(lst):
-    """Flatten Yahoo's list-of-single-key-dicts into one dict."""
-    out = {}
-    for item in lst:
-        if isinstance(item, dict):
-            out.update(item)
-    return out
-
-
-def parse_players(data, game_key):
-    content = data["fantasy_content"]["game"]
-    players_blob = content[1]["players"]
-    total = int(players_blob.get("count", 0))
+def parse_page(players: list) -> tuple[list, int]:
     rows = []
-    for i in range(total):
-        p = players_blob.get(str(i), {}).get("player")
-        if not p or len(p) < 2:
-            continue
+    for p in players:
+        player = p.get("player", {})
+        name = player.get("name", {}).get("full", "").strip()
+        pos  = player.get("display_position", "").strip().upper()
+        team = player.get("editorial_team_abbr", "").strip().upper()
 
-        # p[0] is a list of single-key dicts with player info
-        info = _flatten(p[0])
-        name_block = info.get("name", {})
-        full_name  = name_block.get("full", "") if isinstance(name_block, dict) else ""
-
-        # p[1] is {"draft_analysis": [{"average_pick": "x"}, ...]}
-        da_list = p[1].get("draft_analysis", [])
-        da      = _flatten(da_list) if isinstance(da_list, list) else da_list
-
+        da = player.get("draft_analysis", {})
         adp_raw = da.get("average_pick", "")
         try:
             adp = round(float(adp_raw), 2)
@@ -113,50 +71,53 @@ def parse_players(data, game_key):
         if adp <= 0:
             continue
 
+        if not name:
+            continue
+
         rows.append({
-            "Player":      full_name,
-            "Position(s)": info.get("display_position", ""),
-            "Team":        info.get("editorial_team_abbr", "").upper(),
+            "Player":      name,
+            "Position(s)": pos,
+            "Team":        team,
             "Yahoo!":      adp,
         })
-    return rows, total
+
+    return rows, len(players)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--game",    default="nfl")
-    ap.add_argument("--output",  default="yahoo_adp.csv")
-    ap.add_argument("--max-players", type=int, default=500)
+    ap.add_argument("-o", "--output", default="yahoo_adp.csv")
     args = ap.parse_args()
 
-    access_token = refresh_access_token()
-
-    session = requests.Session()
-    session.headers.update({
-        **HEADERS,
-        "Authorization": f"Bearer {access_token}",
-    })
-
-    print("Resolving current NFL game key...")
-    game_key = get_game_key(session, args.game)
-    print(f"Game key: {game_key}")
-
+    print("Fetching Yahoo Fantasy ADP (public endpoint, no auth)...")
     all_rows = []
-    start     = 0
-    page_size = 25
+    start = 0
 
-    while start < args.max_players:
-        print(f"  Fetching players {start}–{start + page_size - 1}...")
-        data = fetch_players(session, game_key, start=start, count=page_size)
-        rows, page_count = parse_players(data, game_key)
-        all_rows.extend(rows)
-        # Stop when the page returned fewer players than requested
-        if page_count < page_size:
+    while True:
+        print(f"  Fetching players {start}–{start + PAGE_SIZE - 1}...")
+        try:
+            players = fetch_page(start)
+        except requests.RequestException as e:
+            sys.exit(f"Request failed: {e}")
+
+        if not players:
+            print("  No more players returned — done.")
             break
-        start += page_size
+
+        rows, page_count = parse_page(players)
+        all_rows.extend(rows)
+        print(f"  Got {len(rows)} players with ADP on this page")
+
+        # Stop when no players on this page had a valid ADP
+        if len(rows) == 0:
+            print("  No valid ADP values on this page — stopping.")
+            break
+
+        start += PAGE_SIZE
+        time.sleep(0.5)  # be polite
 
     if not all_rows:
-        sys.exit("No players with ADP found.")
+        sys.exit("No Yahoo ADP data found.")
 
     all_rows.sort(key=lambda r: r["Yahoo!"])
 
@@ -166,7 +127,7 @@ def main():
         w.writeheader()
         w.writerows(all_rows)
 
-    print(f"Wrote {len(all_rows)} players to {args.output}.")
+    print(f"Wrote {len(all_rows)} players -> {args.output}")
 
 
 if __name__ == "__main__":
