@@ -25,7 +25,7 @@ import requests
 from bs4 import BeautifulSoup
 
 BASE_URL = "https://nfc.shgn.com/adp.data.php"
-DATE_FMT = "%m/%d/%Y"
+DATE_FMT = "%Y-%m-%d"
 ROLLING_DAYS = 30
 
 HEADERS = {
@@ -36,7 +36,7 @@ HEADERS = {
 
 # Base POST body observed from browser DevTools (football, no filters)
 BASE_PAYLOAD = {
-    "team_id":      "0",
+    "team_id":      "781633",
     "from_date":    "",
     "to_date":      "",
     "num_teams":    "0",
