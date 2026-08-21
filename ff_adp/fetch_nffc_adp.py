@@ -19,11 +19,14 @@ Requires: requests, beautifulsoup4, lxml
 import argparse
 import csv
 import sys
+from datetime import datetime, timedelta
 
 import requests
 from bs4 import BeautifulSoup
 
 BASE_URL = "https://nfc.shgn.com/adp.data.php"
+DATE_FMT = "%m/%d/%Y"
+ROLLING_DAYS = 30
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (personal ADP consensus tool)",
@@ -56,9 +59,15 @@ def fetch_html(payload_overrides=None, html_file=None):
     if html_file:
         with open(html_file, encoding="utf-8") as f:
             return f.read()
+    today = datetime.now()
+    from_date = (today - timedelta(days=ROLLING_DAYS)).strftime(DATE_FMT)
+    to_date   = today.strftime(DATE_FMT)
     payload = dict(BASE_PAYLOAD)
+    payload["from_date"] = from_date
+    payload["to_date"]   = to_date
     if payload_overrides:
         payload.update(payload_overrides)
+    print(f"  Date range: {from_date} – {to_date}")
     resp = requests.post(BASE_URL, data=payload, headers=HEADERS, timeout=30)
     resp.raise_for_status()
     return resp.text
