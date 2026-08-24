@@ -78,7 +78,7 @@ def parse(data):
             ppr = float(ppr)
         except (TypeError, ValueError):
             continue
-        if ppr >= 999:
+        if ppr > 300:
             continue
 
         first = (player.get("first_name") or "").strip()
