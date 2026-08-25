@@ -269,7 +269,30 @@ STARTER_RANK_DAMPING = 1.0
 # total barely moves across this range (180-185) -- the exponent is almost
 # entirely a top-of-position knob, which is why fitting it to one player
 # is so easy to get wrong.
-MIN_EXPONENT = {"QB": 0.0, "RB": 0.0, "WR": 1.5, "TE": 1.45}
+# WR floor REMOVED (was briefly 1.5). It was added to close a -14.1% gap
+# in the WR top-12 total, but that was the wrong instrument and it broke
+# something more important than it fixed:
+#
+#   - It pushed the top WRs ABOVE both reference sources, not between them
+#     (Puka Nacua $62 at 3WR and $77 at 2WR, against a real range of
+#     $54 Draft Sharks / $60 FantasyPros at 3WR and ~$64 at 2WR).
+#   - It inverted the RB/WR ordering. At 2WR it put Puka ($77) ABOVE Gibbs
+#     ($72), which is backwards on its face: cutting a WR starter should
+#     make WRs relatively CHEAPER, and both sources keep the top RB above
+#     the top WR in both shapes.
+#
+# The interaction is why: at 2WR the WR replacement rank shallows 60 -> 41,
+# and a raised exponent amplifies top-end concentration on top of an
+# already-concentrating pool, so an exponent that merely overshoots at 3WR
+# badly overshoots at 2WR.
+#
+# The underlying -14.1% WR top-12 gap is REAL and still open, but it is not
+# an exponent problem -- WR budget share already matches (42.2% vs 43.1%
+# real) and WR replacement depth already matches (60 vs a real 59). With
+# share and depth both correct, the remaining gap points at the projection
+# curve, not the valuation math. Left alone rather than papered over with
+# an exponent that damages the cross-position ordering.
+MIN_EXPONENT = {"QB": 0.0, "RB": 0.0, "WR": 0.0, "TE": 1.45}
 
 
 def _scale_share_by_starter_demand(raw_share, starters, flex_slots):
