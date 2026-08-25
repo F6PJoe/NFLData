@@ -326,7 +326,8 @@ def replacement_rank(pos, ranks=None):
 
 
 def compute_auction_values(blended, ranks=None, exponents=None, teams=None,
-                            budget_share=None, verbose=True):
+                            budget_share=None, starters=None, flex_slots=None,
+                            verbose=True):
     """ranks/exponents/teams/budget_share: optional overrides for
     REPLACEMENT_RANK/VORP_EXPONENT/TEAMS/POSITION_BUDGET_SHARE (used by
     calibrate_replacement_rank.py and calibrate_vorp_exponent.py to
@@ -335,10 +336,22 @@ def compute_auction_values(blended, ranks=None, exponents=None, teams=None,
     format). budget_share defaults to the half-PPR-derived
     POSITION_BUDGET_SHARE — pass an override when calibrating a different
     scoring format, since real bidding behavior (unlike team count) does
-    shift positional budget allocation by format."""
+    shift positional budget allocation by format. starters/flex_slots:
+    optional overrides for STARTERS/FLEX_SLOTS -- used to compute total
+    roster spots (and hence the discretionary $ pool). Passing ranks/
+    budget_share for a non-baseline roster shape WITHOUT also passing the
+    matching starters/flex_slots silently computes discretionary for the
+    WRONG roster size (Round 12 sweep bug -- every non-baseline shape
+    swept via this function directly was off by the $-per-spot difference
+    between the real and baseline roster spot counts). The live Excel
+    workbook was never affected: its Total Discretionary formula already
+    references live Setup cells for every term, never this module's
+    hardcoded STARTERS/FLEX_SLOTS."""
     exponents = exponents or VORP_EXPONENT
     teams = teams if teams is not None else TEAMS
     budget_share = budget_share or POSITION_BUDGET_SHARE
+    starters = starters or STARTERS
+    flex_slots = flex_slots if flex_slots is not None else FLEX_SLOTS
     replacement_points = {}
     for pos, players in blended.items():
         curve = [p["blended_points"] for p in players]
@@ -359,7 +372,7 @@ def compute_auction_values(blended, ranks=None, exponents=None, teams=None,
             })
 
     total_money = teams * BUDGET
-    total_roster_spots = teams * (sum(STARTERS.values()) + FLEX_SLOTS
+    total_roster_spots = teams * (sum(starters.values()) + flex_slots
                                    + BENCH_SPOTS + NON_SKILL_SLOTS_PER_TEAM)
     discretionary = total_money - total_roster_spots * 1
 
@@ -368,8 +381,22 @@ def compute_auction_values(blended, ranks=None, exponents=None, teams=None,
         if p["weighted_vorp"] > 0:
             total_weighted_vorp_by_pos[p["position"]] += p["weighted_vorp"]
 
+    # Guard against a near-empty (not necessarily exactly zero) weighted
+    # VORP pool -- mirrors the same guard already in the Excel workbook
+    # (build_live_draft_workbook.py's POSITION RATES section). A position
+    # configured with essentially no real demand (e.g. 0 starters, no
+    # flex-eligibility) can leave a pool of 0, which crashed here with a
+    # bare ZeroDivisionError, or a pool of a few points, which produced an
+    # absurd rate. Confirmed via the sweep in Round 12: 8-team half-PPR
+    # with TE=0 starters and no TE-flex crashed outright (pool exactly
+    # 0.0). Threshold of 20 matches the Excel guard -- comfortably below
+    # every real baseline pool size in this project, well above what a
+    # genuinely-degenerate pool produces. Below it, rate=0 and every
+    # player in that position floors to the $1 static value, which is the
+    # sensible outcome for a position with essentially no real demand.
     dollar_per_weighted_vorp = {
         pos: (discretionary * budget_share[pos]) / total_weighted_vorp_by_pos[pos]
+             if total_weighted_vorp_by_pos[pos] >= 20 else 0.0
         for pos in POINTS_COL
     }
 
