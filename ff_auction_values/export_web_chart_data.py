@@ -30,6 +30,7 @@ from build_auction_values import (
     blend_with_personal_ranks, load_personal_ranks, load_projections,
 )
 from build_teamcount_estimate import CALIBRATED, TEAM_COUNTS, FORMATS
+from roster_formula import MIN_EXPONENT
 from web_chart_utils import strip_blank_lines, collapse_script_style_blocks
 
 HERE = Path(__file__).resolve().parent
@@ -52,10 +53,26 @@ def main():
             for pos in POINTS_COL
         }
 
+    # Exponent floor mirrors roster_formula.py's MIN_EXPONENT, applied
+    # here directly since this export reads CALIBRATED straight from
+    # build_teamcount_estimate.py and never goes through
+    # estimate_roster_shape() -- the web chart is locked to the baseline
+    # roster shape (2RB/3WR), so none of that module's roster-shape
+    # machinery (starter damping, cross-position redistribution) applies
+    # here anyway, but the exponent floor DOES apply even at baseline and
+    # was previously missing from this export entirely. Without it the
+    # live site kept using the stored TE exponent (~1.0, the lowest of any
+    # position in 14 of 15 combos -- backwards for the most top-heavy
+    # position in fantasy), pricing Trey McBride at ~$23 in a 12-team
+    # half-PPR league where FantasyPros AND Draft Sharks both independently
+    # say ~$33.
     calibrated = {
         f"{teams}|{fmt}": {
             "ranks": CALIBRATED[(teams, fmt)]["ranks"],
-            "exponents": CALIBRATED[(teams, fmt)]["exponents"],
+            "exponents": {
+                pos: max(CALIBRATED[(teams, fmt)]["exponents"][pos], MIN_EXPONENT[pos])
+                for pos in POINTS_COL
+            },
             "budgetShare": CALIBRATED[(teams, fmt)]["budget_share"],
         }
         for teams in TEAM_COUNTS for fmt in FORMATS
