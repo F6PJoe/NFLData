@@ -209,6 +209,12 @@ _BASELINE_FLEX = [("RB_WR_TE", BASELINE_FLEX_SLOTS)]
 # is the noisier read, so the structurally-consistent 1.0 is kept.
 STARTER_RANK_DAMPING = 1.0
 
+# Fraction of a freed/consumed roster spot that redistributes into other
+# positions' depth when a STARTER count changes. See the derivation at the
+# use site in estimate_roster_shape() -- measured at 35-47% across four
+# independent transitions in the 12-team reference exports.
+CROSS_POSITION_DEPTH_SHARE = 0.4
+
 # Floor on VORP_EXPONENT, applied per position after the (teams, fmt)
 # lookup and any flex interpolation.
 #
@@ -364,6 +370,41 @@ def estimate_roster_shape(teams, fmt, starters, flex_slots):
         and starters == BASELINE_STARTERS and flex_slots == [("SUPERFLEX", 1)]
     )
 
+    # Cross-position depth adjustment. Changing a STARTER count does not
+    # change roster size -- it converts a starter slot into a bench slot,
+    # and that bench slot still gets filled by somebody. So when one
+    # position's starter requirement drops, the other positions absorb that
+    # roster spot and their replacement level deepens (and vice versa).
+    #
+    # Our model previously ignored this entirely, so a position whose own
+    # starters didn't change kept a fixed pool while its budget share rose,
+    # and absorbed the full share increase as price. That is why dropping a
+    # WR starter sent Jahmyr Gibbs from $62 to $72 (+16%) when the real
+    # market moves him to $68 (+9.7%) -- 36% of a team's entire budget on
+    # one player, which is not a realistic recommendation.
+    #
+    # Measured, not assumed, across all four transitions available in the
+    # 12-team FantasyPros exports (reading each position's implied depth as
+    # the count of players carrying positive value):
+    #
+    #   WR 3->2 at 2RB:  WR 59->41 (-18), others +7   -> 39%
+    #   WR 3->2 at 3RB:  WR 57->38 (-19), others +9   -> 47%
+    #   RB 2->3 at 3WR:  RB 57->74 (+17), others -6   -> 35%
+    #   RB 2->3 at 2WR:  RB 62->81 (+19), others -7   -> 37%
+    #
+    # Consistent 35-47% across four independent transitions, so 0.4 is a
+    # measured constant rather than a single-point fit -- the failure mode
+    # that produced two bad calibrations earlier in this file's history.
+    #
+    # Deliberately applied to the STARTERS dimension only. Adding flex slots
+    # genuinely grows the roster (more starters, bench unchanged), so no
+    # spot is freed and nothing should be redistributed. That also keeps
+    # both real anchors exact: they use BASELINE_STARTERS, so the ratio
+    # below is 1.0 and this is a no-op for them.
+    _tot_base = sum(_demand(p, BASELINE_STARTERS, flex_slots) for p in ("QB", "RB", "WR", "TE"))
+    _tot_new = sum(_demand(p, starters, flex_slots) for p in ("QB", "RB", "WR", "TE"))
+    cross_pos_mult = ((_tot_base / _tot_new) ** CROSS_POSITION_DEPTH_SHARE) if _tot_new else 1.0
+
     ranks = {}
     for pos in ("QB", "RB", "WR", "TE"):
         # Split the demand response into its two dimensions, because they
@@ -398,7 +439,8 @@ def estimate_roster_shape(teams, fmt, starters, flex_slots):
         flex_ratio = (new_flex / base_flex) if base_flex else 1.0
 
         ranks[pos] = round(baseline["ranks"][pos] * flex_ratio
-                            * starter_ratio ** STARTER_RANK_DAMPING)
+                            * starter_ratio ** STARTER_RANK_DAMPING
+                            * cross_pos_mult)
 
     if not has_superflex:
         # Linear interpolation by RB_WR_TE-type flex count, fit through

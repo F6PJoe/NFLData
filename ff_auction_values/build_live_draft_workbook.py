@@ -210,7 +210,7 @@ from build_teamcount_estimate import CALIBRATED, TEAM_COUNTS, FORMATS
 from roster_formula import (
     FLEX_TYPES, SUPERFLEX_ANCHOR, BASELINE_STARTERS,
     EXPONENT_SLOPE_PER_FLEX, BUDGET_SHARE_SLOPE_PER_FLEX,
-    STARTER_RANK_DAMPING, MIN_EXPONENT, _demand,
+    STARTER_RANK_DAMPING, MIN_EXPONENT, CROSS_POSITION_DEPTH_SHARE, _demand,
 )
 
 OUT_FILE = Path(r"C:\Users\jbond\Dropbox\F6P Admin\Fantasy Football Cheat Sheet"
@@ -248,6 +248,8 @@ BLOCK_COLS = ["Player", "Team", "Points (STD)", "Points (Half-PPR)", "Points (PP
  OFF_TIER, OFF_WVORP, OFF_ROWNUM,
  OFF_GAP_START, OFF_GAPTIER_TOP, OFF_TIER_START,
  OFF_STATIC, OFF_PRICE, OFF_LIVE) = range(len(BLOCK_COLS))
+_STARTER_KEY = {"QB": "qb_starters", "RB": "rb_starters",
+                "WR": "wr_starters", "TE": "te_starters"}
 BLOCK_WIDTH = len(BLOCK_COLS)
 SPACER_COLS = 1
 
@@ -767,6 +769,16 @@ def build_live_calc(wb, layout, setup_cells):
     calc.cell(row - 1, 10, "RB/WR/TE-type Flex Count").font = Font(bold=True)
     calc.cell(row, 10).value = f"={setup_cells['flex_counts']['RB_WR_TE']}"
     rb_wr_te_flex_count_cell = f"$J${row}"
+    # Cross-position depth multiplier -- filled in the second pass below,
+    # once every position's demand row exists to sum over. Mirrors
+    # roster_formula.py's CROSS_POSITION_DEPTH_SHARE: a changed STARTER
+    # count converts a starter slot to a bench slot rather than removing it
+    # from the roster, so ~40% of it resurfaces as depth in the other
+    # positions. Without it a position whose own starters didn't change
+    # absorbs its entire budget-share increase as price.
+    calc.cell(row - 1, 11, "Cross-Pos Depth Mult").font = Font(bold=True)
+    cross_pos_cell = f"$K${row}"
+    cross_pos_row = row
 
     for pos in POINTS_COL:
         row += 1
@@ -813,7 +825,7 @@ def build_live_calc(wb, layout, setup_cells):
         flex_ratio = f"IFERROR(B{row}/{st_base_flex},1)"
         calc.cell(row, 4).value = (
             f"=MAX(1,ROUND(B{baseline_row[pos]}*{flex_ratio}"
-            f"*I{row}^{STARTER_RANK_DAMPING},0))"
+            f"*I{row}^{STARTER_RANK_DAMPING}*{cross_pos_cell},0))"
         )
 
         regime_cell = f"$B${regime_row}"
@@ -872,6 +884,17 @@ def build_live_calc(wb, layout, setup_cells):
         calc.cell(row, 8).value = f"=LARGE({pts_rng},MIN(D{row},{layout[pos]['n_rows']}))"
 
         adj_row[pos] = row
+    # Cross-position depth multiplier: (baseline-starter demand /
+    # actual-starter demand) ^ share, both measured at THIS shape's flex
+    # so only the starters dimension drives it. Exactly 1.0 at baseline
+    # starters, which keeps both real anchors untouched.
+    tot_new = "+".join(f"B{adj_row[p]}" for p in POINTS_COL)
+    tot_base = "+".join(
+        f"({BASELINE_STARTERS[p]}+B{adj_row[p]}-{setup_cells[_STARTER_KEY[p]]})"
+        for p in POINTS_COL)
+    calc.cell(cross_pos_row, 11).value = (
+        f"=IFERROR((({tot_base})/({tot_new}))^{CROSS_POSITION_DEPTH_SHARE},1)")
+
     # Final Budget Share needs renormalization across positions -> second pass
     for pos in POINTS_COL:
         r = adj_row[pos]
