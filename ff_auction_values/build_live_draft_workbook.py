@@ -210,7 +210,7 @@ from build_teamcount_estimate import CALIBRATED, TEAM_COUNTS, FORMATS
 from roster_formula import (
     FLEX_TYPES, SUPERFLEX_ANCHOR, BASELINE_STARTERS,
     EXPONENT_SLOPE_PER_FLEX, BUDGET_SHARE_SLOPE_PER_FLEX,
-    STARTER_RANK_DAMPING, _demand,
+    STARTER_RANK_DAMPING, MIN_EXPONENT, _demand,
 )
 
 OUT_FILE = Path(r"C:\Users\jbond\Dropbox\F6P Admin\Fantasy Football Cheat Sheet"
@@ -842,7 +842,14 @@ def build_live_calc(wb, layout, setup_cells):
         calc.cell(row, 9).value = (
             f"=IFERROR(({starters_cell}+C{row}-{baseline_starters})/C{row},1)"
         )
-        calc.cell(row, 5).value = f"=IF({regime_cell},C{baseline_row[pos]}*E{baseline_row[pos]},{exp_interp})"
+        # MAX(..., floor) mirrors roster_formula.py's MIN_EXPONENT: the
+        # stored calibration gives TE the lowest convexity of any position
+        # in 14 of 15 combos, which is backwards for the most top-heavy
+        # position in fantasy. See that constant for the full reasoning.
+        calc.cell(row, 5).value = (
+            f"=MAX({MIN_EXPONENT[pos]},"
+            f"IF({regime_cell},C{baseline_row[pos]}*E{baseline_row[pos]},{exp_interp}))"
+        )
         # Both branches now scale budget share by demand, but by DIFFERENT
         # ratios, matching roster_formula.py:
         #   non-superflex -> starters-only ratio (col I), since the flex

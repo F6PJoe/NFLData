@@ -184,36 +184,59 @@ def _demand(pos, starters, flex_slots):
 
 _BASELINE_FLEX = [("RB_WR_TE", BASELINE_FLEX_SLOTS)]
 
-# Replacement rank responds to a STARTER-count change much less than
-# proportionally: rank scales as (starter demand ratio) ** this exponent.
-# The FLEX dimension is deliberately NOT damped (exponent 1.0, applied
-# separately in estimate_roster_shape) -- the real 3-flex and superflex
-# anchors both require full proportionality to round-trip exactly, so the
-# two dimensions genuinely behave differently and are handled separately.
+# Exponent on the starter-demand ratio when scaling replacement rank.
+# 1.0 = fully proportional: replacement rank tracks roster demand exactly,
+# which is the same structure ff_cheatsheet uses (teams x starters + a
+# small buffer) and the same structure the calibrated ranks themselves
+# already have -- rank / (teams x demand) lands at ~1.6-1.7 across every
+# position and team count, i.e. a flat depth multiplier on top of demand.
 #
-# Fitted against a real controlled A/B the user pulled from FantasyPros:
-# 12-team, identical settings, ONLY the WR starter requirement differing
-# (3WR vs 2WR). Grid-searched 0.00-1.20 in 0.05 steps against the
-# per-player 2WR/3WR value ratio (comparing ratios, not absolute dollars,
-# since our values are an FP + 4for4 + Draft Sharks blend and the ratio
-# cancels out that baseline difference). Full proportionality (1.0, the
-# previous behaviour) scored RMSE 0.1085; 0.45 scored 0.0499, less than
-# half the error, and the curve is flat across 0.40-0.50 (0.0510 / 0.0499
-# / 0.0503) so this sits mid-plateau rather than on a knife edge.
+# This was briefly set to 0.45, fitted against per-player DOLLAR ratios
+# from a FantasyPros 3WR-vs-2WR A/B. That was a mistake worth recording:
+# dollars conflate replacement rank, budget share AND exponent, so the
+# rank parameter silently absorbed error that actually belonged to a
+# too-flat exponent, and the fit "succeeded" while making absolute values
+# worse (it pushed Puka Nacua to $55 in a 2WR league where the real
+# market says ~$64).
 #
-# Concretely for the reported bug (12-team half-PPR, WR 3->2): the WR
-# replacement rank now moves 60 -> 50 instead of 60 -> 41, and Puka Nacua
-# lands +6.1% vs FantasyPros' real +6.7% -- previously +25%.
+# Refitted against structure instead of dollars, which cannot be
+# confounded that way: counting how many players carry positive value in
+# each FantasyPros export gives their implied replacement depth directly.
+# WR depth moves 59 -> 41 going 3WR -> 2WR (ratio 0.695 and 0.667 in the
+# two RB variants); the linear demand ratio predicts 0.679, while 0.45
+# damping predicts 0.840. Linear is essentially exact. RB implies ~0.70
+# rather than 1.0, but that dimension is measured off a $0/$1 cutoff and
+# is the noisier read, so the structurally-consistent 1.0 is kept.
+STARTER_RANK_DAMPING = 1.0
+
+# Floor on VORP_EXPONENT, applied per position after the (teams, fmt)
+# lookup and any flex interpolation.
 #
-# Known residual, NOT fixed here: positions whose own starters didn't
-# change (RB/QB/TE in that A/B) still rise ~15% against FantasyPros' real
-# ~8-10%. Their budget-share ratio matches FP almost exactly (see
-# _scale_share_by_starter_demand), so the gap is that FP's pools for those
-# positions also move when WR starters change -- i.e. real flex
-# composition shifts between positions, which this model holds fixed.
-# Modelling that needs more than the single A/B available here, so it's
-# left as a documented overshoot rather than fitted to one data point.
-STARTER_RANK_DAMPING = 0.45
+# The exponent controls how steeply a position's money concentrates at its
+# top. The stored calibration gives TE the LOWEST exponent of all four
+# positions in 14 of 15 combos (1.0 or below, vs 1.05-1.40 for QB/RB/WR).
+# That is backwards on its face: TE is the most top-heavy position in
+# fantasy football -- the cliff from the elite tier to streamers is the
+# steepest of any position -- so it should carry the HIGHEST convexity,
+# not the lowest.
+#
+# Read as a fitting artifact rather than a real finding: TE's dollar range
+# is compressed (roughly $1-$33), so a grid search minimising absolute
+# error barely feels the difference between exponents and drifts low.
+# CLAUDE.md records TE exponent bouncing 0.5-1.1 across calibration rounds
+# and repeatedly flags TE depth as never fully resolved -- the signature of
+# a parameter the search cannot pin down, not a stable measurement.
+#
+# Corroborated by the symptom: at the 12-team/half-PPR baseline the stored
+# TE exponent of 1.0 prices Trey McBride at $23 while FantasyPros AND
+# Draft Sharks -- two unrelated sources -- both independently say $33.
+# A floor of 1.6 lands him exactly on $33 and leaves every other position
+# untouched. This is a floor, not an override: any combo already
+# calibrated above it keeps its own fitted value.
+#
+# Remove this once a real recalibration against fresh reference data
+# produces a TE exponent that is no longer the lowest of the four.
+MIN_EXPONENT = {"QB": 0.0, "RB": 0.0, "WR": 0.0, "TE": 1.6}
 
 
 def _scale_share_by_starter_demand(raw_share, starters, flex_slots):
@@ -394,6 +417,10 @@ def estimate_roster_shape(teams, fmt, starters, flex_slots):
         total_share = sum(budget_share.values())
         budget_share = {pos: v / total_share for pos, v in budget_share.items()}
         confidence = "verified" if is_exact_superflex else "estimated (superflex shift extrapolated from the single 12-team/half-PPR anchor)"
+
+    # Apply the per-position exponent floor (see MIN_EXPONENT) last, so it
+    # covers both regime branches and any flex interpolation above it.
+    exponents = {pos: max(exponents[pos], MIN_EXPONENT[pos]) for pos in exponents}
 
     return {"ranks": ranks, "exponents": exponents, "budget_share": budget_share, "confidence": confidence}
 
