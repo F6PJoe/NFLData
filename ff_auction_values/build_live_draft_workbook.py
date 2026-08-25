@@ -210,7 +210,7 @@ from build_teamcount_estimate import CALIBRATED, TEAM_COUNTS, FORMATS
 from roster_formula import (
     FLEX_TYPES, SUPERFLEX_ANCHOR, BASELINE_STARTERS,
     EXPONENT_SLOPE_PER_FLEX, BUDGET_SHARE_SLOPE_PER_FLEX,
-    STARTER_RANK_DAMPING,
+    STARTER_RANK_DAMPING, _demand,
 )
 
 OUT_FILE = Path(r"C:\Users\jbond\Dropbox\F6P Admin\Fantasy Football Cheat Sheet"
@@ -802,8 +802,15 @@ def build_live_calc(wb, layout, setup_cells):
         # against a real FantasyPros 12-team 3WR-vs-2WR A/B. `denom` is
         # "baseline starters carrying THIS shape's flex", the shared
         # midpoint that splits the two dimensions cleanly.
-        denom = f"({baseline_starters}+B{row}-{starters_cell})"
-        flex_ratio = f"IFERROR({denom}/C{row},1)"
+        # `st_base_flex` = this shape's starters carrying BASELINE flex,
+        # i.e. C's flex contribution (C - baseline_starters) re-added to
+        # the actual starter count. That's the midpoint of the ordered
+        # decomposition: starters measured at baseline flex (col I), then
+        # flex measured on top of the actual starters (B / that midpoint).
+        # See roster_formula.py for why this ordering matters -- the
+        # reverse double-counts a superflex slot in a 2-QB league.
+        st_base_flex = f"({starters_cell}+C{row}-{baseline_starters})"
+        flex_ratio = f"IFERROR(B{row}/{st_base_flex},1)"
         calc.cell(row, 4).value = (
             f"=MAX(1,ROUND(B{baseline_row[pos]}*{flex_ratio}"
             f"*I{row}^{STARTER_RANK_DAMPING},0))"
@@ -828,15 +835,30 @@ def build_live_calc(wb, layout, setup_cells):
         # dimension only -- the flex dimension is already covered by the
         # H-column slope in share_interp, and a full demand ratio would
         # double-count it.
+        # Starter-demand ratio, measured at BASELINE flex on both sides so
+        # it isolates the starters dimension (identical to the previous
+        # definition whenever flex is at baseline, which covers every
+        # config the FantasyPros A/B validated).
         calc.cell(row, 9).value = (
-            f"=IFERROR(B{row}/({baseline_starters}+B{row}-{starters_cell}),1)"
+            f"=IFERROR(({starters_cell}+C{row}-{baseline_starters})/C{row},1)"
         )
         calc.cell(row, 5).value = f"=IF({regime_cell},C{baseline_row[pos]}*E{baseline_row[pos]},{exp_interp})"
-        # Only the non-regime branch gets the starter scaling, matching
-        # roster_formula.py: the superflex regime uses REAL measured
-        # shift ratios, which already price in that shape's own demand.
+        # Both branches now scale budget share by demand, but by DIFFERENT
+        # ratios, matching roster_formula.py:
+        #   non-superflex -> starters-only ratio (col I), since the flex
+        #     dimension is already handled by the H-column slope;
+        #   superflex     -> TOTAL demand (col B) vs the superflex anchor's
+        #     own demand for this position (the constant below).
+        # The superflex branch can't use col I: there the QB-eligible flex
+        # IS QB demand, so a starters-only ratio shrinks as superflex slots
+        # are added while rank simultaneously deepens for them -- which
+        # priced 2QB+1SF ($46) BELOW plain 2QB ($111) despite strictly more
+        # QB demand. Both are exact no-ops at their respective anchors.
+        sf_anchor_demand = round(_demand(pos, BASELINE_STARTERS, [("SUPERFLEX", 1)]), 4)
         calc.cell(row, 6).value = (
-            f"=IF({regime_cell},D{baseline_row[pos]}*F{baseline_row[pos]},({share_interp})*I{row})"
+            f"=IF({regime_cell},"
+            f"D{baseline_row[pos]}*F{baseline_row[pos]}*IFERROR(B{row}/{sf_anchor_demand},1),"
+            f"({share_interp})*I{row})"
         )
 
         pts_rng = block_range(layout, pos, OFF_SEL_PTS)

@@ -292,13 +292,31 @@ def estimate_roster_shape(teams, fmt, starters, flex_slots):
         # STARTER_RANK_DAMPING). Flex stays fully proportional -- that's
         # what the real 3-flex and superflex anchors require to round-trip
         # exactly. Starters get damped.
-        base_flex = _demand(pos, BASELINE_STARTERS, _BASELINE_FLEX)
-        new_flex = _demand(pos, BASELINE_STARTERS, flex_slots)
-        flex_ratio = (new_flex / base_flex) if base_flex else 1.0
-
-        base_st = _demand(pos, BASELINE_STARTERS, flex_slots)
-        new_st = _demand(pos, starters, flex_slots)
+        # Order matters: measure the starter change FIRST in its own
+        # natural units (at baseline flex), then measure the flex change
+        # on top of THIS shape's actual starter count.
+        #
+        # Evaluating the flex ratio at BASELINE_STARTERS instead (the
+        # obvious-looking alternative) double-counts whenever both
+        # dimensions move: for QB it always yields (1+0.40)/1 = 1.40x for a
+        # superflex slot, even in a 2-QB league where that slot's real
+        # marginal contribution is only (2+0.40)/2 = 1.20x. That pushed
+        # 2QB+1SF to rank 36 and priced Josh Allen at $45, BELOW his $94 in
+        # a plain 2QB league despite strictly more QB demand. This ordering
+        # gives rank 33 and restores monotonicity.
+        #
+        # Both anchors are unaffected either way (they use
+        # BASELINE_STARTERS, so the starter ratio is exactly 1.0 and the
+        # flex ratio is identical under both orderings), and so is every
+        # starters-only change (flex ratio is 1.0), which is what the
+        # FantasyPros A/B fit was validated against.
+        base_st = _demand(pos, BASELINE_STARTERS, _BASELINE_FLEX)
+        new_st = _demand(pos, starters, _BASELINE_FLEX)
         starter_ratio = (new_st / base_st) if base_st else 1.0
+
+        base_flex = _demand(pos, starters, _BASELINE_FLEX)
+        new_flex = _demand(pos, starters, flex_slots)
+        flex_ratio = (new_flex / base_flex) if base_flex else 1.0
 
         ranks[pos] = round(baseline["ranks"][pos] * flex_ratio
                             * starter_ratio ** STARTER_RANK_DAMPING)
@@ -335,6 +353,42 @@ def estimate_roster_shape(teams, fmt, starters, flex_slots):
             sf_ratio_share = SUPERFLEX_ANCHOR["budget_share"][pos] / sf_anchor_baseline["budget_share"][pos]
             exponents[pos] = round(baseline["exponents"][pos] * sf_ratio_exp, 3)
             budget_share[pos] = baseline["budget_share"][pos] * sf_ratio_share
+        # The superflex shift above is a FIXED per-position ratio measured
+        # at one specific shape: 1 QB starter + 1 superflex slot. It does
+        # not know how much QB demand the actual configured shape has, so
+        # on its own it hands e.g. "2 QB starters PLUS a superflex slot"
+        # the exact same 29.7% QB share as a plain 1QB superflex -- while
+        # the rank formula above correctly keeps deepening QB replacement
+        # level for that extra demand. Same failure mode as the original
+        # starter-count bug: pool grows, money doesn't, so every QB gets
+        # CHEAPER the more QBs you're required to start. Confirmed in the
+        # workbook before fixing: 2QB+1SF put Josh Allen at $33, BELOW his
+        # $66 plain-superflex and barely above his $31 single-QB value.
+        # Scaling by starter demand here (measured against BASELINE_STARTERS
+        # carrying this same flex config, exactly as the non-superflex
+        # branch does) makes QB share respond to that extra demand. No-op
+        # at the real superflex anchor itself, which uses BASELINE_STARTERS,
+        # so the anchor still round-trips exactly.
+        # Scale by TOTAL demand vs the superflex anchor's own shape, not by
+        # the starters-only ratio the non-superflex branch uses. Reason:
+        # here the QB-eligible flex IS part of QB demand, so a
+        # starters-only ratio (which holds flex constant on both sides)
+        # actually SHRINKS as you add superflex slots, while the rank
+        # formula simultaneously deepens QB replacement level for those
+        # same slots. Those two pull opposite ways and produced a
+        # nonsensical ordering: 2QB+1SF priced Josh Allen BELOW plain 2QB
+        # ($46 vs $111) even though it has strictly more QB demand.
+        # Measuring total demand against the anchor keeps the ordering
+        # monotonic in demand, and is still an exact no-op at the anchor
+        # itself (ratio 1.0), so that round-trip is preserved.
+        sf_anchor_flex = [("SUPERFLEX", 1)]
+        raw = {}
+        for pos in ("QB", "RB", "WR", "TE"):
+            anchor_demand = _demand(pos, BASELINE_STARTERS, sf_anchor_flex)
+            this_demand = _demand(pos, starters, flex_slots)
+            ratio = (this_demand / anchor_demand) if anchor_demand else 1.0
+            raw[pos] = budget_share[pos] * ratio
+        budget_share = raw
         # renormalize budget_share to sum to 1 (the two ratios were fit
         # independently per position, so the product isn't guaranteed to)
         total_share = sum(budget_share.values())
