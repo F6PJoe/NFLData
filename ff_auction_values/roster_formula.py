@@ -236,7 +236,24 @@ STARTER_RANK_DAMPING = 1.0
 #
 # Remove this once a real recalibration against fresh reference data
 # produces a TE exponent that is no longer the lowest of the four.
-MIN_EXPONENT = {"QB": 0.0, "RB": 0.0, "WR": 0.0, "TE": 1.6}
+# WR floor added for the same reason, found the same way. With the stored
+# WR exponent of 1.25 the WR top-12 came in 14.1% BELOW the real market at
+# the default 12-team 2RB/3WR shape, while RB landed +1.8% and TE +0.3% --
+# WR was the clear outlier, not TE/QB. Since WR's budget share already
+# matches (42.2% vs a real 43.1%), the position's total money was right and
+# it was purely spread too far down the list.
+#
+# That flatness is also what made TE and QB LOOK expensive: with the top
+# WRs understated, Trey McBride and Josh Allen floated too high on the
+# combined board relative to where the real market puts them (~19th-20th
+# overall). Correcting WR fixes the board ordering without touching either.
+#
+# Swept on top-12 POSITION TOTALS rather than a single player, to avoid
+# fitting the curve to one name: 1.25 -> -14.1%, 1.45 -> -6.9%,
+# 1.55 -> -3.4%, 1.65 -> +0.1% at the default shape. 1.5 sits mid-plateau
+# and lands WR within a few points of RB/TE at both 3WR and 2WR, which is
+# the actual goal -- parity across positions, not matching any one site.
+MIN_EXPONENT = {"QB": 0.0, "RB": 0.0, "WR": 1.5, "TE": 1.6}
 
 
 def _scale_share_by_starter_demand(raw_share, starters, flex_slots):
