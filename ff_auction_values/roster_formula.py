@@ -253,7 +253,23 @@ STARTER_RANK_DAMPING = 1.0
 # 1.55 -> -3.4%, 1.65 -> +0.1% at the default shape. 1.5 sits mid-plateau
 # and lands WR within a few points of RB/TE at both 3WR and 2WR, which is
 # the actual goal -- parity across positions, not matching any one site.
-MIN_EXPONENT = {"QB": 0.0, "RB": 0.0, "WR": 1.5, "TE": 1.6}
+# TE floor lowered 1.6 -> 1.45. The 1.6 was set by tuning to a SINGLE
+# player (Trey McBride hitting $33) -- the same single-point fitting error
+# that produced the bad 0.45 rank damping, repeated. Re-swept on the top-2
+# combined AND top-12 total instead, at both 3WR and 2WR:
+#
+#   TEexp   3WR top2 / top12   2WR top2 / top12
+#   1.40        60 / 180           69 / 206
+#   1.45       ~62 / 181          ~71 / 207
+#   1.60        67 / 185           77 / 212
+#
+# Real spread: 3WR top-2 is 62 (Draft Sharks) to 64 (FantasyPros); 2WR
+# top-2 is 70 (FantasyPros). 1.6 overshot BOTH sources at both shapes
+# (67 and 77); 1.45 sits inside the DS-to-FP range at both. Note the top-12
+# total barely moves across this range (180-185) -- the exponent is almost
+# entirely a top-of-position knob, which is why fitting it to one player
+# is so easy to get wrong.
+MIN_EXPONENT = {"QB": 0.0, "RB": 0.0, "WR": 1.5, "TE": 1.45}
 
 
 def _scale_share_by_starter_demand(raw_share, starters, flex_slots):
