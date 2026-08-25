@@ -184,6 +184,37 @@ def _demand(pos, starters, flex_slots):
 
 _BASELINE_FLEX = [("RB_WR_TE", BASELINE_FLEX_SLOTS)]
 
+# Replacement rank responds to a STARTER-count change much less than
+# proportionally: rank scales as (starter demand ratio) ** this exponent.
+# The FLEX dimension is deliberately NOT damped (exponent 1.0, applied
+# separately in estimate_roster_shape) -- the real 3-flex and superflex
+# anchors both require full proportionality to round-trip exactly, so the
+# two dimensions genuinely behave differently and are handled separately.
+#
+# Fitted against a real controlled A/B the user pulled from FantasyPros:
+# 12-team, identical settings, ONLY the WR starter requirement differing
+# (3WR vs 2WR). Grid-searched 0.00-1.20 in 0.05 steps against the
+# per-player 2WR/3WR value ratio (comparing ratios, not absolute dollars,
+# since our values are an FP + 4for4 + Draft Sharks blend and the ratio
+# cancels out that baseline difference). Full proportionality (1.0, the
+# previous behaviour) scored RMSE 0.1085; 0.45 scored 0.0499, less than
+# half the error, and the curve is flat across 0.40-0.50 (0.0510 / 0.0499
+# / 0.0503) so this sits mid-plateau rather than on a knife edge.
+#
+# Concretely for the reported bug (12-team half-PPR, WR 3->2): the WR
+# replacement rank now moves 60 -> 50 instead of 60 -> 41, and Puka Nacua
+# lands +6.1% vs FantasyPros' real +6.7% -- previously +25%.
+#
+# Known residual, NOT fixed here: positions whose own starters didn't
+# change (RB/QB/TE in that A/B) still rise ~15% against FantasyPros' real
+# ~8-10%. Their budget-share ratio matches FP almost exactly (see
+# _scale_share_by_starter_demand), so the gap is that FP's pools for those
+# positions also move when WR starters change -- i.e. real flex
+# composition shifts between positions, which this model holds fixed.
+# Modelling that needs more than the single A/B available here, so it's
+# left as a documented overshoot rather than fitted to one data point.
+STARTER_RANK_DAMPING = 0.45
+
 
 def _scale_share_by_starter_demand(raw_share, starters, flex_slots):
     """Scale each position's budget share by how its STARTER demand
@@ -256,10 +287,21 @@ def estimate_roster_shape(teams, fmt, starters, flex_slots):
 
     ranks = {}
     for pos in ("QB", "RB", "WR", "TE"):
-        baseline_demand = _demand(pos, BASELINE_STARTERS, _BASELINE_FLEX)
-        new_demand = _demand(pos, starters, flex_slots)
-        ratio = new_demand / baseline_demand if baseline_demand else 1.0
-        ranks[pos] = round(baseline["ranks"][pos] * ratio)
+        # Split the demand response into its two dimensions, because they
+        # empirically do NOT respond the same way (see
+        # STARTER_RANK_DAMPING). Flex stays fully proportional -- that's
+        # what the real 3-flex and superflex anchors require to round-trip
+        # exactly. Starters get damped.
+        base_flex = _demand(pos, BASELINE_STARTERS, _BASELINE_FLEX)
+        new_flex = _demand(pos, BASELINE_STARTERS, flex_slots)
+        flex_ratio = (new_flex / base_flex) if base_flex else 1.0
+
+        base_st = _demand(pos, BASELINE_STARTERS, flex_slots)
+        new_st = _demand(pos, starters, flex_slots)
+        starter_ratio = (new_st / base_st) if base_st else 1.0
+
+        ranks[pos] = round(baseline["ranks"][pos] * flex_ratio
+                            * starter_ratio ** STARTER_RANK_DAMPING)
 
     if not has_superflex:
         # Linear interpolation by RB_WR_TE-type flex count, fit through

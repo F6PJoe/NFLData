@@ -210,6 +210,7 @@ from build_teamcount_estimate import CALIBRATED, TEAM_COUNTS, FORMATS
 from roster_formula import (
     FLEX_TYPES, SUPERFLEX_ANCHOR, BASELINE_STARTERS,
     EXPONENT_SLOPE_PER_FLEX, BUDGET_SHARE_SLOPE_PER_FLEX,
+    STARTER_RANK_DAMPING,
 )
 
 OUT_FILE = Path(r"C:\Users\jbond\Dropbox\F6P Admin\Fantasy Football Cheat Sheet"
@@ -794,8 +795,18 @@ def build_live_calc(wb, layout, setup_cells):
         # errors on k=0, so this floors it at "1 player of relevance"
         # rather than erroring. Not a meaningful real-world case, just a
         # safety net against a genuinely empty position.
+        # Rank = baseline_rank * flex_ratio * starter_ratio^DAMPING.
+        # Mirrors roster_formula.py: the flex dimension stays fully
+        # proportional (the real 3-flex/superflex anchors require that to
+        # round-trip), while the starter dimension is damped -- fitted
+        # against a real FantasyPros 12-team 3WR-vs-2WR A/B. `denom` is
+        # "baseline starters carrying THIS shape's flex", the shared
+        # midpoint that splits the two dimensions cleanly.
+        denom = f"({baseline_starters}+B{row}-{starters_cell})"
+        flex_ratio = f"IFERROR({denom}/C{row},1)"
         calc.cell(row, 4).value = (
-            f"=MAX(1,ROUND(B{baseline_row[pos]}*IFERROR(B{row}/C{row},1),0))"
+            f"=MAX(1,ROUND(B{baseline_row[pos]}*{flex_ratio}"
+            f"*I{row}^{STARTER_RANK_DAMPING},0))"
         )
 
         regime_cell = f"$B${regime_row}"
