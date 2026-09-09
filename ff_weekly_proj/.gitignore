@@ -1,0 +1,5 @@
+# Generated output — not committed
+*.csv
+.env
+__pycache__/
+*.pyc

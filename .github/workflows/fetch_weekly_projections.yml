@@ -1,0 +1,76 @@
+name: Fetch Weekly Projections
+#
+# Pulls in-season weekly projected stat lines from all 10 sources,
+# builds a consensus CSV per position, and pushes to the weekly Google Sheet.
+#
+# No native `schedule:` trigger — runs are driven by cron-job.org, same as
+# the draft projections workflow. Do NOT add a `schedule:` trigger here
+# without disabling the cron-job.org job first, or it will double-scrape.
+#
+# Fantasy Sharks and FTN are often blocked from datacenter IPs, so their
+# fetchers exit with a warning but do not fail the whole run.
+
+on:
+  workflow_dispatch:
+    # Triggered by cron-job.org during the season, or manually from the Actions tab.
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r ff_weekly_proj/requirements.txt
+
+      - name: Write credentials
+        env:
+          FTN_EMAIL:                    ${{ secrets.FTN_EMAIL }}
+          FTN_PASSWORD:                 ${{ secrets.FTN_PASSWORD }}
+          DRAFTSHARKS_EMAIL:            ${{ secrets.DRAFTSHARKS_EMAIL }}
+          DRAFTSHARKS_PASSWORD:         ${{ secrets.DRAFTSHARKS_PASSWORD }}
+          FANTASYDATA_EMAIL:            ${{ secrets.FANTASYDATA_EMAIL }}
+          FANTASYDATA_PASSWORD:         ${{ secrets.FANTASYDATA_PASSWORD }}
+          FOR4FOR4_EMAIL:               ${{ secrets.FOR4FOR4_EMAIL }}
+          FOR4FOR4_PASSWORD:            ${{ secrets.FOR4FOR4_PASSWORD }}
+          FANTASYLIFE_EMAIL:            ${{ secrets.FANTASYLIFE_EMAIL }}
+          FANTASYLIFE_PASSWORD:         ${{ secrets.FANTASYLIFE_PASSWORD }}
+          FANTASYLIFE_FIREBASE_API_KEY: ${{ secrets.FANTASYLIFE_FIREBASE_API_KEY }}
+          GOOGLE_SERVICE_ACCOUNT:       ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+        run: |
+          cat > ff_weekly_proj/.env <<EOF
+          FTN_EMAIL=${FTN_EMAIL}
+          FTN_PASSWORD=${FTN_PASSWORD}
+          DRAFTSHARKS_EMAIL=${DRAFTSHARKS_EMAIL}
+          DRAFTSHARKS_PASSWORD=${DRAFTSHARKS_PASSWORD}
+          FANTASYDATA_EMAIL=${FANTASYDATA_EMAIL}
+          FANTASYDATA_PASSWORD=${FANTASYDATA_PASSWORD}
+          FOR4FOR4_EMAIL=${FOR4FOR4_EMAIL}
+          FOR4FOR4_PASSWORD=${FOR4FOR4_PASSWORD}
+          FANTASYLIFE_EMAIL=${FANTASYLIFE_EMAIL}
+          FANTASYLIFE_PASSWORD=${FANTASYLIFE_PASSWORD}
+          FANTASYLIFE_FIREBASE_API_KEY=${FANTASYLIFE_FIREBASE_API_KEY}
+          EOF
+
+          # Service account JSON is shared with the draft projections workflow
+          echo "${GOOGLE_SERVICE_ACCOUNT}" > triple-baton-456523-e4-b9ec3cbd6e3d.json
+
+      - name: Run fetchers, build consensus, and push to Sheets
+        working-directory: ff_weekly_proj
+        run: python run_all.py
+
+      - name: Upload CSVs as artifact (optional — for debugging)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-projection-csvs
+          path: 'ff_weekly_proj/*.csv'
+          retention-days: 7
