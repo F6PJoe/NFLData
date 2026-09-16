@@ -20,6 +20,17 @@ __pycache__/
 *_adp.csv
 combined_adp.csv
 ff_draft_proj/*.csv
+ff_projections/*.csv
+ff_defense/*.csv
+ff_defense/reddit_post.md
+
+# ── Raw source cache (~90MB of nflverse CSVs, re-fetchable) ──────────────────
+ff_projections/cached/
+
+# Timestamped workbook backups. my_projections.xlsx itself is deliberately
+# NOT ignored — it holds hours of hand-entered usage that can't be regenerated,
+# so git history is worth having as a safety net.
+ff_projections/my_projections.backup-*.xlsx
 
 # ── Probe/debug scripts (one-off helpers, not needed in repo) ─────────────────
 probe_*.py

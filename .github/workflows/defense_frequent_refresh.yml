@@ -1,0 +1,75 @@
+name: Defense Stream-O-Matic - Frequent Refresh
+#
+# Runs everything EXCEPT FTN DAVE and Sharp pressure rate (weekly-only --
+# see run_frequent.py). Meant to run repeatedly through the week --
+# per Joe's plan, Wednesday morning through Sunday -- to keep
+# Subvertadown's projection, live odds, Yahoo roster/start%/projection,
+# and FantasyPros ECR current. Does NOT need FTN credentials at all.
+#
+# No native `schedule:` trigger, matching every other workflow in this
+# repo -- GitHub's own scheduler has been unreliable here before. Wire
+# this up via cron-job.org (workflow_dispatch) for the actual Wed-Sun
+# cadence Joe wants; do NOT add a `schedule:` trigger here without
+# checking cron-job.org first, or this could double-run.
+#
+# --week is optional -- omit it to auto-detect from today's date
+# (current_week.py), which is what a scheduled/unattended trigger should
+# do, since there's no one there to type it in.
+
+on:
+  workflow_dispatch:
+    inputs:
+      week:
+        description: "NFL week (leave blank to auto-detect from today's date)"
+        required: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r ff_defense/requirements.txt
+
+      - name: Write credentials
+        env:
+          SUBVERTADOWN_EMAIL:    ${{ secrets.SUBVERTADOWN_EMAIL }}
+          SUBVERTADOWN_PASSWORD: ${{ secrets.SUBVERTADOWN_PASSWORD }}
+          ODDS_API_KEY:           ${{ secrets.ODDS_API_KEY }}
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+        run: |
+          cat > ff_defense/.env <<EOF
+          SUBVERTADOWN_EMAIL=${SUBVERTADOWN_EMAIL}
+          SUBVERTADOWN_PASSWORD=${SUBVERTADOWN_PASSWORD}
+          ODDS_API_KEY=${ODDS_API_KEY}
+          EOF
+
+          # Service account JSON goes at the repo root -- every ff_defense
+          # script points at Path(__file__).parent.parent for it.
+          echo "${GOOGLE_SERVICE_ACCOUNT}" > triple-baton-456523-e4-b9ec3cbd6e3d.json
+
+      - name: Run frequent refresh
+        working-directory: ff_defense
+        run: |
+          if [ -n "${{ github.event.inputs.week }}" ]; then
+            python run_frequent.py --week "${{ github.event.inputs.week }}"
+          else
+            python run_frequent.py
+          fi
+
+      - name: Upload CSVs as artifact (optional — for debugging)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: defense-frequent-refresh-csvs
+          path: 'ff_defense/*.csv'
+          retention-days: 7
