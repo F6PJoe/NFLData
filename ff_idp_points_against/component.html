@@ -1,0 +1,243 @@
+<div id="f6p-idp">
+  <div class="f6p-idp-viewswitch">
+    <button type="button" data-fmt="one_two_three">1-2-3</button>
+    <button type="button" data-fmt="big3">Big 3</button>
+    <button type="button" data-fmt="fantasypros">FantasyPros</button>
+  </div>
+  <div class="f6p-idp-controls">
+    <div class="f6p-idp-pos" role="tablist">
+      <button type="button" data-pos="DL">DL</button>
+      <button type="button" data-pos="LB">LB</button>
+      <button type="button" data-pos="S">S</button>
+    </div>
+    <div class="f6p-idp-season-wrap">
+      <label for="f6p-idp-season-select">Choose Year</label>
+      <select id="f6p-idp-season-select" class="f6p-idp-season">
+        <option value="2026">2026</option>
+        <option value="2025">2025</option>
+      </select>
+    </div>
+    <div class="f6p-idp-meta"></div>
+  </div>
+  <div class="f6p-idp-scroll">
+    <table class="f6p-idp-table">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+#f6p-idp{font-family:Arial,Helvetica,sans-serif;max-width:100%;background:#fff;color:#222}
+#f6p-idp *{box-sizing:border-box}
+#f6p-idp .f6p-idp-viewswitch{display:flex;gap:8px;margin:0 0 12px}
+#f6p-idp .f6p-idp-viewswitch button{font:inherit;font-weight:700;font-size:14px;padding:10px 20px;border:2px solid #cc5e03;background:#fff;color:#cc5e03;cursor:pointer;border-radius:4px}
+#f6p-idp .f6p-idp-viewswitch button.active{background:#cc5e03;color:#fff}
+#f6p-idp .f6p-idp-controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin:0 0 10px;padding-top:10px;border-top:1px solid #ddd}
+#f6p-idp .f6p-idp-pos{display:flex;gap:6px}
+#f6p-idp .f6p-idp-pos button{font:inherit;font-weight:700;font-size:13px;letter-spacing:.03em;padding:8px 16px;border:1px solid #cc5e03;background:#fff;color:#cc5e03;cursor:pointer;border-radius:3px}
+#f6p-idp .f6p-idp-pos button.active{background:#cc5e03;color:#fff}
+#f6p-idp .f6p-idp-season-wrap{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+#f6p-idp .f6p-idp-season-wrap label{font-size:13px;font-weight:700;color:#555;white-space:nowrap}
+#f6p-idp select.f6p-idp-season{font:inherit;font-size:13px;font-weight:700;padding:7px 10px;border:1px solid #cc5e03;color:#cc5e03;background:#fff;border-radius:3px;cursor:pointer;width:auto;max-width:90px;flex:0 0 auto}
+#f6p-idp .f6p-idp-meta{font-size:13px;color:#555}
+#f6p-idp .f6p-idp-scroll{overflow-x:auto;border:1px solid #ddd;border-radius:4px}
+#f6p-idp table.f6p-idp-table{border-collapse:collapse;width:100%;font-size:12px}
+#f6p-idp table.f6p-idp-table th,#f6p-idp table.f6p-idp-table td{padding:7px 10px;text-align:center;border-bottom:1px solid #eee;white-space:nowrap;background:#fff;color:#222}
+#f6p-idp table.f6p-idp-table thead th{background:#cc5e03;color:#fff;position:sticky;top:0;cursor:pointer;font-weight:700;user-select:none;z-index:2}
+#f6p-idp table.f6p-idp-table thead th:hover{background:#a94c02}
+#f6p-idp table.f6p-idp-table thead th.sorted{background:#660000}
+#f6p-idp table.f6p-idp-table th.f6p-idp-rank,#f6p-idp table.f6p-idp-table td.f6p-idp-rank{width:34px;min-width:34px;padding:7px 4px;text-align:center;cursor:default}
+#f6p-idp table.f6p-idp-table th.f6p-idp-team,#f6p-idp table.f6p-idp-table td.f6p-idp-team{text-align:left;cursor:default}
+#f6p-idp table.f6p-idp-table thead th.f6p-idp-rank:hover,#f6p-idp table.f6p-idp-table thead th.f6p-idp-team:hover{background:#cc5e03}
+#f6p-idp table.f6p-idp-table thead th.f6p-idp-rank,#f6p-idp table.f6p-idp-table thead th.f6p-idp-team{z-index:4}
+#f6p-idp table.f6p-idp-table thead th.f6p-idp-rank{left:0}
+#f6p-idp table.f6p-idp-table thead th.f6p-idp-team{left:34px}
+#f6p-idp table.f6p-idp-table tbody th.f6p-idp-rank,#f6p-idp table.f6p-idp-table tbody th.f6p-idp-team{position:sticky;background:#fafafa;font-weight:700;z-index:1}
+#f6p-idp table.f6p-idp-table tbody th.f6p-idp-rank{left:0;color:#999}
+#f6p-idp table.f6p-idp-table tbody th.f6p-idp-team{left:34px;min-width:120px}
+#f6p-idp table.f6p-idp-table tbody tr:nth-child(even) td,#f6p-idp table.f6p-idp-table tbody tr:nth-child(even) th{background:#f7f7f7}
+#f6p-idp table.f6p-idp-table tbody tr:hover td,#f6p-idp table.f6p-idp-table tbody tr:hover th{background:#e8e8e8;color:#222}
+#f6p-idp table.f6p-idp-table td.f6p-idp-bye{color:#bbb}
+#f6p-idp table.f6p-idp-table td.f6p-idp-avg,#f6p-idp table.f6p-idp-table th.f6p-idp-avg{font-weight:700;border-left:2px solid #ccc}
+</style>
+
+<script>
+(function(){
+  var DATA_URL_PATTERN = "/wp-content/uploads/f6p-data/idp_points_against_{season}.json";
+  var DEFAULT_SEASON = "2026";
+  var FORMAT_LABELS = {one_two_three:"1-2-3", big3:"Big 3", fantasypros:"FantasyPros"};
+  var TEAM_NAMES = {
+    ARI:"Cardinals", ATL:"Falcons", BAL:"Ravens", BUF:"Bills",
+    CAR:"Panthers", CHI:"Bears", CIN:"Bengals", CLE:"Browns",
+    DAL:"Cowboys", DEN:"Broncos", DET:"Lions", GB:"Packers",
+    HOU:"Texans", IND:"Colts", JAX:"Jaguars", KC:"Chiefs",
+    LAC:"Chargers", LAR:"Rams", LV:"Raiders", MIA:"Dolphins",
+    MIN:"Vikings", NE:"Patriots", NO:"Saints", NYG:"Giants",
+    NYJ:"Jets", PHI:"Eagles", PIT:"Steelers", SEA:"Seahawks",
+    SF:"49ers", TB:"Buccaneers", TEN:"Titans", WAS:"Commanders"
+  };
+  var season = DEFAULT_SEASON;
+  var fmt = "one_two_three";
+  var pos = "DL";
+  var sortKey = "avg";
+  var sortAsc = true;
+  var cache = {};
+
+  function setMeta(text){
+    document.querySelector("#f6p-idp .f6p-idp-meta").textContent = text;
+  }
+
+  function loadSeason(s){
+    if (cache[s]) {
+      render();
+      return;
+    }
+    setMeta("Loading " + s + "...");
+    var url = DATA_URL_PATTERN.replace("{season}", s);
+    fetch(url, {cache:"no-cache"}).then(function(r){return r.json()}).then(function(json){
+      cache[s] = json;
+      render();
+    }).catch(function(err){
+      setMeta("Could not load " + s + " IDP points-against data.");
+    });
+  }
+
+  function currentTable(){
+    var data = cache[season];
+    return data ? data.formats[fmt][pos] : null;
+  }
+
+  function sortValue(row){
+    return sortKey === "avg" ? row.avg : row.weeks[sortKey];
+  }
+
+  function setSort(key){
+    if (sortKey === key) {
+      sortAsc = !sortAsc;
+    } else {
+      sortKey = key;
+      sortAsc = true;
+    }
+    render();
+  }
+
+  function render(){
+    var data = cache[season];
+    if (!data) return;
+    var weeks = data.weeks;
+    var table = currentTable();
+    var teams = Object.keys(table);
+    teams.sort(function(a,b){
+      var av = sortValue(table[a]);
+      var bv = sortValue(table[b]);
+      var aMissing = (av === undefined);
+      var bMissing = (bv === undefined);
+      if (aMissing && bMissing) return 0;
+      if (aMissing) return 1;
+      if (bMissing) return -1;
+      var d = av - bv;
+      return sortAsc ? d : -d;
+    });
+
+    var thead = document.querySelector("#f6p-idp thead");
+    var tbody = document.querySelector("#f6p-idp tbody");
+    while (thead.firstChild) thead.removeChild(thead.firstChild);
+    while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+
+    var headRow = document.createElement("tr");
+    var thRank = document.createElement("th");
+    thRank.textContent = "#";
+    thRank.className = "f6p-idp-rank";
+    headRow.appendChild(thRank);
+    var thTeam = document.createElement("th");
+    thTeam.textContent = "Team";
+    thTeam.className = "f6p-idp-team";
+    headRow.appendChild(thTeam);
+    weeks.forEach(function(wk){
+      var th = document.createElement("th");
+      th.textContent = "Wk" + wk;
+      if (sortKey === wk) th.className = "sorted";
+      th.addEventListener("click", function(){
+        setSort(wk);
+      });
+      headRow.appendChild(th);
+    });
+    var thAvg = document.createElement("th");
+    thAvg.textContent = "AVG";
+    thAvg.className = "f6p-idp-avg" + (sortKey === "avg" ? " sorted" : "");
+    thAvg.addEventListener("click", function(){
+      setSort("avg");
+    });
+    headRow.appendChild(thAvg);
+    thead.appendChild(headRow);
+
+    teams.forEach(function(team, i){
+      var row = document.createElement("tr");
+      var rankCell = document.createElement("th");
+      rankCell.textContent = String(i + 1);
+      rankCell.className = "f6p-idp-rank";
+      row.appendChild(rankCell);
+      var rowHead = document.createElement("th");
+      rowHead.textContent = TEAM_NAMES[team] || team;
+      rowHead.title = team;
+      rowHead.className = "f6p-idp-team";
+      row.appendChild(rowHead);
+      var wkPts = table[team].weeks;
+      weeks.forEach(function(wk){
+        var td = document.createElement("td");
+        var v = wkPts[wk];
+        if (v === undefined) {
+          td.textContent = "";
+          td.className = "f6p-idp-bye";
+        } else {
+          td.textContent = v.toFixed(1);
+        }
+        row.appendChild(td);
+      });
+      var avgTd = document.createElement("td");
+      avgTd.textContent = table[team].avg.toFixed(1);
+      avgTd.className = "f6p-idp-avg";
+      row.appendChild(avgTd);
+      tbody.appendChild(row);
+    });
+
+    var sortLabel = sortKey === "avg" ? "AVG" : "Wk" + sortKey;
+    setMeta(data.season + " season -- " + FORMAT_LABELS[fmt] + " -- " + pos + " -- "
+      + teams.length + " teams -- ranked by " + sortLabel
+      + " -- higher AVG = juicier streaming matchup -- click a column header to sort");
+
+    var posButtons = document.querySelectorAll("#f6p-idp .f6p-idp-pos button");
+    posButtons.forEach(function(b){
+      b.classList.toggle("active", b.getAttribute("data-pos") === pos);
+    });
+    var fmtButtons = document.querySelectorAll("#f6p-idp .f6p-idp-viewswitch button");
+    fmtButtons.forEach(function(b){
+      b.classList.toggle("active", b.getAttribute("data-fmt") === fmt);
+    });
+  }
+
+  var posButtons = document.querySelectorAll("#f6p-idp .f6p-idp-pos button");
+  posButtons.forEach(function(b){
+    b.addEventListener("click", function(){
+      pos = b.getAttribute("data-pos");
+      render();
+    });
+  });
+  var fmtButtons = document.querySelectorAll("#f6p-idp .f6p-idp-viewswitch button");
+  fmtButtons.forEach(function(b){
+    b.addEventListener("click", function(){
+      fmt = b.getAttribute("data-fmt");
+      render();
+    });
+  });
+  var seasonSelect = document.querySelector("#f6p-idp .f6p-idp-season");
+  seasonSelect.value = DEFAULT_SEASON;
+  seasonSelect.addEventListener("change", function(){
+    season = seasonSelect.value;
+    loadSeason(season);
+  });
+
+  loadSeason(season);
+})();
+</script>

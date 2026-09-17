@@ -26,6 +26,12 @@ ff_defense/reddit_post.md
 
 # ── Raw source cache (~90MB of nflverse CSVs, re-fetchable) ──────────────────
 ff_projections/cached/
+ff_points_against/cached/
+ff_idp_points_against/cached/
+
+# ── Long-form reference CSVs (regenerated on each fetch run) ─────────────────
+ff_points_against/data/*.csv
+ff_idp_points_against/data/*.csv
 
 # Timestamped workbook backups. my_projections.xlsx itself is deliberately
 # NOT ignored — it holds hours of hand-entered usage that can't be regenerated,

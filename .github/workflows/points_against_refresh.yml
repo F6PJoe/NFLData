@@ -1,0 +1,88 @@
+name: Points Against - Weekly Refresh
+#
+# Refreshes ff_points_against (offense QB/RB/WR/TE + team DST) and
+# ff_idp_points_against (DL/LB/S) for the current season and uploads both
+# projects' JSON to the live site over SFTP -- replaces the manual
+# "run the fetch script, then run sftp_upload.py" pair for both projects.
+#
+# No native `schedule:` trigger, matching every other workflow in this
+# repo -- GitHub's own scheduler has been unreliable here before. Wire this
+# up via cron-job.org (workflow_dispatch) for the actual weekly cadence;
+# do NOT add a `schedule:` trigger here without checking cron-job.org
+# first, or this could double-run and double-upload.
+#
+# Only refreshes the CURRENT season by default -- prior seasons are a
+# one-time backfill, not a recurring refresh. Bump the default below to
+# 2027 once that season starts.
+
+on:
+  workflow_dispatch:
+    inputs:
+      year:
+        description: "Season year to refresh (both projects)"
+        required: false
+        default: "2026"
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r ff_points_against/requirements.txt
+          pip install -r ff_idp_points_against/requirements.txt
+
+      - name: Write SFTP key and credentials
+        env:
+          SFTP_KEY:             ${{ secrets.SFTP_KEY }}
+          SFTP_KEY_PASSPHRASE:  ${{ secrets.SFTP_KEY_PASSPHRASE }}
+          SFTP_HOST:            ${{ secrets.SFTP_HOST }}
+          SFTP_PORT:            ${{ secrets.SFTP_PORT }}
+          SFTP_USERNAME:        ${{ secrets.SFTP_USERNAME }}
+          SFTP_REMOTE_ROOT:     ${{ secrets.SFTP_REMOTE_ROOT }}
+        run: |
+          echo "${SFTP_KEY}" > "${RUNNER_TEMP}/sftp_key"
+          chmod 600 "${RUNNER_TEMP}/sftp_key"
+
+          for dir in ff_points_against ff_idp_points_against; do
+            cat > "${dir}/.env" <<EOF
+          SFTP_HOST=${SFTP_HOST}
+          SFTP_PORT=${SFTP_PORT}
+          SFTP_USERNAME=${SFTP_USERNAME}
+          SFTP_KEY_PATH=${RUNNER_TEMP}/sftp_key
+          SFTP_KEY_PASSPHRASE=${SFTP_KEY_PASSPHRASE}
+          SFTP_REMOTE_ROOT=${SFTP_REMOTE_ROOT}
+          EOF
+          done
+
+      - name: Refresh + upload ff_points_against (offense + DST)
+        working-directory: ff_points_against
+        run: |
+          python fetch_nflverse_points_against.py --year "${{ github.event.inputs.year }}" --refresh
+          python sftp_upload.py --only "${{ github.event.inputs.year }}"
+
+      - name: Refresh + upload ff_idp_points_against
+        working-directory: ff_idp_points_against
+        run: |
+          python fetch_nflverse_idp_points_against.py --year "${{ github.event.inputs.year }}" --refresh
+          python sftp_upload.py --only "${{ github.event.inputs.year }}"
+
+      - name: Upload data files as artifact (optional — for debugging)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: points-against-data
+          path: |
+            ff_points_against/data/*
+            ff_idp_points_against/data/*
+          retention-days: 7

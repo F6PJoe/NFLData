@@ -1,0 +1,158 @@
+<!DOCTYPE html><html><head><meta charset='utf-8'><title>points against preview (dev only)</title></head><body><div id="f6p-pa">
+  <div class="f6p-pa-viewswitch">
+    <button type="button" data-fmt="std">Standard</button>
+    <button type="button" data-fmt="half_ppr">Half-PPR</button>
+    <button type="button" data-fmt="ppr">PPR</button>
+  </div>
+  <div class="f6p-pa-controls">
+    <div class="f6p-pa-pos" role="tablist">
+      <button type="button" data-pos="QB">QB</button>
+      <button type="button" data-pos="RB">RB</button>
+      <button type="button" data-pos="WR">WR</button>
+      <button type="button" data-pos="TE">TE</button>
+    </div>
+    <div class="f6p-pa-meta"></div>
+  </div>
+  <div class="f6p-pa-scroll">
+    <table class="f6p-pa-table">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+#f6p-pa{font-family:Arial,Helvetica,sans-serif;max-width:100%}
+#f6p-pa *{box-sizing:border-box}
+#f6p-pa .f6p-pa-viewswitch{display:flex;gap:8px;margin:0 0 12px}
+#f6p-pa .f6p-pa-viewswitch button{font:inherit;font-weight:700;font-size:14px;padding:10px 20px;border:2px solid #cc5e03;background:#fff;color:#cc5e03;cursor:pointer;border-radius:4px}
+#f6p-pa .f6p-pa-viewswitch button.active{background:#cc5e03;color:#fff}
+#f6p-pa .f6p-pa-controls{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin:0 0 10px;padding-top:10px;border-top:1px solid #ddd}
+#f6p-pa .f6p-pa-pos{display:flex;gap:6px}
+#f6p-pa .f6p-pa-pos button{font:inherit;font-weight:700;font-size:13px;letter-spacing:.03em;padding:8px 16px;border:1px solid #cc5e03;background:#fff;color:#cc5e03;cursor:pointer;border-radius:3px}
+#f6p-pa .f6p-pa-pos button.active{background:#cc5e03;color:#fff}
+#f6p-pa .f6p-pa-meta{font-size:13px;color:#555}
+#f6p-pa .f6p-pa-scroll{overflow-x:auto;border:1px solid #ddd}
+#f6p-pa table.f6p-pa-table{border-collapse:collapse;width:100%;font-size:12px;white-space:nowrap}
+#f6p-pa table.f6p-pa-table th,#f6p-pa table.f6p-pa-table td{padding:6px 8px;text-align:center;border-bottom:1px solid #eee}
+#f6p-pa table.f6p-pa-table thead th{background:#cc5e03;color:#fff;position:sticky;top:0;cursor:pointer;font-weight:700}
+#f6p-pa table.f6p-pa-table thead th.sorted{background:#660000}
+#f6p-pa table.f6p-pa-table tbody th{position:sticky;left:0;background:#fafafa;text-align:left;font-weight:700;z-index:1}
+#f6p-pa table.f6p-pa-table tbody tr:hover td,#f6p-pa table.f6p-pa-table tbody tr:hover th{background:#660000;color:#fff}
+#f6p-pa table.f6p-pa-table td.f6p-pa-bye{color:#bbb}
+#f6p-pa table.f6p-pa-table td.f6p-pa-avg,#f6p-pa table.f6p-pa-table th.f6p-pa-avg{font-weight:700;border-left:2px solid #ccc}
+</style>
+
+<script>
+(function(){
+  var DATA_URL = "data/points_against_2025.json";
+  var FORMAT_LABELS = {std:"Standard", half_ppr:"Half-PPR", ppr:"PPR"};
+  var fmt = "half_ppr";
+  var pos = "QB";
+  var sortAsc = true;
+  var data = null;
+
+  function fetchData(){
+    fetch(DATA_URL, {cache:"no-cache"}).then(function(r){return r.json()}).then(function(json){
+      data = json;
+      render();
+    }).catch(function(err){
+      var meta = document.querySelector("#f6p-pa .f6p-pa-meta");
+      meta.textContent = "Could not load points-against data.";
+    });
+  }
+
+  function currentTable(){
+    return data.formats[fmt][pos];
+  }
+
+  function render(){
+    if (!data) return;
+    var weeks = data.weeks;
+    var table = currentTable();
+    var teams = Object.keys(table);
+    teams.sort(function(a,b){
+      var d = table[a].avg - table[b].avg;
+      return sortAsc ? d : -d;
+    });
+
+    var thead = document.querySelector("#f6p-pa thead");
+    var tbody = document.querySelector("#f6p-pa tbody");
+    while (thead.firstChild) thead.removeChild(thead.firstChild);
+    while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
+
+    var headRow = document.createElement("tr");
+    var thTeam = document.createElement("th");
+    thTeam.textContent = "Team";
+    headRow.appendChild(thTeam);
+    weeks.forEach(function(wk){
+      var th = document.createElement("th");
+      th.textContent = "Wk" + wk;
+      headRow.appendChild(th);
+    });
+    var thAvg = document.createElement("th");
+    thAvg.textContent = "AVG";
+    thAvg.className = "f6p-pa-avg sorted";
+    thAvg.addEventListener("click", function(){
+      sortAsc = !sortAsc;
+      render();
+    });
+    headRow.appendChild(thAvg);
+    thead.appendChild(headRow);
+
+    teams.forEach(function(team){
+      var row = document.createElement("tr");
+      var rowHead = document.createElement("th");
+      rowHead.textContent = team;
+      row.appendChild(rowHead);
+      var wkPts = table[team].weeks;
+      weeks.forEach(function(wk){
+        var td = document.createElement("td");
+        var v = wkPts[wk];
+        if (v === undefined) {
+          td.textContent = "";
+          td.className = "f6p-pa-bye";
+        } else {
+          td.textContent = v.toFixed(1);
+        }
+        row.appendChild(td);
+      });
+      var avgTd = document.createElement("td");
+      avgTd.textContent = table[team].avg.toFixed(1);
+      avgTd.className = "f6p-pa-avg";
+      row.appendChild(avgTd);
+      tbody.appendChild(row);
+    });
+
+    var meta = document.querySelector("#f6p-pa .f6p-pa-meta");
+    meta.textContent = data.season + " season -- " + FORMAT_LABELS[fmt] + " -- " + teams.length + " teams -- lower AVG = tougher matchup";
+
+    var posButtons = document.querySelectorAll("#f6p-pa .f6p-pa-pos button");
+    posButtons.forEach(function(b){
+      b.classList.toggle("active", b.getAttribute("data-pos") === pos);
+    });
+    var fmtButtons = document.querySelectorAll("#f6p-pa .f6p-pa-viewswitch button");
+    fmtButtons.forEach(function(b){
+      b.classList.toggle("active", b.getAttribute("data-fmt") === fmt);
+    });
+  }
+
+  var posButtons = document.querySelectorAll("#f6p-pa .f6p-pa-pos button");
+  posButtons.forEach(function(b){
+    b.addEventListener("click", function(){
+      pos = b.getAttribute("data-pos");
+      render();
+    });
+  });
+  var fmtButtons = document.querySelectorAll("#f6p-pa .f6p-pa-viewswitch button");
+  fmtButtons.forEach(function(b){
+    b.addEventListener("click", function(){
+      fmt = b.getAttribute("data-fmt");
+      render();
+    });
+  });
+
+  fetchData();
+})();
+</script>
+</body></html>
