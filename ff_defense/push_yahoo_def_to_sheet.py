@@ -18,6 +18,7 @@ Requires: google-api-python-client, google-auth
 
 import argparse
 import csv
+import os
 from pathlib import Path
 
 from team_names import normalize
@@ -32,6 +33,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", default="yahoo_def.csv")
     args = ap.parse_args()
+
+    if not os.path.exists(args.csv):
+        print(f"[WARN] {args.csv} not found -- fetch_yahoo_def.py likely failed. "
+              "Leaving columns C/D/L unchanged.")
+        return
 
     with open(args.csv, newline="", encoding="utf-8") as f:
         yahoo_rows = list(csv.DictReader(f))

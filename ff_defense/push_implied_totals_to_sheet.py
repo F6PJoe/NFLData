@@ -17,6 +17,7 @@ Requires: google-api-python-client, google-auth
 
 import argparse
 import csv
+import os
 from pathlib import Path
 
 from team_names import normalize
@@ -30,6 +31,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", default="implied_totals.csv")
     args = ap.parse_args()
+
+    if not os.path.exists(args.csv):
+        print(f"[WARN] {args.csv} not found -- fetch_implied_totals.py likely failed. "
+              "Leaving column F unchanged.")
+        return
 
     with open(args.csv, newline="", encoding="utf-8") as f:
         implied_rows = list(csv.DictReader(f))

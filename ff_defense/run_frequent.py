@@ -15,6 +15,7 @@ Usage:
 """
 
 import argparse
+import sys
 
 from current_week import current_week
 from run_all import STEPS, run_steps
@@ -23,7 +24,7 @@ SKIP = {"fetch_ftn_dave.py", "push_ftn_dave_to_sheet.py",
         "fetch_pressure_rate.py", "push_pressure_rate_to_sheet.py",
         "generate_reddit_post.py"}
 
-FREQUENT_STEPS = [(script, args, required) for script, args, required in STEPS if script not in SKIP]
+FREQUENT_STEPS = [(script, args) for script, args in STEPS if script not in SKIP]
 
 
 def main():
@@ -35,7 +36,15 @@ def main():
     week = args.week if args.week is not None else current_week()
     print(f"Week: {week}" + (" (auto-detected)" if args.week is None else " (explicit)"))
 
-    run_steps(FREQUENT_STEPS, week)
+    failures = run_steps(FREQUENT_STEPS, week)
+
+    if failures:
+        print(f"\nDone (DVOA and pressure rate skipped -- weekly-only), "
+              f"but {len(failures)} step(s) failed:")
+        for script, code in failures:
+            print(f"  - {script} (exit {code})")
+        sys.exit(1)
+
     print("\nAll done (DVOA and pressure rate skipped -- weekly-only).")
 
 

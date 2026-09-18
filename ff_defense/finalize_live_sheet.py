@@ -9,6 +9,11 @@ after all the fetch_*/push_* scripts for the week:
    so its row count IS however many teams have a game this week. Any
    leftover rows below that (from a previous week that had more teams,
    or just unused buffer rows) get deleted outright, not just cleared.
+   If that CSV is missing (fetch_subvertadown_defense.py failed -- e.g. a
+   lapsed subscription, login blocked from CI -- see run_all.py), falls
+   back to however many rows column B on the sheet already has, so this
+   step still runs and every other column's fresh push still lands
+   somewhere sensible instead of the whole run stopping.
 2. Column A's SCORE formula (=SUM(F{r}:K{r})+IF(ISNUMBER(SEARCH("@",
    D{r})), 0, 5)) is filled down from row 2 through the last real team
    row -- written explicitly per row rather than relying on a
@@ -24,6 +29,7 @@ Requires: google-api-python-client, google-auth
 
 import argparse
 import csv
+import os
 from pathlib import Path
 
 SHEET_ID = "1lTRoatl-YQHlv78YeisG7eFyz2xqaConGUoPo4medpQ"
@@ -42,10 +48,6 @@ def main():
     ap.add_argument("--csv", default="subvertadown_defense.csv")
     args = ap.parse_args()
 
-    with open(args.csv, newline="", encoding="utf-8") as f:
-        n_teams = sum(1 for _ in csv.DictReader(f))
-    last_row = n_teams + 1  # +1 for the header
-
     from google.oauth2.service_account import Credentials
     from googleapiclient.discovery import build
 
@@ -54,6 +56,19 @@ def main():
     )
     service = build("sheets", "v4", credentials=creds, cache_discovery=False)
     sheet = service.spreadsheets()
+
+    if os.path.exists(args.csv):
+        with open(args.csv, newline="", encoding="utf-8") as f:
+            n_teams = sum(1 for _ in csv.DictReader(f))
+        source = args.csv
+    else:
+        existing = sheet.values().get(spreadsheetId=SHEET_ID, range=f"{TAB}!B2:B").execute()
+        n_teams = len(existing.get("values", []))
+        source = f"'{TAB}'!B2:B (fallback -- {args.csv} not found)"
+        print(f"[WARN] {args.csv} not found -- using the sheet's current row count instead.")
+
+    last_row = n_teams + 1  # +1 for the header
+    print(f"Team count source: {source} -> {n_teams} teams.")
 
     requests = []
 

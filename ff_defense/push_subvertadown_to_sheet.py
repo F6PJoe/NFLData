@@ -21,6 +21,7 @@ Requires: google-api-python-client, google-auth
 
 import argparse
 import csv
+import os
 from pathlib import Path
 
 SHEET_ID = "1lTRoatl-YQHlv78YeisG7eFyz2xqaConGUoPo4medpQ"
@@ -32,6 +33,16 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", default="subvertadown_defense.csv")
     args = ap.parse_args()
+
+    if not os.path.exists(args.csv):
+        # fetch_subvertadown_defense.py is allowed to fail (e.g. a lapsed
+        # subscription, login blocked from CI) without stopping the rest
+        # of the pipeline -- see run_all.py. Leave B/E/G as whatever they
+        # already were rather than crashing; every other push still runs
+        # against that same, slightly-stale team list.
+        print(f"[WARN] {args.csv} not found -- fetch_subvertadown_defense.py likely failed. "
+              "Leaving columns B/E/G unchanged.")
+        return
 
     with open(args.csv, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))

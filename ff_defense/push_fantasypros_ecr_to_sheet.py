@@ -16,6 +16,7 @@ Requires: google-api-python-client, google-auth
 
 import argparse
 import csv
+import os
 from pathlib import Path
 
 from team_names import normalize
@@ -29,6 +30,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", default="fantasypros_dst_ecr.csv")
     args = ap.parse_args()
+
+    if not os.path.exists(args.csv):
+        print(f"[WARN] {args.csv} not found -- fetch_fantasypros_dst_ecr.py likely failed. "
+              "Leaving column K unchanged.")
+        return
 
     with open(args.csv, newline="", encoding="utf-8") as f:
         ecr_rows = list(csv.DictReader(f))

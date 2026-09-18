@@ -17,6 +17,7 @@ Requires: google-api-python-client, google-auth
 
 import argparse
 import csv
+import os
 from pathlib import Path
 
 from team_names import normalize
@@ -30,6 +31,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--csv", default="pressure_rate.csv")
     args = ap.parse_args()
+
+    if not os.path.exists(args.csv):
+        print(f"[WARN] {args.csv} not found -- fetch_pressure_rate.py likely failed. "
+              "Leaving column J unchanged.")
+        return
 
     with open(args.csv, newline="", encoding="utf-8") as f:
         pressure_rows = list(csv.DictReader(f))

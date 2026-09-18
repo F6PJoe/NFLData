@@ -108,6 +108,20 @@ def login(session):
     )
     resp.raise_for_status()
 
+    # A 200 here doesn't guarantee a real login -- Laravel re-renders the
+    # login page (still 200) on bad credentials, and a Cloudflare challenge
+    # page is also a 200. Surface enough to tell those apart without
+    # printing anything sensitive.
+    print(f"[login] POST {LOGIN_URL} -> {resp.status_code}, landed on {resp.url}")
+    if "/login" in resp.url:
+        print("[login] WARNING: redirected back to /login -- credentials were likely rejected.")
+    if "Just a moment" in resp.text or "cf-chl" in resp.text or "challenges.cloudflare.com" in resp.text:
+        print("[login] WARNING: response looks like a Cloudflare challenge page, not the real site.")
+    if "These credentials do not match" in resp.text or "credentials do not match" in resp.text.lower():
+        print("[login] WARNING: page shows a 'credentials do not match' validation error.")
+    cookie_names = sorted(c.name for c in session.cookies)
+    print(f"[login] session cookies set: {cookie_names}")
+
 
 def fetch_rows(session):
     resp = session.get(DEFENSE_URL, headers=HEADERS, timeout=30)

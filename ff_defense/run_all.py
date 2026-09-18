@@ -17,47 +17,53 @@ from current_week import current_week
 
 HERE = Path(__file__).parent
 
-# (script, extra_args, required) -- in the order they must run. required=False
-# means a failure prints a warning and the run continues, same convention as
-# ff_weekly_proj/run_all.py's FTN/Fantasy Sharks handling: FTN's login is
-# often blocked from datacenter IPs (GitHub Actions runners use well-known,
-# published IP ranges, which Cloudflare bot-management on FTN's login
-# endpoint apparently flags) -- confirmed as a real, already-hit problem in
-# this repo, not a hypothetical, via fetch_weekly_projections.yml's own
-# comment. push_ftn_dave_to_sheet.py separately no-ops cleanly if
-# ftn_dave.csv doesn't exist (e.g. this exact case, on an ephemeral CI
-# runner with no leftover file from a prior run), so it doesn't need
-# required=False itself -- it always exits 0.
+# (script, extra_args) -- in the order they must run. No step stops the
+# pipeline on failure -- Joe's call: a failure on any one source (a lapsed
+# subscription, a CI/datacenter IP block like FTN's -- see
+# fetch_weekly_projections.yml's own comment about that exact issue) should
+# still leave every OTHER source's push to run, so at least most of the
+# sheet gets refreshed instead of nothing at all. Every push_*.py script
+# checks its input CSV exists first and no-ops cleanly (prints a warning,
+# leaves its columns as whatever they already were) if the matching
+# fetch_*.py failed to produce one -- so a missing file here is never a
+# crash, just a skipped column. finalize_live_sheet.py separately falls
+# back to the sheet's own current row count if subvertadown_defense.csv is
+# missing, so bye-week row cleanup / SCORE formula / sort still run even
+# when Subvertadown itself is down.
 STEPS = [
-    ("fetch_subvertadown_defense.py", [], True),
-    ("push_subvertadown_to_sheet.py", [], True),
-    ("fetch_ftn_dave.py", [], False),
-    ("push_ftn_dave_to_sheet.py", [], True),
-    ("fetch_implied_totals.py", [], True),
-    ("push_implied_totals_to_sheet.py", [], True),
-    ("fetch_yahoo_def.py", ["--week", "{week}"], True),
-    ("push_yahoo_def_to_sheet.py", [], True),
-    ("fetch_fantasypros_dst_ecr.py", ["--week", "{week}"], True),
-    ("push_fantasypros_ecr_to_sheet.py", [], True),
-    ("fetch_pressure_rate.py", [], True),
-    ("push_pressure_rate_to_sheet.py", [], True),
-    ("finalize_live_sheet.py", [], True),
-    ("generate_reddit_post.py", ["--week", "{week}"], True),
+    ("fetch_subvertadown_defense.py", []),
+    ("push_subvertadown_to_sheet.py", []),
+    ("fetch_ftn_dave.py", []),
+    ("push_ftn_dave_to_sheet.py", []),
+    ("fetch_implied_totals.py", []),
+    ("push_implied_totals_to_sheet.py", []),
+    ("fetch_yahoo_def.py", ["--week", "{week}"]),
+    ("push_yahoo_def_to_sheet.py", []),
+    ("fetch_fantasypros_dst_ecr.py", ["--week", "{week}"]),
+    ("push_fantasypros_ecr_to_sheet.py", []),
+    ("fetch_pressure_rate.py", []),
+    ("push_pressure_rate_to_sheet.py", []),
+    ("finalize_live_sheet.py", []),
+    ("generate_reddit_post.py", ["--week", "{week}"]),
 ]
 
 
 def run_steps(steps, week):
-    for script, args, required in steps:
+    """Runs every step regardless of earlier failures; returns the list of
+    (script, exit_code) for any that failed, so the caller can report a
+    summary and still exit non-zero without having stopped early."""
+    failures = []
+    for script, args in steps:
         resolved_args = [a.format(week=week) for a in args]
         print(f"\n=== {script} {' '.join(resolved_args)} ===", flush=True)
         result = subprocess.run(
             [sys.executable, str(HERE / script)] + resolved_args, cwd=HERE
         )
         if result.returncode != 0:
-            if required:
-                sys.exit(f"\n{script} failed (exit {result.returncode}) -- stopping.")
             print(f"[WARN] {script} failed (exit {result.returncode}) -- "
-                  f"continuing, likely a CI/datacenter IP block.", flush=True)
+                  f"continuing with the rest of the run.", flush=True)
+            failures.append((script, result.returncode))
+    return failures
 
 
 def main():
@@ -69,7 +75,14 @@ def main():
     week = args.week if args.week is not None else current_week()
     print(f"Week: {week}" + (" (auto-detected)" if args.week is None else " (explicit)"))
 
-    run_steps(STEPS, week)
+    failures = run_steps(STEPS, week)
+
+    if failures:
+        print(f"\nDone, but {len(failures)} step(s) failed:")
+        for script, code in failures:
+            print(f"  - {script} (exit {code})")
+        sys.exit(1)
+
     print("\nAll done.")
 
 
