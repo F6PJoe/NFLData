@@ -4,11 +4,14 @@ Pull FTN's weekly projected stat lines for QB/RB/WR/TE.
 
 Auth: ftn_auth.get_access_token() logs in via FTN_EMAIL/FTN_PASSWORD from .env.
 
-Data: GET https://ls.ftnfantasy.com/api/ftn/players/projections/weekly/<WEEK>
+Data: GET https://fantasydata.ftnfantasy.com/api/projections/weekly
   Authorization: Bearer <access_token>
 
-FTN doesn't report fumbles — left blank.
-Opponent lookup comes from ESPN schedule utility.
+The endpoint always returns the current week and takes no week parameter, so
+--week only affects the Opp lookup, not which slate is fetched.
+
+Opponent lookup comes from ESPN schedule utility (the payload's own "opp"
+field wins when present).
 
 Usage:
     python fetch_ftn_projections.py
@@ -27,7 +30,7 @@ import ftn_auth
 import schedule as nfl_schedule
 import scoring
 
-DATA_URL = "https://ls.ftnfantasy.com/api/ftn/players/projections/weekly"
+DATA_URL = "https://fantasydata.ftnfantasy.com/api/projections/weekly"
 
 HEADERS = {"User-Agent": "Mozilla/5.0 (personal projections tool)"}
 
@@ -37,6 +40,7 @@ STAT_MAP = {
     "pass_att": "att", "pass_cmp": "cmp", "pass_yds": "pass_yd", "pass_td": "td_pass",
     "pass_int": "int", "rush_att": "rsh", "rush_yds": "rsh_yd", "rush_td": "td_rsh",
     "targets": "tar", "rec": "rec", "rec_yds": "rec_yd", "rec_td": "td_rec",
+    "fum": "fum",
 }
 
 OUT_COLUMNS = {
@@ -64,8 +68,20 @@ def get_players(week, json_file=None):
 
 
 def build_stat_line(projections):
-    raw = {p["stat"]: p.get("value", 0) for p in projections}
-    return {key: raw.get(stat_key, 0) for key, stat_key in STAT_MAP.items()}
+    """Flatten FTN's [{stat, value}] list into a scoring.py stat dict.
+
+    Stats the payload omits stay None. FTN sends only the stats relevant to a
+    player's position, and build_consensus averages each column across the
+    sources that supply it -- so a blank abstains where a 0 would drag every
+    player's average toward zero.
+    """
+    raw = {p["stat"]: p.get("value") for p in projections}
+    return {key: raw.get(stat_key) for key, stat_key in STAT_MAP.items()}
+
+
+def cell(value):
+    """Format a stat for the CSV -- blank when FTN doesn't report it."""
+    return "" if value is None else value
 
 
 def parse(players, opponents):
@@ -83,31 +99,31 @@ def parse(players, opponents):
         if pos == "QB":
             rows["QB"].append((scoring.qb_points(s), {
                 "QB": name, "Team": team, "Opp": opp,
-                "Pass Att": s["pass_att"], "Pass Comp": s["pass_cmp"],
-                "Pass Yds": s["pass_yds"], "Pass TD": s["pass_td"], "Pass Int": s["pass_int"],
-                "Rush Att": s["rush_att"], "Rush Yds": s["rush_yds"], "Rush TD": s["rush_td"],
-                "Fumbles": "",
+                "Pass Att": cell(s["pass_att"]), "Pass Comp": cell(s["pass_cmp"]),
+                "Pass Yds": cell(s["pass_yds"]), "Pass TD": cell(s["pass_td"]), "Pass Int": cell(s["pass_int"]),
+                "Rush Att": cell(s["rush_att"]), "Rush Yds": cell(s["rush_yds"]), "Rush TD": cell(s["rush_td"]),
+                "Fumbles": cell(s["fum"]),
             }))
         elif pos == "RB":
             rows["RB"].append((scoring.ppr_points(s), {
                 "RB": name, "Team": team, "Opp": opp,
-                "Rush Att": s["rush_att"], "Rush Yds": s["rush_yds"], "Rush TD": s["rush_td"],
-                "Targets": s["targets"], "Rec": s["rec"], "Rec Yds": s["rec_yds"],
-                "Rec TD": s["rec_td"], "Fum": "",
+                "Rush Att": cell(s["rush_att"]), "Rush Yds": cell(s["rush_yds"]), "Rush TD": cell(s["rush_td"]),
+                "Targets": cell(s["targets"]), "Rec": cell(s["rec"]), "Rec Yds": cell(s["rec_yds"]),
+                "Rec TD": cell(s["rec_td"]), "Fum": cell(s["fum"]),
             }))
         elif pos == "WR":
             rows["WR"].append((scoring.ppr_points(s), {
                 "WR": name, "Team": team, "Opp": opp,
-                "Targets": s["targets"], "Rec": s["rec"], "Rec Yds": s["rec_yds"],
-                "Rec TD": s["rec_td"], "Rush Att": s["rush_att"], "Rush Yds": s["rush_yds"],
-                "Rush TD": s["rush_td"], "Fum": "",
+                "Targets": cell(s["targets"]), "Rec": cell(s["rec"]), "Rec Yds": cell(s["rec_yds"]),
+                "Rec TD": cell(s["rec_td"]), "Rush Att": cell(s["rush_att"]), "Rush Yds": cell(s["rush_yds"]),
+                "Rush TD": cell(s["rush_td"]), "Fum": cell(s["fum"]),
             }))
         elif pos == "TE":
             rows["TE"].append((scoring.ppr_points(s), {
                 "TE": name, "Team": team, "Opp": opp,
-                "Targets": s["targets"], "Rec": s["rec"], "Rec Yds": s["rec_yds"],
-                "Rec TD": s["rec_td"], "Rush Att": s["rush_att"], "Rush Yds": s["rush_yds"],
-                "Rush TD": s["rush_td"],
+                "Targets": cell(s["targets"]), "Rec": cell(s["rec"]), "Rec Yds": cell(s["rec_yds"]),
+                "Rec TD": cell(s["rec_td"]), "Rush Att": cell(s["rush_att"]), "Rush Yds": cell(s["rush_yds"]),
+                "Rush TD": cell(s["rush_td"]),
             }))
 
     for pos in rows:

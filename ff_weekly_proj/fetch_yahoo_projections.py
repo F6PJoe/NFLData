@@ -11,6 +11,15 @@ Page (25 players per request, paginated via &count=0,25,50,...):
 No login needed — this page is publicly viewable.
 Yahoo doesn't expose Pass Att/Comp for QBs — left blank.
 
+Yahoo lists its whole player database, so the tail is padded with players who
+carry no projection for the week (every stat cell renders as "-"). Those are
+skipped. They are not cleanly sorted to the end — a projected player can sit
+below a page of blank ones — so every page is still walked.
+
+A players page that keeps erroring (Yahoo throws intermittent 500s) is retried,
+then given up on, keeping whatever rows that position already collected rather
+than losing the positions that have not been fetched yet.
+
 Usage:
     python fetch_yahoo_projections.py
     python fetch_yahoo_projections.py --year 2026 --week 3 --league-id 84385
@@ -22,6 +31,7 @@ import argparse
 import csv
 import datetime
 import sys
+import time
 
 from bs4 import BeautifulSoup
 
@@ -39,6 +49,9 @@ HEADERS = {
 
 TEAM_ALIASES = {"WAS": "WSH"}
 
+MAX_ATTEMPTS = 3
+RETRY_BACKOFF = 2  # seconds, doubled after each failed attempt
+
 OUT_COLUMNS = {
     "QB": ["QB", "Team", "Opp", "Pass Att", "Pass Comp", "Pass Yds", "Pass TD",
            "Pass Int", "Rush Att", "Rush Yds", "Rush TD", "Fumbles"],
@@ -52,10 +65,39 @@ OUT_COLUMNS = {
 
 
 def num(text):
+    """Parse a stat cell. None for "-" — Yahoo's marker for "no projection"."""
     text = (text or "").replace(",", "").strip()
     if not text or text == "-":
-        return 0.0
+        return None
     return float(text)
+
+
+def cell(value):
+    """Format a stat for the CSV — blank when Yahoo doesn't project it.
+
+    build_consensus averages each column across the sources that supply it, so
+    a blank abstains where a 0 would drag every player's average down.
+    """
+    return "" if value is None else value
+
+
+def parse_team(player_cell):
+    """Pull the team abbreviation out of a player cell's "Team - POS" span.
+
+    Injured players get an extra span carrying the same Fz-xxs class ahead of
+    that one, holding just the status letter ("Q", "O", ...), so match on the
+    text shape instead of taking the first hit -- otherwise every questionable
+    starter comes through with a team of "Q" and no opponent.
+    """
+    for span in player_cell.find_all("span", class_="Fz-xxs"):
+        text = span.get_text(strip=True)
+        if " - " in text:
+            return text.split(" - ")[0].upper()
+    return ""
+
+
+class PageFetchError(Exception):
+    """A players page still failed after every retry."""
 
 
 def get_html(pos, week, league_id, offset, html_file=None):
@@ -64,16 +106,35 @@ def get_html(pos, week, league_id, offset, html_file=None):
             return f.read()
     import requests
     url = PAGE_URL.format(league_id=league_id, pos=pos, week=week, offset=offset)
-    resp = requests.get(url, headers=HEADERS, timeout=30)
-    resp.raise_for_status()
-    return resp.text
+    delay = RETRY_BACKOFF
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=30)
+            resp.raise_for_status()
+            return resp.text
+        except requests.RequestException as exc:
+            if attempt == MAX_ATTEMPTS:
+                raise PageFetchError(
+                    f"{pos} page at offset {offset} failed "
+                    f"{MAX_ATTEMPTS}x: {exc}") from exc
+            print(f"[WARN] {pos} offset {offset}: {exc} "
+                  f"(attempt {attempt}/{MAX_ATTEMPTS}, retrying in {delay}s)", flush=True)
+            time.sleep(delay)
+            delay *= 2
 
 
 def fetch_position(pos, week, league_id, opponents):
     rows = []
     offset = 0
     while True:
-        html = get_html(pos, week, league_id, offset)
+        try:
+            html = get_html(pos, week, league_id, offset)
+        except PageFetchError as exc:
+            # Keep what this position already has instead of aborting the run
+            # and losing the positions that haven't been fetched yet.
+            print(f"[WARN] {exc} — keeping the {len(rows)} {pos}s collected so far.",
+                  flush=True)
+            break
         soup = BeautifulSoup(html, "html.parser")
         table = soup.find("table")
         if table is None:
@@ -91,11 +152,10 @@ def fetch_position(pos, week, league_id, opponents):
                 continue
             player_cell = tds[2]
             name_a = player_cell.find("a", class_="name")
-            teampos_span = player_cell.find("span", class_="Fz-xxs")
-            if name_a is None or teampos_span is None:
+            if name_a is None:
                 continue
             name = name_a.get_text(strip=True)
-            team = teampos_span.get_text(strip=True).split(" - ")[0].upper()
+            team = parse_team(player_cell)
             team = TEAM_ALIASES.get(team, team)
             opp = opponents.get(team, "")
 
@@ -111,40 +171,50 @@ def fetch_position(pos, week, league_id, opponents):
             rec_td = num(tds[19].get_text())
             fum_lost = num(tds[22].get_text())
 
+            if all(v is None for v in (pass_yds, pass_td, pass_int, rush_att,
+                                       rush_yds, rush_td, targets, rec, rec_yds,
+                                       rec_td, fum_lost)):
+                continue  # in Yahoo's database, but no projection this week
+
             if pos == "QB":
                 s = {"pass_yds": pass_yds, "pass_td": pass_td, "pass_int": pass_int,
                      "rush_yds": rush_yds, "rush_td": rush_td, "fum": fum_lost}
                 rows.append((scoring.qb_points(s), {
                     "QB": name, "Team": team, "Opp": opp,
                     "Pass Att": "", "Pass Comp": "",
-                    "Pass Yds": pass_yds, "Pass TD": pass_td, "Pass Int": pass_int,
-                    "Rush Att": rush_att, "Rush Yds": rush_yds, "Rush TD": rush_td,
-                    "Fumbles": fum_lost,
+                    "Pass Yds": cell(pass_yds), "Pass TD": cell(pass_td),
+                    "Pass Int": cell(pass_int), "Rush Att": cell(rush_att),
+                    "Rush Yds": cell(rush_yds), "Rush TD": cell(rush_td),
+                    "Fumbles": cell(fum_lost),
                 }))
             elif pos == "RB":
                 s = {"rush_yds": rush_yds, "rush_td": rush_td, "rec": rec,
                      "rec_yds": rec_yds, "rec_td": rec_td, "fum": fum_lost}
                 rows.append((scoring.ppr_points(s), {
                     "RB": name, "Team": team, "Opp": opp,
-                    "Rush Att": rush_att, "Rush Yds": rush_yds, "Rush TD": rush_td,
-                    "Targets": targets, "Rec": rec, "Rec Yds": rec_yds, "Rec TD": rec_td,
-                    "Fum": fum_lost,
+                    "Rush Att": cell(rush_att), "Rush Yds": cell(rush_yds),
+                    "Rush TD": cell(rush_td), "Targets": cell(targets),
+                    "Rec": cell(rec), "Rec Yds": cell(rec_yds),
+                    "Rec TD": cell(rec_td), "Fum": cell(fum_lost),
                 }))
             elif pos == "WR":
                 s = {"rush_yds": rush_yds, "rush_td": rush_td, "rec": rec,
                      "rec_yds": rec_yds, "rec_td": rec_td, "fum": fum_lost}
                 rows.append((scoring.ppr_points(s), {
                     "WR": name, "Team": team, "Opp": opp,
-                    "Targets": targets, "Rec": rec, "Rec Yds": rec_yds, "Rec TD": rec_td,
-                    "Rush Att": rush_att, "Rush Yds": rush_yds, "Rush TD": rush_td,
-                    "Fum": fum_lost,
+                    "Targets": cell(targets), "Rec": cell(rec),
+                    "Rec Yds": cell(rec_yds), "Rec TD": cell(rec_td),
+                    "Rush Att": cell(rush_att), "Rush Yds": cell(rush_yds),
+                    "Rush TD": cell(rush_td), "Fum": cell(fum_lost),
                 }))
             elif pos == "TE":
                 s = {"rec": rec, "rec_yds": rec_yds, "rec_td": rec_td, "fum": fum_lost}
                 rows.append((scoring.ppr_points(s), {
                     "TE": name, "Team": team, "Opp": opp,
-                    "Targets": targets, "Rec": rec, "Rec Yds": rec_yds, "Rec TD": rec_td,
-                    "Rush Att": rush_att, "Rush Yds": rush_yds, "Rush TD": rush_td,
+                    "Targets": cell(targets), "Rec": cell(rec),
+                    "Rec Yds": cell(rec_yds), "Rec TD": cell(rec_td),
+                    "Rush Att": cell(rush_att), "Rush Yds": cell(rush_yds),
+                    "Rush TD": cell(rush_td),
                 }))
 
         if len(trs) < 25:

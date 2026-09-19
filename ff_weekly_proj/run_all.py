@@ -26,13 +26,15 @@ FETCHERS = [
 ]
 
 # Minimum expected rows per position — roughly half of a normal week's count.
-# Fantasy Sharks and FTN are intentionally low because they're often blocked
-# or unavailable from CI (datacenter IP blocks, auth issues).
+# Fantasy Sharks is intentionally low because it's often blocked from CI
+# (datacenter IP blocks). Yahoo's are measured against its post-filter counts:
+# the fetcher drops players Yahoo lists with no projection for the week, which
+# takes it from 140/264/465/246 raw down to roughly 32/111/165/106.
 MIN_ROWS = {
     "espn":          {"qb": 20, "rb": 35, "wr": 60, "te": 25},
     "cbs":           {"qb": 20, "rb": 30, "wr": 30, "te": 25},
     "ftn":           {"qb": 10, "rb": 25, "wr": 40, "te": 15},
-    "yahoo":         {"qb": 40, "rb": 70, "wr": 120, "te": 60},
+    "yahoo":         {"qb": 15, "rb": 55, "wr": 80, "te": 50},
     "fantasysharks": {"qb": 15, "rb": 30, "wr": 45, "te": 25},
     "draftsharks":   {"qb": 15, "rb": 35, "wr": 55, "te": 25},
     "fantasydata":   {"qb": 25, "rb": 45, "wr": 65, "te": 35},
