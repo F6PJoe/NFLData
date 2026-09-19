@@ -43,7 +43,7 @@ PROJECTIONS_URL = (
 HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
                          "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
 
-TEAM_ALIASES = {"WAS": "WSH", "LVR": "LV", "JAC": "JAX"}
+TEAM_ALIASES = {"WAS": "WSH", "LVR": "LV", "JAC": "JAX", "LA": "LAR"}
 
 OUT_COLUMNS = {
     "QB": ["QB", "Team", "Opp", "Pass Att", "Pass Comp", "Pass Yds", "Pass TD",
@@ -87,9 +87,30 @@ def get_token():
 
 
 def num(value):
+    """Parse an API stat value. None when the field is absent or null."""
     if value is None or value == "":
-        return 0.0
+        return None
     return float(value)
+
+
+def stat(row, key):
+    """Read a stat key the API may omit.
+
+    The projections payload is position-sparse: QB rows carry only passing and
+    rushing keys, RB/WR/TE rows only receiving and rushing, and even within one
+    position a key is dropped for players projected to have no such usage.
+    """
+    return num(row.get(key))
+
+
+def cell(value):
+    """Format a stat for the CSV -- blank when this source doesn't report it.
+
+    build_consensus averages each column across the sources that supply it, so
+    a blank abstains from the consensus while a 0 would drag every player's
+    average toward zero.
+    """
+    return "" if value is None else scoring.round2(value)
 
 
 def fetch_position(token, pos, week, json_dir=None):
@@ -126,72 +147,74 @@ def build_record(pos, row, opponents):
     team = TEAM_ALIASES.get(alias, alias)
     opp = opponents.get(team, "")
 
-    pass_yds = num(row["passingYards"])
-    pass_td = num(row["passingTouchdowns"])
-    pass_int = num(row["passingInterceptions"])
-    rush_att = num(row["rushingAttempts"])
-    rush_yds = num(row["rushingYards"])
-    rush_td = num(row["rushingTouchdowns"])
-    targets = num(row["receivingTargets"])
-    rec = num(row["receivingReceptions"])
-    rec_yds = num(row["receivingYards"])
-    rec_td = num(row["receivingTouchdowns"])
-    fum = num(row["fumblesLost"])
+    pass_yds = stat(row, "passingYards")
+    pass_td = stat(row, "passingTouchdowns")
+    pass_int = stat(row, "passingInterceptions")
+    rush_att = stat(row, "rushingAttempts")
+    rush_yds = stat(row, "rushingYards")
+    rush_td = stat(row, "rushingTouchdowns")
+    targets = stat(row, "receivingTargets")
+    rec = stat(row, "receivingReceptions")
+    rec_yds = stat(row, "receivingYards")
+    rec_td = stat(row, "receivingTouchdowns")
+    # Fantasy Life no longer projects fumbles at all; kept so the column fills
+    # itself back in if they bring the field back.
+    fum = stat(row, "fumblesLost")
 
     if pos == "QB":
         s = {"pass_yds": pass_yds, "pass_td": pass_td, "pass_int": pass_int,
              "rush_yds": rush_yds, "rush_td": rush_td, "fum": fum}
         return scoring.qb_points(s), {
             "QB": name, "Team": team, "Opp": opp,
-            "Pass Att": scoring.round2(num(row["passingAttempts"])),
-            "Pass Comp": scoring.round2(num(row["passingCompletions"])),
-            "Pass Yds": scoring.round2(pass_yds),
-            "Pass TD": scoring.round2(pass_td),
-            "Pass Int": scoring.round2(pass_int),
-            "Rush Att": scoring.round2(rush_att),
-            "Rush Yds": scoring.round2(rush_yds),
-            "Rush TD": scoring.round2(rush_td),
-            "Fumbles": scoring.round2(fum),
+            "Pass Att": cell(stat(row, "passingAttempts")),
+            "Pass Comp": cell(stat(row, "passingCompletions")),
+            "Pass Yds": cell(pass_yds),
+            "Pass TD": cell(pass_td),
+            "Pass Int": cell(pass_int),
+            "Rush Att": cell(rush_att),
+            "Rush Yds": cell(rush_yds),
+            "Rush TD": cell(rush_td),
+            "Fumbles": cell(fum),
         }
     elif pos == "RB":
         s = {"rush_yds": rush_yds, "rush_td": rush_td, "rec": rec,
              "rec_yds": rec_yds, "rec_td": rec_td, "fum": fum}
         return scoring.ppr_points(s), {
             "RB": name, "Team": team, "Opp": opp,
-            "Rush Att": scoring.round2(rush_att),
-            "Rush Yds": scoring.round2(rush_yds),
-            "Rush TD": scoring.round2(rush_td),
-            "Targets": scoring.round2(targets),
-            "Rec": scoring.round2(rec),
-            "Rec Yds": scoring.round2(rec_yds),
-            "Rec TD": scoring.round2(rec_td),
-            "Fum": scoring.round2(fum),
+            "Rush Att": cell(rush_att),
+            "Rush Yds": cell(rush_yds),
+            "Rush TD": cell(rush_td),
+            "Targets": cell(targets),
+            "Rec": cell(rec),
+            "Rec Yds": cell(rec_yds),
+            "Rec TD": cell(rec_td),
+            "Fum": cell(fum),
         }
     elif pos == "WR":
         s = {"rush_yds": rush_yds, "rush_td": rush_td, "rec": rec,
              "rec_yds": rec_yds, "rec_td": rec_td, "fum": fum}
         return scoring.ppr_points(s), {
             "WR": name, "Team": team, "Opp": opp,
-            "Targets": scoring.round2(targets),
-            "Rec": scoring.round2(rec),
-            "Rec Yds": scoring.round2(rec_yds),
-            "Rec TD": scoring.round2(rec_td),
-            "Rush Att": scoring.round2(rush_att),
-            "Rush Yds": scoring.round2(rush_yds),
-            "Rush TD": scoring.round2(rush_td),
-            "Fum": scoring.round2(fum),
+            "Targets": cell(targets),
+            "Rec": cell(rec),
+            "Rec Yds": cell(rec_yds),
+            "Rec TD": cell(rec_td),
+            "Rush Att": cell(rush_att),
+            "Rush Yds": cell(rush_yds),
+            "Rush TD": cell(rush_td),
+            "Fum": cell(fum),
         }
     elif pos == "TE":
         s = {"rec": rec, "rec_yds": rec_yds, "rec_td": rec_td, "fum": fum}
         return scoring.ppr_points(s), {
             "TE": name, "Team": team, "Opp": opp,
-            "Targets": scoring.round2(targets),
-            "Rec": scoring.round2(rec),
-            "Rec Yds": scoring.round2(rec_yds),
-            "Rec TD": scoring.round2(rec_td),
-            "Rush Att": scoring.round2(rush_att),
-            "Rush Yds": scoring.round2(rush_yds),
-            "Rush TD": scoring.round2(rush_td),
+            "Targets": cell(targets),
+            "Rec": cell(rec),
+            "Rec Yds": cell(rec_yds),
+            "Rec TD": cell(rec_td),
+            "Rush Att": cell(rush_att),
+            "Rush Yds": cell(rush_yds),
+            "Rush TD": cell(rush_td),
         }
 
 
