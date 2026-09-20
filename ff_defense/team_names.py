@@ -3,11 +3,12 @@ Shared team-name/abbreviation normalization for the ff_defense fetchers.
 
 The Live tab's Team column (B) holds full nicknames ("Buccaneers"); the
 Opp column (E) holds abbreviations, sometimes "@"-prefixed ("@KC"). Each
-outside source has its own quirks on top of that -- FTN uses "JAX" for
-the Jaguars, eatdrinkandsleepfootball.com's team-page links use stale
-city-based codes (stl/sd/oak) left over from past relocations even
-though the displayed team names are current. normalize() takes any of
-these forms and returns one consistent abbreviation to key lookups by.
+outside source has its own quirks on top of that -- FTN and nflverse both
+use "JAX" for the Jaguars, eatdrinkandsleepfootball.com's team-page links
+use stale city-based codes (stl/sd/oak) left over from past relocations
+even though the displayed team names are current, and nflverse uses "LA"
+for the Rams (not "LAR"). normalize() takes any of these forms and
+returns one consistent abbreviation to key lookups by.
 """
 
 NAME_TO_ABBR = {
@@ -21,7 +22,7 @@ NAME_TO_ABBR = {
     "49ers": "SF", "Buccaneers": "TB", "Titans": "TEN", "Commanders": "WAS",
 }
 
-TEAM_ALIASES = {"JAX": "JAC", "STL": "LAR", "SD": "LAC", "OAK": "LV"}
+TEAM_ALIASES = {"JAX": "JAC", "STL": "LAR", "SD": "LAC", "OAK": "LV", "LA": "LAR"}
 
 
 def normalize(name_or_abbr):
