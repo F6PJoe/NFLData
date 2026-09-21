@@ -50,6 +50,38 @@ Or just `python run_all.py` / `python run_frequent.py` (week auto-detected).
 B that every other push matches its rows against. `finalize_live_sheet.py`
 must run LAST — see below.
 
+## Two runs a week, and why the split is what it is
+Both are GitHub Actions workflows on `workflow_dispatch`, triggered by
+cron-job.org (no native `schedule:` — see the workflow comments).
+
+| | `run_all.py` / `defense_full_refresh.yml` | `run_frequent.py` / `defense_frequent_refresh.yml` |
+|---|---|---|
+| When | Tuesday afternoon, once | Wednesday–Sunday, repeatedly |
+| Columns | all of them, + Reddit post | F (odds), C/D/K (Yahoo), J (ECR) |
+
+**The Tuesday run must land first each week.** It writes the team list in
+column B, and every mid-week push matches its rows against that list — so a
+mid-week run that goes first just refreshes last week's teams.
+
+Four things are **Tuesday-only**, and three of them are not just about
+saving time:
+- **Team list + matchups (B/E).** Opponents don't change once a slate is
+  set; a flexed game moves the kickoff, not who's playing whom.
+- **Def Rating (G) and Opp Off EPA (H).** These are season-to-date per-play
+  numbers. Refreshing on a Friday folds in Thursday night's game — and
+  *only* Thursday night's game, so 2 of 32 teams get rated on a sample the
+  other 30 don't have. Freezing at Tuesday keeps every team's rating over
+  the same set of completed weeks, which is what a 1–32 ranking across
+  teams actually requires. This is a correctness constraint, not a
+  performance one; don't "improve" it by refreshing more often.
+- **Pressure rate (I).** Weekly-only at the source.
+- **The Reddit post.** Joe posts the top 10 once.
+
+`finalize_live_sheet.py` needs no `schedule.csv` on a mid-week run: it
+falls back to the sheet's own row count, which Tuesday already trimmed to
+this week's team count. That's why a fresh CI checkout with no CSVs on
+disk still finalizes correctly.
+
 Two row-matching patterns are used throughout, per column:
 - **Own team** (columns B, C, D, G, J, K): matched by the row's own Team (B).
 - **Opponent** (columns F, H, I): matched by looking up the row's Opp (E)

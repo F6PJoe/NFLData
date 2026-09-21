@@ -1,0 +1,88 @@
+name: Defense Stream-O-Matic - Full Refresh
+#
+# The TUESDAY run: once a week, Tuesday afternoon, scheduled from
+# cron-job.org. Tuesday is the week boundary current_week.py uses, so this
+# is the first run of each new NFL week.
+#
+# It does everything -- and it's the ONLY run that does these four:
+#   * team list + matchups (columns B/E) -- establishes the rows every
+#     other push matches against, and trims bye-week rows
+#   * Def Rating (column G) and Opp Off EPA (column H) -- season-to-date
+#     per-play numbers, frozen here so every team's rating covers the same
+#     set of completed weeks (see run_frequent.py's docstring)
+#   * pressure rate (column I)
+# plus the Reddit post markdown for Joe's weekly top-10 thread.
+#
+# It must land BEFORE the week's first mid-week refresh, since that one
+# assumes the team list in column B is already this week's.
+#
+# This used to need FTN and Subvertadown logins, which is why it was a
+# manual, run-it-from-home job -- FTN's login was routinely blocked from
+# GitHub's datacenter IPs. Both sources are gone, so the only credentials
+# left are the odds API key and the Google service account and there's no
+# longer any reason not to run it here.
+#
+# No native `schedule:` trigger, matching every other workflow in this
+# repo -- GitHub's own scheduler has been unreliable here before. The
+# Tuesday cadence is driven by cron-job.org hitting workflow_dispatch, same
+# as the ADP/projections workflows. Do NOT add a `schedule:` trigger here
+# without checking cron-job.org first, or this could double-run.
+#
+# --week is optional -- omit it to auto-detect from today's date
+# (current_week.py), or pass an explicit week to override.
+
+on:
+  workflow_dispatch:
+    inputs:
+      week:
+        description: "NFL week (leave blank to auto-detect from today's date)"
+        required: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r ff_defense/requirements.txt
+
+      - name: Write credentials
+        env:
+          ODDS_API_KEY:           ${{ secrets.ODDS_API_KEY }}
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+        run: |
+          cat > ff_defense/.env <<EOF
+          ODDS_API_KEY=${ODDS_API_KEY}
+          EOF
+
+          # Service account JSON goes at the repo root -- every ff_defense
+          # script points at Path(__file__).parent.parent for it.
+          echo "${GOOGLE_SERVICE_ACCOUNT}" > triple-baton-456523-e4-b9ec3cbd6e3d.json
+
+      - name: Run full weekly refresh
+        working-directory: ff_defense
+        run: |
+          if [ -n "${{ github.event.inputs.week }}" ]; then
+            python run_all.py --week "${{ github.event.inputs.week }}"
+          else
+            python run_all.py
+          fi
+
+      - name: Upload CSVs and Reddit post as artifacts (for debugging / copy-paste)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: defense-full-refresh-output
+          path: |
+            ff_defense/*.csv
+            ff_defense/reddit_post.md
+          retention-days: 14

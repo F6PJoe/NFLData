@@ -1,15 +1,24 @@
 name: Defense Stream-O-Matic - Frequent Refresh
 #
-# Runs everything EXCEPT Sharp pressure rate (weekly-only -- see
-# run_frequent.py). Meant to run repeatedly through the week -- per Joe's
-# plan, Wednesday morning through Sunday -- to keep the schedule, the
-# nflverse-derived defense rating and opponent-offense EPA, live odds,
-# Yahoo roster/start%/projection, and FantasyPros ECR current.
+# The MID-WEEK run: Wednesday morning through Sunday, as often as Joe
+# wants. Only the columns that actually move day to day -- live odds,
+# Yahoo roster/start%/projection, FantasyPros ECR -- then re-score and
+# re-sort.
+#
+# Everything else is deliberately Tuesday-only and lives in
+# defense_full_refresh.yml: the team list and matchups (opponents don't
+# change once the slate is set), Def Rating and Opp Off EPA (refreshing
+# mid-week would fold in Thursday night's game for 2 teams and nobody
+# else -- see run_frequent.py's docstring), and pressure rate.
+#
+# ORDER MATTERS between the two workflows: the Tuesday full refresh has to
+# land first each week, because it's what writes the team list in column B
+# that every push here matches its rows against. If this runs first on a
+# Wednesday, it refreshes LAST week's teams.
 #
 # Needs NO login credentials beyond the odds API key and the Google
-# service account: the team list, matchups, and both EPA columns come
-# from nflverse's public release files. Subvertadown and FTN are gone --
-# their secrets are no longer written here, and nothing reads them.
+# service account -- everything self-owned comes from nflverse's public
+# release files.
 #
 # No native `schedule:` trigger, matching every other workflow in this
 # repo -- GitHub's own scheduler has been unreliable here before. Wire
