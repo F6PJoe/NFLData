@@ -23,9 +23,10 @@ if they were this week's. Now filtered to current_week.week_window_utc(),
 the Tue-to-Tue ET window that current_week() itself uses.
 
 Teams whose game has already kicked off simply won't appear in the
-output. That's expected and correct -- push_implied_totals_to_sheet.py
-keeps their existing value rather than blanking it, so a Thursday-night
-team holds its pre-kickoff number for the rest of the week.
+output -- expected and correct. push_implied_totals_to_sheet.py banks
+every fetched value on the sheet's IMP tab, so those teams are filled
+back in from the last number seen before kickoff (which is the final,
+correct one for that week) and the ranking still covers the full slate.
 
 Implied total = O/U / 2 - team's own spread / 2 (spread is negative for
 the favorite) -- verified against the eatdrinkandsleepfootball numbers
@@ -52,14 +53,19 @@ import datetime
 
 import requests
 
-from current_week import week_window_utc
+from current_week import current_week, week_window_utc
 from team_names import nickname_to_abbr
 
 ODDS_URL = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/"
 PREFERRED_BOOKMAKER = "fanduel"
 GAMES_PER_WEEK = 16
 
-FIELDNAMES = ["Rank", "Team", "ImpliedTotal", "Spread", "OU", "Opponent"]
+# No Rank column on purpose: a rank is only meaningful across the FULL
+# slate, and late in the week this fetch only sees the games that haven't
+# kicked off yet. push_implied_totals_to_sheet.py merges these live values
+# with the ones banked on the sheet's IMP tab and ranks the complete set
+# there. This file is just "what the book says right now."
+FIELDNAMES = ["Week", "Team", "ImpliedTotal", "Spread", "OU", "Opponent"]
 
 
 def _load_dotenv(path=".env"):
@@ -105,7 +111,7 @@ def fetch_games(week=None):
     return in_week
 
 
-def build_rows(games):
+def build_rows(games, week):
     rows = []
     for game in games:
         book = _pick_bookmaker(game)
@@ -124,6 +130,7 @@ def build_rows(games):
             if spread is None:
                 continue
             rows.append({
+                "Week": week,
                 "Team": nickname_to_abbr(team),
                 "ImpliedTotal": round(ou / 2 - spread / 2, 2),
                 "Spread": spread,
@@ -132,8 +139,6 @@ def build_rows(games):
             })
 
     rows.sort(key=lambda r: r["ImpliedTotal"], reverse=True)  # highest first
-    for i, r in enumerate(rows, start=1):
-        r["Rank"] = i
     return rows
 
 
@@ -151,28 +156,25 @@ def main():
                      help="NFL week (default: auto-detected from today's date)")
     args = ap.parse_args()
 
-    games = fetch_games(args.week)
-    rows = build_rows(games)
+    week = args.week or current_week()
+    games = fetch_games(week)
+    rows = build_rows(games, week)
     if not rows:
-        raise SystemExit(
-            "No games with spreads/totals found in this week's window -- "
-            "either the whole slate has already been played or the API "
-            "returned nothing usable."
-        )
+        # Not fatal: every game this week may simply have kicked off
+        # already. The push still produces a full ranking from the IMP
+        # tab's banked values, so write the (empty) file and let it.
+        print("No live lines in this week's window -- the whole slate has "
+              "already kicked off. The push will rank entirely from the "
+              "IMP tab's banked values.")
 
-    # A partial slate is NORMAL from Thursday night onward: the API drops
-    # games once they kick off. Those teams keep their existing sheet value
-    # (push_implied_totals_to_sheet.py preserves it), so this is a note,
-    # not an error.
+    # A partial slate is NORMAL from Thursday night onward -- the API drops
+    # each game at kickoff. The push fills those teams in from the IMP tab.
     if len(rows) < 2 * GAMES_PER_WEEK:
-        played = 2 * GAMES_PER_WEEK - len(rows)
-        print(f"NOTE: {len(rows)} of {2 * GAMES_PER_WEEK} team slots have live lines; "
-              f"~{played} team(s) have already kicked off and will keep their "
-              "existing sheet value.")
+        print(f"NOTE: {len(rows)} of {2 * GAMES_PER_WEEK} team slots have live "
+              "lines; the rest have kicked off and will come from the IMP tab.")
 
     write_csv(rows, args.out)
-    print(f"Wrote {len(rows)} teams to {args.out} "
-          "(rank 1 = highest implied total, 32 = lowest).")
+    print(f"Wrote {len(rows)} teams to {args.out} (week {week}, raw values, unranked).")
 
 
 if __name__ == "__main__":
