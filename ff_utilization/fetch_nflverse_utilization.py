@@ -188,21 +188,11 @@ def match_prefix(entries, first_name):
     return best
 
 
-def gamebook_snaps(year, week, gsis, away, home, refresh=False):
-    """-> {(team, initial, surname): offensive snaps} for one game."""
+def _parse_gamebook_pdf(path, away, home):
     from pypdf import PdfReader
 
-    dest = CACHE / "gamebooks" / f"{year}_w{week:02d}_{gsis}.pdf"
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    if not dest.exists() or refresh:
-        url = GAMEBOOK.format(year=year, week=week, gsis=gsis)
-        req = urllib.request.Request(url, headers={"User-Agent": UA})
-        with urllib.request.urlopen(req, timeout=90) as r:
-            dest.write_bytes(r.read())
-        time.sleep(0.8)
-
     text = ""
-    for page in PdfReader(str(dest)).pages:
+    for page in PdfReader(str(path)).pages:
         t = page.extract_text() or ""
         if "Playtime" in t or text:
             text += t + "\n"
@@ -227,9 +217,55 @@ def gamebook_snaps(year, week, gsis, away, home, refresh=False):
     return out
 
 
-def collect_gamebook_snaps(year, wmin, wmax, refresh=False):
-    """-> ({(team,init,surname): (snaps, pct)}, n_games_ok, n_games_failed)"""
-    games_path = fetch("games", year, refresh=False)
+def gamebook_snaps(year, week, gsis, away, home, force=False):
+    """-> {(team, initial, surname): offensive snaps} for one game.
+
+    Per-game PDF, cached by content validity rather than mere existence: the
+    Playtime Percentage section (what this actually parses) is added to the
+    PDF LATER than the PDF itself becomes downloadable, so an early fetch can
+    save a real, 200-OK file that still parses to nothing. Treating "the file
+    exists" as "done" would permanently cache that empty result. Instead: a
+    cached PDF that already parses to real snap rows is trusted with no
+    network call (a posted gamebook doesn't get revised, so this is safe to
+    keep forever); a cached PDF that parses to nothing is retried on every
+    call until it succeeds. `force=True` bypasses the cache entirely for the
+    rare case of a suspected-bad download.
+    """
+    dest = CACHE / "gamebooks" / f"{year}_w{week:02d}_{gsis}.pdf"
+    dest.parent.mkdir(parents=True, exist_ok=True)
+
+    if dest.exists() and not force:
+        cached = _parse_gamebook_pdf(dest, away, home)
+        if cached:
+            return cached
+
+    url = GAMEBOOK.format(year=year, week=week, gsis=gsis)
+    req = urllib.request.Request(url, headers={"User-Agent": UA})
+    with urllib.request.urlopen(req, timeout=90) as r:
+        dest.write_bytes(r.read())
+    time.sleep(0.8)
+
+    return _parse_gamebook_pdf(dest, away, home)
+
+
+def collect_gamebook_snaps(year, wmin, wmax, refresh_schedule=False):
+    """-> ({(team,init,surname): (snaps, pct)}, n_games_ok, n_games_failed)
+
+    `refresh_schedule` controls only the games.csv fetch (see the comment
+    below) -- it does NOT propagate to the per-game gamebook PDFs. Those have
+    their own, separate caching policy now (content-validity, not a shared
+    refresh flag): see gamebook_snaps()'s docstring.
+    """
+    # games.csv lists the FULL season's schedule from day one, but the "gsis"
+    # column (the game id gamebook fetches key off) is filled in progressively
+    # per game, not all at once -- a week's gsis can still be blank days before
+    # kickoff. Hardcoding refresh=False here (on the "the schedule doesn't
+    # change" theory) silently hid an entire completed week: the cached copy
+    # from right after week 1 had week 2's gsis columns still blank, so week 2
+    # games were filtered out before gamebook fetching even started -- no
+    # error, coverage() just reported week 1's 16 games and stopped. Now
+    # follows the same refresh policy as players/snaps/pbp/rosters.
+    games_path = fetch("games", year, refresh=refresh_schedule)
     with open(games_path, encoding="utf-8") as fh:
         games = [g for g in csv.DictReader(fh)
                  if g["season"] == str(year) and g["game_type"] == "REG"
@@ -239,7 +275,7 @@ def collect_gamebook_snaps(year, wmin, wmax, refresh=False):
     for g in games:
         try:
             snaps.update(gamebook_snaps(year, int(num(g["week"])), g["gsis"],
-                                        g["away_team"], g["home_team"], refresh))
+                                        g["away_team"], g["home_team"]))
             ok += 1
         except Exception as exc:
             bad += 1
@@ -259,7 +295,7 @@ def coverage(year, wmin, wmax):
     import io
     from pypdf import PdfReader
 
-    games_path = fetch("games", year)
+    games_path = fetch("games", year, refresh=True)
     with open(games_path, encoding="utf-8") as fh:
         games = [g for g in csv.DictReader(fh)
                  if g["season"] == str(year) and g["game_type"] == "REG"

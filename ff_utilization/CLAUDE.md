@@ -190,6 +190,35 @@ tgt%, EZ, EZ%, ADOT.
    rosters by default (`use_cache=False` in the function, no CLI flag needed).
    `--use-cache` opts back into the stale-allowed behavior for fast local
    iteration on merge logic only -- **never pass it for a real weekly run.**
+5. **Same bug, opposite direction, in `games.csv`.** Found immediately
+   after fixing #4: `games.csv` lists the full season's schedule from day
+   one, but its `gsis` column (the game id gamebook fetching keys off) fills
+   in progressively per game, not all at once. `collect_gamebook_snaps()`
+   hardcoded `fetch("games", year, refresh=False)` on the theory that "the
+   schedule doesn't change" -- true for the matchups, false for `gsis`. A
+   cache from right after week 1 had week 2's `gsis` cells still blank, so
+   `wmin <= week <= wmax` filtering silently dropped 15 already-completed
+   week 2 games before gamebook fetching even started -- no error,
+   `--coverage` just quietly reported week 1's 16 games and stopped, as if
+   week 2 hadn't happened. Fixed the same way as #4: `games` now follows the
+   same always-refresh policy as players/snaps/pbp/rosters.
+
+   Fixing #5 immediately created a new, opposite problem: with `games`
+   forced fresh, `gamebook_snaps()`'s per-game PDF fetch was *also* being
+   re-triggered on every run (it received the same blanket refresh flag),
+   which meant re-downloading all 30+ already-final gamebook PDFs every
+   single time instead of just the one still-pending game -- correct, but
+   needlessly slow. Fixed by decoupling the two caching policies entirely:
+   `gamebook_snaps()` now caches by **content validity**, not existence or a
+   shared flag -- if the saved PDF already parses to real snap rows, it's
+   trusted with zero network calls (a posted gamebook doesn't get revised,
+   so this is safe indefinitely); if it parses to nothing (fetched before
+   the Playtime section existed, same lag `coverage()` warns about), it's
+   retried from scratch on every call until it succeeds. Verified directly:
+   ran the full fetch twice back to back, confirmed via `stat`'s mtime that
+   an already-good week 1 gamebook PDF was byte-identical and untouched
+   both times, while the one not-yet-posted game (this week's MNF) kept
+   re-attempting and correctly reporting the failure each run.
 
 ## Parallel build: `fetch_nflverse_utilization.py` (official-basis)
 Second pipeline, run alongside the FL one, same column names and file shape so
