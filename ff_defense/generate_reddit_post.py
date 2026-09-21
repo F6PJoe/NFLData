@@ -13,8 +13,19 @@ rendering, which returns the already-percent-formatted strings ("25%") set
 up in push_yahoo_def_to_sheet.py -- no re-formatting needed here. Opp gets
 a space inserted after "@" ("@TEN" -> "@ TEN") to match Joe's own example.
 
+The post is written three places, because the Tuesday run now happens on
+GitHub where a local file is useless: a local reddit_post.md, stdout (so
+it's in the Actions log), and a "Reddit" tab on the sheet itself -- which
+is the one Joe actually copies from.
+
+On that tab the body is written ONE LINE PER ROW, not as a single
+multi-line cell. A cell containing newlines gets quote-wrapped when you
+copy it out to a plain text field like Reddit's; a column of one-line
+cells pastes clean.
+
 Usage:
-    python generate_reddit_post.py --week 2   # -> reddit_post.md
+    python generate_reddit_post.py --week 2   # -> reddit_post.md + sheet
+    python generate_reddit_post.py --week 2 --no-sheet
 """
 
 import argparse
@@ -23,6 +34,7 @@ from pathlib import Path
 SHEET_ID = "1lTRoatl-YQHlv78YeisG7eFyz2xqaConGUoPo4medpQ"
 SERVICE_ACCT = str(Path(__file__).parent.parent / "triple-baton-456523-e4-b9ec3cbd6e3d.json")
 TAB = "Live"
+POST_TAB = "Reddit"
 TOOL_URL = "https://fantasysixpack.net/fantasy-football-defense-stream-o-matic/"
 
 
@@ -54,10 +66,57 @@ def build_post(week, rows):
     return title, "\n".join(lines)
 
 
+def push_to_sheet(sheet, title, body):
+    """Publish the post to its own tab: title in A1, body from A3 down."""
+    meta = sheet.get(spreadsheetId=SHEET_ID).execute()
+    tabs = {sh["properties"]["title"]: sh["properties"]["sheetId"]
+            for sh in meta["sheets"]}
+
+    if POST_TAB not in tabs:
+        resp = sheet.batchUpdate(spreadsheetId=SHEET_ID, body={"requests": [
+            {"addSheet": {"properties": {"title": POST_TAB}}}
+        ]}).execute()
+        gid = resp["replies"][0]["addSheet"]["properties"]["sheetId"]
+        # Wide column A -- these lines are long and the default width makes
+        # the post unreadable without clicking into every cell.
+        sheet.batchUpdate(spreadsheetId=SHEET_ID, body={"requests": [
+            {"updateDimensionProperties": {
+                "range": {"sheetId": gid, "dimension": "COLUMNS",
+                          "startIndex": 0, "endIndex": 1},
+                "properties": {"pixelSize": 720}, "fields": "pixelSize"}}
+        ]}).execute()
+        print(f"Created '{POST_TAB}' tab.")
+
+    # Clear first: last week's post may have had more rows than this one,
+    # and leftover lines at the bottom would get copied along with it.
+    sheet.values().clear(spreadsheetId=SHEET_ID, range=f"{POST_TAB}!A:C",
+                         body={}).execute()
+
+    values = [[title], [""]] + [[line] for line in body.splitlines()]
+    sheet.values().update(
+        spreadsheetId=SHEET_ID, range=f"{POST_TAB}!A1",
+        valueInputOption="RAW", body={"values": values},
+    ).execute()
+
+    # Off to the side so it never gets caught in a column-A copy.
+    sheet.values().update(
+        spreadsheetId=SHEET_ID, range=f"{POST_TAB}!C1",
+        valueInputOption="RAW",
+        body={"values": [["Post title = A1. Post body = A3 down."],
+                         ["Select the cells, copy, paste into Reddit."],
+                         ["Overwritten by every Tuesday full run."]]},
+    ).execute()
+
+    print(f"Published post to the '{POST_TAB}' tab "
+          f"(title A1, body A3:A{len(values)}).")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--week", type=int, required=True)
     ap.add_argument("--out", default="reddit_post.md")
+    ap.add_argument("--no-sheet", action="store_true",
+                    help="write the local file only, don't touch the Reddit tab")
     args = ap.parse_args()
 
     from google.oauth2.service_account import Credentials
@@ -81,6 +140,10 @@ def main():
         f.write(f"{title}\n\n{body}\n")
 
     print(f"Wrote Reddit post markdown to {args.out}")
+
+    if not args.no_sheet:
+        push_to_sheet(sheet, title, body)
+
     print()
     print("=" * 60)
     print("TITLE:", title)

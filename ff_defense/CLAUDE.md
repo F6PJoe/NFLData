@@ -77,6 +77,19 @@ saving time:
 - **Pressure rate (I).** Weekly-only at the source.
 - **The Reddit post.** Joe posts the top 10 once.
 
+`generate_reddit_post.py` writes the post three places: a local
+`reddit_post.md`, stdout (so it's in the Actions log), and a **"Reddit" tab
+on the sheet**, which is what Joe actually copies from now that the Tuesday
+run happens on GitHub and a file on the runner is useless. Title in A1,
+body from A3 down, usage note in C1:C3 — off to the side so it can't get
+caught in a column-A copy. The tab is created on first run and cleared
+before each write, so a shorter post can't leave last week's rows dangling
+below it.
+
+The body is written **one line per row, not one multi-line cell**: a cell
+containing newlines gets quote-wrapped when you copy it into a plain text
+field like Reddit's, while a column of one-line cells pastes clean.
+
 `finalize_live_sheet.py` needs no `schedule.csv` on a mid-week run: it
 falls back to the sheet's own row count, which Tuesday already trimmed to
 this week's team count. That's why a fresh CI checkout with no CSVs on
