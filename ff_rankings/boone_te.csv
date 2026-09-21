@@ -1,0 +1,61 @@
+Rank,Pos Rank,Player,Team,Position,Bye,Tier,Rank Min,Rank Max,Rank Std
+1,TE1,Brock Bowers,LV,TE,13,1,1,1,0.00
+2,TE2,Trey McBride,ARI,TE,14,1,2,2,0.00
+3,TE3,Colston Loveland,CHI,TE,10,1,3,3,0.00
+4,TE4,Tyler Warren,IND,TE,13,1,4,4,0.00
+5,TE5,Tucker Kraft,GB,TE,11,1,5,5,0.00
+6,TE6,Harold Fannin Jr.,CLE,TE,11,2,6,6,0.00
+7,TE7,Sam LaPorta,DET,TE,6,2,7,7,0.00
+8,TE8,Kyle Pitts Sr.,ATL,TE,11,2,8,8,0.00
+9,TE9,George Kittle,SF,TE,8,2,9,9,0.00
+10,TE10,Dalton Kincaid,BUF,TE,7,2,10,10,0.00
+11,TE11,Travis Kelce,KC,TE,5,2,11,11,0.00
+12,TE12,Isaiah Likely,NYG,TE,8,3,12,12,0.00
+13,TE13,Dallas Goedert,PHI,TE,10,3,13,13,0.00
+14,TE14,Mark Andrews,BAL,TE,13,3,14,14,0.00
+15,TE15,Chig Okonkwo,WAS,TE,7,3,15,15,0.00
+16,TE16,Brenton Strange,JAC,TE,7,3,16,16,0.00
+17,TE17,Jake Ferguson,DAL,TE,14,3,17,17,0.00
+18,TE18,Hunter Henry,NE,TE,11,3,18,18,0.00
+19,TE19,Oronde Gadsden II,LAC,TE,7,3,19,19,0.00
+20,TE20,Kenyon Sadiq,NYJ,TE,13,4,20,20,0.00
+21,TE21,AJ Barner,SEA,TE,11,4,21,21,0.00
+22,TE22,Dalton Schultz,HOU,TE,8,4,22,22,0.00
+23,TE23,Juwan Johnson,NO,TE,8,4,23,23,0.00
+24,TE24,T.J. Hockenson,MIN,TE,6,4,24,24,0.00
+25,TE25,Gunnar Helm,TEN,TE,9,4,25,25,0.00
+26,TE26,Greg Dulcich,MIA,TE,6,4,26,26,0.00
+27,TE27,Terrance Ferguson,LAR,TE,11,4,27,27,0.00
+28,TE28,Eli Stowers,PHI,TE,10,4,28,28,0.00
+29,TE29,Darnell Washington,PIT,TE,9,4,29,29,0.00
+30,TE30,Pat Freiermuth,PIT,TE,9,4,30,30,0.00
+31,TE31,Cade Otton,TB,TE,10,5,31,31,0.00
+32,TE32,David Njoku,LAC,TE,7,5,32,32,0.00
+33,TE33,Mason Taylor,NYJ,TE,13,5,33,33,0.00
+34,TE34,Erick All Jr.,CIN,TE,6,5,34,34,0.00
+35,TE35,Mike Gesicki,CIN,TE,6,5,35,35,0.00
+36,TE36,Evan Engram,DEN,TE,10,5,36,36,0.00
+37,TE37,Darren Waller,FA,TE,,5,37,37,0.00
+38,TE38,Michael Mayer,LV,TE,13,5,38,38,0.00
+39,TE39,Theo Johnson,NYG,TE,8,5,39,39,0.00
+40,TE40,Jake Tonges,SF,TE,8,5,40,40,0.00
+41,TE41,Tyler Higbee,LAR,TE,11,5,41,41,0.00
+42,TE42,Elijah Arroyo,SEA,TE,11,5,42,42,0.00
+43,TE43,Oscar Delp,NO,TE,8,5,43,43,0.00
+44,TE44,Justin Joly,DEN,TE,10,5,44,44,0.00
+45,TE45,Cole Kmet,CHI,TE,10,6,45,45,0.00
+46,TE46,Ja'Tavion Sanders,CAR,TE,5,6,46,46,0.00
+47,TE47,Noah Gray,KC,TE,5,6,47,47,0.00
+48,TE48,Dawson Knox,BUF,TE,7,6,48,48,0.00
+49,TE49,Colby Parkinson,LAR,TE,11,6,49,49,0.00
+50,TE50,Ben Sinnott,WAS,TE,7,6,50,50,0.00
+51,TE51,Luke Musgrave,GB,TE,11,6,51,51,0.00
+52,TE52,Daniel Bellinger,TEN,TE,9,6,52,52,0.00
+53,TE53,Eli Raridon,NE,TE,11,6,53,53,0.00
+54,TE54,Max Klare,LAR,TE,11,6,54,54,0.00
+55,TE55,Zach Ertz,FA,TE,,6,55,55,0.00
+56,TE56,Austin Hooper,ATL,TE,11,6,56,56,0.00
+57,TE57,Josh Oliver,MIN,TE,6,6,57,57,0.00
+58,TE58,Marlin Klein,HOU,TE,8,6,58,58,0.00
+59,TE59,Tommy Tremble,CAR,TE,5,6,59,59,0.00
+60,TE60,Noah Fant,NO,TE,8,6,60,60,0.00

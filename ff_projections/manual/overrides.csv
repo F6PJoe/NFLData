@@ -1,0 +1,7 @@
+player,team,pos,depth,status,note
+Brandon Aiyuk,SF,WR,,OUT,Contract standoff - on reserve/left squad and has not filed for reinstatement. ~0 snaps expected in 2026. NOT the knee; Sleeper's DNR/ACL+MCL tag is stale 2024 data. Revisit if the contract situation resolves.
+Stefon Diggs,WAS,WR,2,ACT,Signed with WAS Aug 2026. Sleeper has it; nflverse does not. Depth is an assumption - verify.
+Kayshon Boutte,HOU,WR,4,ACT,Traded from NE to HOU Aug 2026. Depth 4 (behind Collins/Dell/Hutchinson) is my estimate, not confirmed - verify/adjust.
+Gardner Minshew,ARI,QB,3,ACT,Sleeper has him QB4 behind Slovis; he's the real QB3. Joe's call. Pushes Slovis to 4 and off the visible board.
+Jayden Higgins,HOU,WR,,OUT,Joe's call: done for the year (Knee ACL/Surgery). Already IR-auto-zeroed by Sleeper's tag - recorded so it stays OUT even if that tag ever changes.
+Ricky Pearsall,SF,WR,,OUT,Joe's call: done for the year (Knee PCL). Already IR-auto-zeroed by Sleeper's tag - recorded so it stays OUT even if that tag ever changes.

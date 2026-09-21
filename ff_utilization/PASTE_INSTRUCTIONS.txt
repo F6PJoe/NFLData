@@ -1,0 +1,77 @@
+HOW TO PASTE THE USAGE TABLES INTO WORDPRESS
+============================================
+
+These instructions deliberately live OUTSIDE the embed files. An earlier
+version put them in an HTML comment at the top of each embed, and that broke
+the page: the comment contained a nested "-->" (from the example markers) which
+closed the comment early, dumping the rest of the banner onto the page as
+visible text -- and the "[/s2If-paywall]" inside that example closed the real
+paywall block early, so the table never initialized.
+
+Rule: the embed files are pasted whole, unmodified. Nothing else goes in them.
+
+
+WHICH FILE GOES WHERE
+---------------------
+  embed_weekly.html  ->  the WEEKLY usage post
+  embed_season.html  ->  the SEASON-LONG usage post
+
+Both read the same uploaded data file. Only the pinned view differs.
+
+
+STEPS
+-----
+1. Upload  data/utilization_weekly.json  to
+       /wp-content/plugins/s2member-files/utilization_weekly.json
+   Same filename every week -- overwrite it, never rename. That is why the
+   posts never need touching again.
+
+   ONE FILE FEEDS BOTH POSTS. The season post reads this same weekly file and
+   sums it in the browser; there is no separate season JSON. Both embeds point
+   at utilization_weekly.json and differ only in VIEW_MODE.
+
+2. Add a Gutenberg CUSTOM HTML BLOCK. This is the confirmed-working setup.
+
+   A Custom HTML block bypasses WordPress's wpautop filter. The auction chart
+   lives in the Classic editor's Text view instead -- don't assume this post
+   inherits that; the first attempt here failed until it moved to a Custom
+   HTML block.
+
+   Do NOT reformat, re-indent, or "prettify" the pasted block. The <style> and
+   <script> are deliberately collapsed onto single lines: WordPress's wpautop
+   filter injects <p> and <br> tags into anything with line breaks inside
+   those tags, which breaks the CSS and JS. Collapsed, there are no line
+   boundaries for it to act on. Adding line breaks back re-introduces the bug.
+
+   Symptom if it happens: the area renders but stays empty, with NO error
+   message -- the script never parsed, so its error handler never ran.
+
+3. Paste the ENTIRE contents of the embed file into that block.
+
+4. Wrap it in the member shortcodes, so the structure is:
+
+       [s2If-paywall]
+       ...entire contents of the embed file...
+       [/s2If-paywall]
+
+   Put the shortcodes on their own lines, outside the pasted HTML.
+
+
+AFTER PUBLISHING, CHECK
+-----------------------
+* The table populates. "Usage data is unavailable right now (HTTP 4xx)" means
+  the gateway URL or the uploaded filename is wrong.
+* No raw text or stray "-->" is visible anywhere on the page.
+* s2Member file downloads are UNLIMITED for the member level -- the table
+  fetches the JSON on every page load, so a capped allowance locks members out.
+* Log out (or use a private window) and confirm non-members see nothing.
+
+
+IF YOU CHANGE THE TABLE
+-----------------------
+Edit component.html, then:
+
+    python build_embed.py
+
+and re-paste. Never edit embed_weekly.html / embed_season.html directly --
+they are regenerated and your changes are lost.

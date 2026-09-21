@@ -50,9 +50,16 @@ MIN_ROWS = {
 }
 
 
+# Fantasy Sharks 403s from datacenter IPs (GitHub Actions), so CI falls back
+# to the committed snapshot in cached/. Passing --save-cache means any run
+# from a residential connection refreshes that snapshot for free — it only
+# writes on a successful fetch, so it's a no-op in CI.
+EXTRA_ARGS = {"fetch_fantasysharks_projections.py": ["--save-cache"]}
+
+
 def run(script, required=True):
     print(f"\n=== {script} ===", flush=True)
-    result = subprocess.run([sys.executable, script])
+    result = subprocess.run([sys.executable, script] + EXTRA_ARGS.get(script, []))
     if result.returncode != 0:
         print(f"[WARN] {script} exited {result.returncode}", flush=True)
         if required:

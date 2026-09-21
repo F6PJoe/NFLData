@@ -1,0 +1,94 @@
+Rank,Pos Rank,Player,Team,Position,Bye,Tier,Rank Min,Rank Max,Rank Std
+1,RB1,Jahmyr Gibbs,DET,RB,6,1,1,1,0.00
+2,RB2,Bijan Robinson,ATL,RB,11,1,2,2,0.00
+3,RB3,Christian McCaffrey,SF,RB,8,1,3,3,0.00
+4,RB4,Jonathan Taylor,IND,RB,13,1,4,4,0.00
+5,RB5,James Cook III,BUF,RB,7,2,5,5,0.00
+6,RB6,Chase Brown,CIN,RB,6,2,6,6,0.00
+7,RB7,Omarion Hampton,LAC,RB,7,2,7,7,0.00
+8,RB8,Kenneth Walker III,KC,RB,5,2,8,8,0.00
+9,RB9,Saquon Barkley,PHI,RB,10,2,9,9,0.00
+10,RB10,Derrick Henry,BAL,RB,13,3,10,10,0.00
+11,RB11,De'Von Achane,MIA,RB,6,3,11,11,0.00
+12,RB12,Javonte Williams,DAL,RB,14,3,12,12,0.00
+13,RB13,Ashton Jeanty,LV,RB,13,3,13,13,0.00
+14,RB14,Kyren Williams,LAR,RB,11,3,14,14,0.00
+15,RB15,Jeremiyah Love,ARI,RB,14,3,15,15,0.00
+16,RB16,Breece Hall,NYJ,RB,13,3,16,16,0.00
+17,RB17,D'Andre Swift,CHI,RB,10,4,17,17,0.00
+18,RB18,Bucky Irving,TB,RB,10,4,18,18,0.00
+19,RB19,Travis Etienne Jr.,NO,RB,8,4,19,19,0.00
+20,RB20,Cam Skattebo,NYG,RB,8,4,20,20,0.00
+21,RB21,Quinshon Judkins,CLE,RB,11,4,21,21,0.00
+22,RB22,David Montgomery,HOU,RB,8,4,22,22,0.00
+23,RB23,Jadarian Price,SEA,RB,11,4,23,23,0.00
+24,RB24,Bhayshul Tuten,JAC,RB,7,4,24,24,0.00
+25,RB25,Rhamondre Stevenson,NE,RB,11,4,25,25,0.00
+26,RB26,TreVeyon Henderson,NE,RB,11,4,26,26,0.00
+27,RB27,Jaylen Warren,PIT,RB,9,5,27,27,0.00
+28,RB28,Jonathon Brooks,CAR,RB,5,5,28,28,0.00
+29,RB29,Rico Dowdle,PIT,RB,9,5,29,29,0.00
+30,RB30,Blake Corum,LAR,RB,11,5,30,30,0.00
+31,RB31,Tony Pollard,TEN,RB,9,5,31,31,0.00
+32,RB32,Chuba Hubbard,CAR,RB,5,5,32,32,0.00
+33,RB33,MarShawn Lloyd,GB,RB,11,5,33,33,0.00
+34,RB34,J.K. Dobbins,DEN,RB,10,5,34,34,0.00
+35,RB35,Jacory Croskey-Merritt,WAS,RB,7,5,35,35,0.00
+36,RB36,Chris Rodriguez Jr.,JAC,RB,7,5,36,36,0.00
+37,RB37,RJ Harvey,DEN,RB,10,5,37,37,0.00
+38,RB38,Kenny Gainwell,TB,RB,10,5,38,38,0.00
+39,RB39,Jordan Mason,MIN,RB,6,6,39,39,0.00
+40,RB40,Mike Washington Jr.,LV,RB,13,6,40,40,0.00
+41,RB41,Jonah Coleman,DEN,RB,10,6,41,41,0.00
+42,RB42,Woody Marks,HOU,RB,8,6,42,42,0.00
+43,RB43,Aaron Jones Sr.,MIN,RB,6,6,43,43,0.00
+44,RB44,Rachaad White,WAS,RB,7,6,44,44,0.00
+45,RB45,Tyjae Spears,TEN,RB,9,6,45,45,0.00
+46,RB46,Emmett Johnson,KC,RB,5,6,46,46,0.00
+47,RB47,Tyler Allgeier,ARI,RB,14,6,47,47,0.00
+48,RB48,Kyle Monangai,CHI,RB,10,6,48,48,0.00
+49,RB49,Tank Bigsby,PHI,RB,10,6,49,49,0.00
+50,RB50,Josh Jacobs,GB,RB,11,6,50,50,0.00
+51,RB51,Malik Davis,DAL,RB,14,6,51,51,0.00
+52,RB52,Keaton Mitchell,LAC,RB,7,6,52,52,0.00
+53,RB53,Kaelon Black,SF,RB,8,6,53,53,0.00
+54,RB54,Dylan Sampson,CLE,RB,11,7,54,54,0.00
+55,RB55,Zach Charbonnet,SEA,RB,11,7,55,55,0.00
+56,RB56,Braelon Allen,NYJ,RB,13,7,56,56,0.00
+57,RB57,Brian Robinson Jr.,ATL,RB,11,7,57,57,0.00
+58,RB58,Ray Davis,BUF,RB,7,7,58,58,0.00
+59,RB59,Najee Harris,NYG,RB,8,7,59,59,0.00
+60,RB60,Kimani Vidal,LAC,RB,7,7,60,60,0.00
+61,RB61,Jordan James,SF,RB,8,7,61,61,0.00
+62,RB62,Alvin Kamara,NO,RB,8,7,62,62,0.00
+63,RB63,Sean Tucker,TB,RB,10,7,63,63,0.00
+64,RB64,Demond Claiborne,MIN,RB,6,7,64,64,0.00
+65,RB65,Samaje Perine,CIN,RB,6,7,65,65,0.00
+66,RB66,Justice Hill,BAL,RB,13,7,66,66,0.00
+67,RB67,Seth McGowan,IND,RB,13,7,67,67,0.00
+68,RB68,Kendre Miller,NO,RB,8,7,68,68,0.00
+69,RB69,Emanuel Wilson,SEA,RB,11,7,69,69,0.00
+70,RB70,Nicholas Singleton,TEN,RB,9,7,70,70,0.00
+71,RB71,Kaytron Allen,WAS,RB,7,7,71,71,0.00
+72,RB72,Tyrone Tracy Jr.,NYG,RB,8,8,72,72,0.00
+73,RB73,George Holani,SEA,RB,11,8,73,73,0.00
+74,RB74,Kaleb Johnson,GB,RB,11,8,74,74,0.00
+75,RB75,DJ Giddens,IND,RB,13,8,75,75,0.00
+76,RB76,James Conner,ARI,RB,14,8,76,76,0.00
+77,RB77,Ollie Gordon II,MIA,RB,6,8,77,77,0.00
+78,RB78,Jaylen Wright,MIA,RB,6,8,78,78,0.00
+79,RB79,Isaiah Davis,NYJ,RB,13,8,79,79,0.00
+80,RB80,LeQuint Allen Jr.,JAC,RB,7,8,80,80,0.00
+81,RB81,Brashard Smith,KC,RB,5,8,81,81,0.00
+82,RB82,Emari Demercado,DAL,RB,14,8,82,82,0.00
+83,RB83,Ty Johnson,BUF,RB,7,8,83,83,0.00
+84,RB84,Devin Neal,FA,RB,,8,84,84,0.00
+85,RB85,Chris Brooks,GB,RB,11,8,85,85,0.00
+86,RB86,Trey Benson,ARI,RB,14,8,86,86,0.00
+87,RB87,Devin Singletary,NYG,RB,8,8,87,87,0.00
+88,RB88,Adam Randall,BAL,RB,13,8,88,88,0.00
+89,RB89,Jerome Ford,WAS,RB,7,8,89,89,0.00
+90,RB90,Trevor Etienne,CAR,RB,5,8,90,90,0.00
+91,RB91,Sione Vaki,DET,RB,6,8,91,91,0.00
+92,RB92,Tahj Brooks,CIN,RB,6,8,92,92,0.00
+93,RB93,Jarquez Hunter,FA,RB,,8,93,93,0.00

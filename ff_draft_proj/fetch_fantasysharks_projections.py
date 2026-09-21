@@ -23,9 +23,21 @@ Requires: requests
 import argparse
 import csv
 import io
+import os
+import shutil
 import sys
+import time
 
 import scoring
+
+CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cached")
+
+# How long a cached snapshot may stand in for a live fetch. Past this, the
+# source is DROPPED rather than used: preseason projections move enough
+# (injuries, depth charts, holdouts) that month-old numbers would quietly
+# drag the consensus while looking current. Better to lose one of ten
+# sources than to average in stale data.
+MAX_CACHE_AGE_DAYS = 14
 
 CSV_URL = "https://www.fantasysharks.com/apps/Projections/SeasonProjections.php?pos={pos}&format=csv"
 
@@ -67,15 +79,34 @@ def format_name(name):
     return name.strip()
 
 
+class Blocked(Exception):
+    """Site refused the request (403) — almost always the IP block, not us."""
+
+
 def fetch_csv(pos, csv_file=None):
     if csv_file:
         with open(csv_file, encoding="utf-8") as f:
             text = f.read()
     else:
+        import time
+
         import requests
-        resp = requests.get(CSV_URL.format(pos=pos), headers=HEADERS, timeout=30)
-        resp.raise_for_status()
-        text = resp.text
+        last = None
+        # A couple of quick retries in case it's transient rate limiting; a
+        # real IP block fails all of them and we fall back to cached CSVs.
+        for attempt in range(3):
+            try:
+                resp = requests.get(CSV_URL.format(pos=pos), headers=HEADERS, timeout=30)
+                if resp.status_code == 403:
+                    last = Blocked(f"403 Forbidden for {pos}")
+                    time.sleep(2 * (attempt + 1))
+                    continue
+                resp.raise_for_status()
+                return list(csv.reader(io.StringIO(resp.text)))
+            except requests.RequestException as e:
+                last = e
+                time.sleep(2 * (attempt + 1))
+        raise last
     return list(csv.reader(io.StringIO(text)))
 
 
@@ -140,12 +171,48 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--prefix", default="fantasysharks")
     ap.add_argument("--csv-dir", help="dir with saved <pos>.csv files instead of fetching")
+    ap.add_argument("--save-cache", action="store_true",
+                    help="also copy fetched CSVs into cached/ (run from a residential IP, then commit)")
     args = ap.parse_args()
 
     wrote_any = False
+    blocked = []
     for pos in ("QB", "RB", "WR", "TE"):
         csv_file = f"{args.csv_dir}/{pos.lower()}.csv" if args.csv_dir else None
-        rows = fetch_csv(pos, csv_file)
+        out_path = f"{args.prefix}_{pos.lower()}.csv"
+        snapshot = os.path.join(CACHE_DIR, f"{args.prefix}_{pos.lower()}.csv")
+        try:
+            rows = fetch_csv(pos, csv_file)
+        except Exception as e:
+            # Fantasy Sharks blocks non-residential IPs (GitHub Actions
+            # runners), so this fetch succeeds locally and 403s in CI. Rather
+            # than kill the run and silently drop a source from the consensus,
+            # fall back to the committed snapshot in cached/ and shout about
+            # its age. Refresh that snapshot by running this script with
+            # --save-cache from a residential connection and committing it.
+            src = out_path if os.path.exists(out_path) else (
+                snapshot if os.path.exists(snapshot) else None)
+            if src:
+                age_d = (time.time() - os.path.getmtime(src)) / 86400
+                if age_d > MAX_CACHE_AGE_DAYS:
+                    print(f"[WARN] fantasysharks {pos}: {type(e).__name__}: {e} — "
+                          f"cached snapshot is {age_d:.0f} days old (limit "
+                          f"{MAX_CACHE_AGE_DAYS}), DROPPING source rather than "
+                          f"averaging in stale projections. Refresh with: "
+                          f"python fetch_fantasysharks_projections.py --save-cache")
+                    blocked.append(pos)
+                    continue
+                if src != out_path:
+                    shutil.copyfile(src, out_path)
+                print(f"[WARN] fantasysharks {pos}: {type(e).__name__}: {e} — "
+                      f"using cached {src} ({age_d:.1f} days old)")
+                blocked.append(pos)
+                wrote_any = True
+                continue
+            print(f"[WARN] fantasysharks {pos}: {type(e).__name__}: {e} — "
+                  f"no cached snapshot at {snapshot}, source dropped from consensus")
+            blocked.append(pos)
+            continue
         data_rows = rows[1:]
         recs = []
         for row in data_rows:
@@ -163,7 +230,15 @@ def main():
             w.writeheader()
             w.writerows(recs)
         print(f"Wrote {len(recs)} {pos}s to {out}.")
+        if args.save_cache:
+            os.makedirs(CACHE_DIR, exist_ok=True)
+            shutil.copyfile(out, os.path.join(CACHE_DIR, out))
+            print(f"  cached -> cached/{out}")
         wrote_any = True
+
+    if blocked:
+        print(f"[WARN] fantasysharks: {len(blocked)}/4 positions unavailable "
+              f"({', '.join(blocked)}) — consensus is using cached/partial data for this source")
 
     if not wrote_any:
         sys.exit("No data parsed for any position.")

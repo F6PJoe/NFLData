@@ -1,0 +1,109 @@
+name: Sample Weekly Rankings Freshness
+
+# Records WHEN each FantasyPros weekly-rankings expert re-saves their board
+# through a Sunday morning, so the in-season freshness cutoff can be set from
+# measured behaviour instead of a guess. See ff_rankings/weekly_freshness.py.
+#
+# No native `schedule:` trigger here on purpose -- this repo's recurring runs
+# are driven by cron-job.org, not GitHub's own scheduler, which has been
+# unreliable in the past (same rule as fetch_draft_projections.yml). Point a
+# cron-job.org job at this workflow_dispatch for ~9:00 AM ET each Sunday.
+#
+# One long-running job rather than many short triggers: the repo is public,
+# so Actions minutes are free, and a single run means one commit instead of
+# twenty-odd.
+
+on:
+  workflow_dispatch:
+    inputs:
+      until:
+        description: 'Stop sampling at this ET wall-clock time (HH:MM)'
+        required: false
+        default: '13:05'
+      interval:
+        description: 'Seconds between samples'
+        required: false
+        default: '600'
+      half_ppr_only:
+        description: 'Sample only the 7 half-PPR lists (faster)'
+        type: boolean
+        required: false
+        default: false
+      slate:
+        description: "Slate whose cutoff to label rows with (SUN/THU/WED/FRI)"
+        required: false
+        default: 'SUN'
+      fingerprint:
+        description: 'Also hash each source own list (covers sources absent from FP panel)'
+        type: boolean
+        required: false
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  sample:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r ff_rankings/requirements.txt
+
+      - name: Sample freshness through the morning
+        working-directory: ff_rankings
+        run: |
+          python sample_weekly_freshness.py \
+            --until "${{ inputs.until }}" \
+            --interval "${{ inputs.interval }}" \
+            ${{ inputs.half_ppr_only && '--half-ppr-only' || '' }}
+
+      - name: Summarise what was collected
+        if: always()
+        working-directory: ff_rankings
+        run: |
+          latest=$(ls -d freshness/*/ 2>/dev/null | tail -1)
+          if [ -n "$latest" ]; then
+            python analyze_weekly_freshness.py "$latest" || true
+          else
+            echo "No snapshots were written."
+          fi
+
+      - name: Commit snapshots
+        if: always()
+        run: |
+          if [ -z "$(git status --porcelain ff_rankings/freshness)" ]; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ff_rankings/freshness
+          git commit -m "ff_rankings: weekly freshness snapshots $(date -u +%Y-%m-%d)"
+          # Another run may have landed while this job was sampling.
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && \
+              git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            echo "push attempt $i failed, retrying"
+            sleep 5
+          done
+          exit 1
+
+      - name: Upload snapshots as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-freshness-snapshots
+          path: 'ff_rankings/freshness/**'
+          retention-days: 30
+          if-no-files-found: warn

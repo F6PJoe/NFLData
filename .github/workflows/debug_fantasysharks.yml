@@ -1,0 +1,57 @@
+name: Debug - Fantasy Sharks fetch only
+
+# Runs ONLY the Fantasy Sharks projection fetcher on a GitHub runner so the
+# 403-from-datacenter-IP question can be tested without triggering the full
+# "Fetch Draft Projections" workflow (which also pushes the auction value
+# chart to WordPress). Safe to run any time: no credentials, no Sheets push,
+# no WordPress publish, nothing committed back to the repo.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install requests
+        run: pip install requests
+
+      - name: Probe every candidate URL from the runner
+        working-directory: ff_draft_proj
+        run: |
+          python - <<'PY'
+          import requests
+          UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+          B = "https://www.fantasysharks.com"
+          urls = {
+            "csv (current)": f"{B}/apps/Projections/SeasonProjections.php?pos=QB&format=csv",
+            "xml":           f"{B}/apps/Projections/SeasonProjections.php?pos=QB&format=xml",
+            "html":          f"{B}/apps/Projections/SeasonProjections.php?pos=QB",
+            "bert html":     f"{B}/apps/bert/forecasts/projections.php?Position=1",
+            "site root":     f"{B}/",
+            "static png":    f"{B}/images/json.png",
+          }
+          for name, u in urls.items():
+              try:
+                  r = requests.get(u, headers={"User-Agent": UA}, timeout=30)
+                  print(f"{name:15s} status={r.status_code} bytes={len(r.content):>8} "
+                        f"ctype={r.headers.get('content-type')} "
+                        f"server={r.headers.get('server')} cf-ray={r.headers.get('cf-ray')}")
+                  if r.status_code != 200:
+                      print(f"                body: {r.text[:180]!r}")
+              except Exception as e:
+                  print(f"{name:15s} EXC {type(e).__name__}: {e}")
+          PY
+
+      - name: Run the real fetcher (expected to fall back or drop the source)
+        working-directory: ff_draft_proj
+        run: python fetch_fantasysharks_projections.py

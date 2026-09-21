@@ -1,0 +1,33 @@
+team,note
+# Hand-maintained. The note shows on that team's tab while you set Plays/G and
+# Pass Rate - the two numbers a new staff most directly changes.
+#
+# SOURCE: draftsharks.com/article/nfl-coaching-changes - reviews every staff
+# change with its expected effect on pace, scheme and pass rate. Head-coach
+# changes independently match en.wikipedia.org/wiki/2026_NFL_season.
+#
+# Where the article names only a coordinator, only a coordinator is recorded.
+#
+# ── head-coach changes ──
+ARI,NEW HC Mike LaFleur + OC Nathaniel Hackett. Pass rate projected to DROP 69.4% -> 58%. Biggest scheme change in the league - revisit Pass Rate above.
+ATL,NEW HC Kevin Stefanski + OC Tommy Rees. Zone-heavy run game; little pass-rate change expected. Emphasis on Robinson touches.
+BAL,NEW HC Jesse Minter + OC Declan Doyle. More explosive plays expected - Doyle brings creativity and detail.
+BUF,NEW HC Joe Brady (promoted from OC) + OC Pete Carmichael Jr. Brady keeps play-calling. Run-lean; controlled pace continues.
+CLE,NEW HC Todd Monken + OC Travis Switzer. Shift toward MORE RUN given QB uncertainty - lower pass rate.
+LV,NEW HC Klint Kubiak + OC Andrew Janocko. Balanced offense with established run-game emphasis.
+MIA,NEW HC Jeff Hafley + OC Bobby Slowik. Defensive HC; run-game focus and balance despite the QB transition. Pace may slow.
+NYG,NEW HC John Harbaugh + OC Matt Nagy. More run emphasis expected; Nagy's historical results underwhelming.
+PIT,NEW HC Mike McCarthy + OC Brian Angelichio. West Coast principles; moderate pass rates.
+TEN,NEW HC Robert Saleh + OC Brian Daboll. Potential shift toward a more balanced approach.
+# ── coordinator changes, head coach unchanged ──
+CHI,HC unchanged. OC Press Taylor under Ben Johnson. Continuity maintained; no significant regression expected.
+DEN,HC unchanged. OC Davis Webb under Sean Payton. Same offense with little tweaks; emphasis on the quick passing game.
+DET,HC unchanged. OC Drew Petzing under Dan Campbell. Won't completely depart from the prior system.
+KC,HC unchanged. OC Eric Bieniemy under Andy Reid. Focus on developing an explosive run game.
+LAC,HC unchanged. OC Mike McDaniel. Earlier ball release; more catch-and-run opportunities.
+LAR,HC unchanged. OC Nate Scheelhaase under Sean McVay. McVay retains play-calling; smooth transition expected.
+NYJ,HC unchanged. OC Frank Reich. Offense starts with the run game.
+PHI,HC unchanged. OC Sean Mannion under Nick Sirianni. Shift toward under-center looks; wide-zone running scheme.
+SEA,HC unchanged. OC Brian Fleury. Lot of the same stuff as his predecessor; similar personnel deployment.
+TB,HC unchanged. OC Zac Robinson. Balanced approach; pre-snap motion emphasis; flexible personnel usage.
+WAS,HC unchanged. OC David Blough under Dan Quinn. Shift from shotgun-heavy (86.9%) toward under-center; more play-action.

@@ -1,0 +1,102 @@
+Rank,Pos Rank,Player,Team,Position,Bye,Tier,Rank Min,Rank Max,Rank Std
+1,WR1,Ja'Marr Chase,CIN,WR,6,1,1,1,0.00
+2,WR2,Puka Nacua,LAR,WR,11,1,2,2,0.00
+3,WR3,Amon-Ra St. Brown,DET,WR,6,1,3,3,0.00
+4,WR4,Jaxon Smith-Njigba,SEA,WR,11,2,4,4,0.00
+5,WR5,CeeDee Lamb,DAL,WR,14,2,5,5,0.00
+6,WR6,Justin Jefferson,MIN,WR,6,2,6,6,0.00
+7,WR7,Drake London,ATL,WR,11,2,7,7,0.00
+8,WR8,A.J. Brown,NE,WR,11,2,8,8,0.00
+9,WR9,Nico Collins,HOU,WR,8,3,9,9,0.00
+10,WR10,Rashee Rice,KC,WR,5,3,10,10,0.00
+11,WR11,Chris Olave,NO,WR,8,3,11,11,0.00
+12,WR12,George Pickens,DAL,WR,14,3,12,12,0.00
+13,WR13,Zay Flowers,BAL,WR,13,3,13,13,0.00
+14,WR14,Malik Nabers,NYG,WR,8,3,14,14,0.00
+15,WR15,Garrett Wilson,NYJ,WR,13,4,15,15,0.00
+16,WR16,DeVonta Smith,PHI,WR,10,4,16,16,0.00
+17,WR17,Luther Burden III,CHI,WR,10,4,17,17,0.00
+18,WR18,Jaylen Waddle,DEN,WR,10,4,18,18,0.00
+19,WR19,Ladd McConkey,LAC,WR,7,4,19,19,0.00
+20,WR20,Tee Higgins,CIN,WR,6,4,20,20,0.00
+21,WR21,Tetairoa McMillan,CAR,WR,5,4,21,21,0.00
+22,WR22,Emeka Egbuka,TB,WR,10,4,22,22,0.00
+23,WR23,Christian Watson,GB,WR,11,5,23,23,0.00
+24,WR24,Mike Evans,SF,WR,8,5,24,24,0.00
+25,WR25,Chris Godwin Jr.,TB,WR,10,5,25,25,0.00
+26,WR26,Davante Adams,LAR,WR,11,5,26,26,0.00
+27,WR27,DJ Moore,BUF,WR,7,5,27,27,0.00
+28,WR28,Jameson Williams,DET,WR,6,5,28,28,0.00
+29,WR29,Rome Odunze,CHI,WR,10,5,29,29,0.00
+30,WR30,Marvin Harrison Jr.,ARI,WR,14,5,30,30,0.00
+31,WR31,Parker Washington,JAC,WR,7,5,31,31,0.00
+32,WR32,Terry McLaurin,WAS,WR,7,5,32,32,0.00
+33,WR33,Quentin Johnston,LAC,WR,7,6,33,33,0.00
+34,WR34,DK Metcalf,PIT,WR,9,6,34,34,0.00
+35,WR35,Carnell Tate,TEN,WR,9,6,35,35,0.00
+36,WR36,Stefon Diggs,WAS,WR,7,6,36,36,0.00
+37,WR37,Josh Downs,IND,WR,13,6,37,37,0.00
+38,WR38,Jayden Reed,GB,WR,11,6,38,38,0.00
+39,WR39,KC Concepcion,CLE,WR,11,6,39,39,0.00
+40,WR40,Courtland Sutton,DEN,WR,10,6,40,40,0.00
+41,WR41,De'Zhaun Stribling,SF,WR,8,6,41,41,0.00
+42,WR42,Brian Thomas Jr.,JAC,WR,7,6,42,42,0.00
+43,WR43,Wan'Dale Robinson,TEN,WR,9,6,43,43,0.00
+44,WR44,Michael Wilson,ARI,WR,14,6,44,44,0.00
+45,WR45,Alec Pierce,IND,WR,13,6,45,45,0.00
+46,WR46,Michael Pittman Jr.,PIT,WR,9,7,46,46,0.00
+47,WR47,Jalen Coker,CAR,WR,5,7,47,47,0.00
+48,WR48,Makai Lemon,PHI,WR,10,7,48,48,0.00
+49,WR49,Jordan Addison,MIN,WR,6,7,49,49,0.00
+50,WR50,Matthew Golden,GB,WR,11,7,50,50,0.00
+51,WR51,Xavier Worthy,KC,WR,5,7,51,51,0.00
+52,WR52,Jakobi Meyers,JAC,WR,7,7,52,52,0.00
+53,WR53,Deebo Samuel Sr.,SF,WR,8,7,53,53,0.00
+54,WR54,Romeo Doubs,NE,WR,11,7,54,54,0.00
+55,WR55,Tre Tucker,LV,WR,13,7,55,55,0.00
+56,WR56,Denzel Boston,CLE,WR,11,7,56,56,0.00
+57,WR57,Khalil Shakir,BUF,WR,7,7,57,57,0.00
+58,WR58,Rashid Shaheed,SEA,WR,11,7,58,58,0.00
+59,WR59,Adonai Mitchell,NYJ,WR,13,7,59,59,0.00
+60,WR60,Ryan Flournoy,DAL,WR,14,7,60,60,0.00
+61,WR61,Pat Bryant,DEN,WR,10,7,61,61,0.00
+62,WR62,Jordyn Tyson,NO,WR,8,8,62,62,0.00
+63,WR63,Ja'Kobi Lane,BAL,WR,13,8,63,63,0.00
+64,WR64,Jalen McMillan,TB,WR,10,8,64,64,0.00
+65,WR65,Tre' Harris,LAC,WR,7,8,65,65,0.00
+66,WR66,Kayshon Boutte,HOU,WR,8,8,66,66,0.00
+67,WR67,Dontayvion Wicks,PHI,WR,10,8,67,67,0.00
+68,WR68,Jalen Nailor,LV,WR,13,8,68,68,0.00
+69,WR69,Rashod Bateman,BAL,WR,13,8,69,69,0.00
+70,WR70,Jauan Jennings,MIN,WR,6,8,70,70,0.00
+71,WR71,Keenan Allen,IND,WR,13,8,71,71,0.00
+72,WR72,Cyrus Allen,KC,WR,5,8,72,72,0.00
+73,WR73,Jerry Jeudy,CLE,WR,11,8,73,73,0.00
+74,WR74,Jaylin Noel,HOU,WR,8,8,74,74,0.00
+75,WR75,Ted Hurst III,TB,WR,10,8,75,75,0.00
+76,WR76,Caleb Douglas,MIA,WR,6,8,76,76,0.00
+77,WR77,Travis Hunter,JAC,WR,7,8,77,77,0.00
+78,WR78,Omar Cooper Jr.,NYJ,WR,13,8,78,78,0.00
+79,WR79,Chris Bell,MIA,WR,6,8,79,79,0.00
+80,WR80,Devaughn Vele,NO,WR,8,8,80,80,0.00
+81,WR81,Troy Franklin,DEN,WR,10,9,81,81,0.00
+82,WR82,Malik Washington,MIA,WR,6,9,82,82,0.00
+83,WR83,Calvin Ridley,TEN,WR,9,9,83,83,0.00
+84,WR84,Keon Coleman,BUF,WR,7,9,84,84,0.00
+85,WR85,Darnell Mooney,NYG,WR,8,9,85,85,0.00
+86,WR86,Tyquan Thornton,KC,WR,5,9,86,86,0.00
+87,WR87,Jack Bech,LV,WR,13,9,87,87,0.00
+88,WR88,Cooper Kupp,SEA,WR,11,9,88,88,0.00
+89,WR89,Germie Bernard,PIT,WR,9,9,89,89,0.00
+90,WR90,Malachi Fields,NYG,WR,8,9,90,90,0.00
+91,WR91,Antonio Williams,WAS,WR,7,9,91,91,0.00
+92,WR92,Darius Slayton,NYG,WR,8,9,92,92,0.00
+93,WR93,Isaac TeSlaa,DET,WR,6,9,93,93,0.00
+94,WR94,Demarcus Robinson,SF,WR,8,9,94,94,0.00
+95,WR95,Bryce Lance,NO,WR,8,9,95,95,0.00
+96,WR96,Elijah Sarratt,BAL,WR,13,9,96,96,0.00
+97,WR97,Zachariah Branch,ATL,WR,11,9,97,97,0.00
+98,WR98,Tory Horton,SEA,WR,11,9,98,98,0.00
+99,WR99,Chimere Dike,TEN,WR,9,9,99,99,0.00
+100,WR100,Elic Ayomanor,TEN,WR,9,9,100,100,0.00
+101,WR101,Skyler Bell,BUF,WR,7,9,101,101,0.00

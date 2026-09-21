@@ -12,8 +12,13 @@ Only outputs: QB, RB, WR, TE (offense) + K (kicker) + DST (team defense).
 Defense players are normalised to "<Nickname>" with position DST.
 """
 
-import argparse, csv, os, subprocess, sys, unicodedata, re
+import argparse, csv, os, subprocess, sys, time, unicodedata, re
 from pathlib import Path
+
+# A source CSV older than this is excluded from the consensus rather than
+# merged as if current. ADP shifts daily; a day or two stale is tolerable,
+# a week is not.
+MAX_SOURCE_AGE_DAYS = 3
 
 # ── Column config ─────────────────────────────────────────────────────────────
 # (module, csv_file, adp_col, label, extra_args)
@@ -29,16 +34,15 @@ SOURCES = [
     ('fetch_ffpc_adp',      'ffpc_adp.csv',       'FFPC',     'FFPC',     []),
     ('fetch_nffc_adp',      'bb10s_adp.csv',      'BB10s',    'BB10s',    ['--contest', 'bb10s']),
     ('fetch_nffc_adp',      'nffc_adp.csv',       'NFFC',     'NFFC',     []),
+    ('fetch_nffc_adp',      'nffc_cutline_adp.csv', 'NFFC Cutline', 'NFFC Cutline', ['--contest', 'cutline']),
+    ('fetch_rts_adp',       'rts_adp.csv',        'RTSports', 'RTSports', []),
     ('fetch_underdog_adp',  'underdog_adp.csv',   'Underdog', 'Underdog', []),
 ]
 
-# NFFC Cutline and RTSports are only used by the separate ff_cheatsheet
-# project, which fetches them independently — this project (ADP -> Google
-# Sheet) doesn't reference those sources at all.
 OUTPUT_COLS = ['Player', 'Position(s)', 'Team',
                'Sleeper', 'Sleeper_STD', 'Sleeper_Half', 'Sleeper_2QB',
                'ESPN', 'Yahoo!', 'CBS', 'Fantrax',
-               'FFPC', 'BB10s', 'NFFC',
+               'FFPC', 'BB10s', 'NFFC', 'NFFC Cutline', 'RTSports',
                'Underdog', 'Consensus']
 
 # Columns written to Google Sheets — must match the header row already in the sheet.
@@ -49,10 +53,16 @@ SHEET_COLS = ['Player', 'Position(s)', 'Team',
               'Sleeper', 'ESPN', 'Yahoo!', 'CBS', 'Fantrax',
               'FFPC', 'BB10s', 'NFFC', 'Underdog', 'Consensus']
 
-# Sleeper format variants are reference columns only — only Sleeper (PPR) enters consensus
-SITE_COLS = [c for c in OUTPUT_COLS
-             if c not in ('Player', 'Position(s)', 'Team',
-                          'Sleeper_STD', 'Sleeper_Half', 'Sleeper_2QB', 'Consensus')]
+# Sources averaged into Consensus. Listed EXPLICITLY, not derived by excluding
+# things from OUTPUT_COLS — that older approach meant any newly added source
+# joined the consensus automatically, which is how RTSports and NFFC Cutline
+# silently started influencing the published number.
+#
+# Everything else in OUTPUT_COLS (Sleeper_STD/Half/2QB, NFFC Cutline, RTSports)
+# is a reference column only: carried in combined_adp.csv so the cheat sheet can
+# offer them as individually selectable ADP sources, but never part of Consensus.
+SITE_COLS = ['Sleeper', 'ESPN', 'Yahoo!', 'CBS', 'Fantrax',
+             'FFPC', 'BB10s', 'NFFC', 'Underdog']
 
 # ── Google Sheets config ──────────────────────────────────────────────────────
 SHEET_ID     = '1fQxZjVIHcvi41wDxGK13Sx4lD3odFV-DBVsNPg8pvyU'
@@ -414,7 +424,9 @@ def merge(all_data: list) -> list:
             out[c] = round(v, 1) if v is not None else 999
 
         # Reference columns excluded from consensus — pass through raw values
-        for ref_col in ('Sleeper_STD', 'Sleeper_Half', 'Sleeper_2QB'):
+        # so the cheat sheet can still offer them as selectable ADP sources.
+        for ref_col in ('Sleeper_STD', 'Sleeper_Half', 'Sleeper_2QB',
+                        'NFFC Cutline', 'RTSports'):
             raw = row.get(ref_col)
             out[ref_col] = round(float(raw), 1) if raw else 999
 
@@ -510,10 +522,27 @@ def main():
 
     print("\n[2/4] Loading & filtering CSVs...")
     all_data = []
+    stale = []
     for module_name, csv_file, adp_col, label, extra_args in SOURCES:
+        # A failed fetcher leaves the previous run's CSV on disk, and without
+        # this check it gets merged as if it were today's data (RTSports sat
+        # 8 days stale in the consensus that way). ADP moves daily, so past
+        # MAX_SOURCE_AGE_DAYS the source is excluded rather than trusted.
+        age_d = None
+        if os.path.exists(csv_file):
+            age_d = (time.time() - os.path.getmtime(csv_file)) / 86400
+        if age_d is not None and age_d > MAX_SOURCE_AGE_DAYS:
+            print(f"  {label:10s}: [WARN] {csv_file} is {age_d:.1f} days old "
+                  f"(limit {MAX_SOURCE_AGE_DAYS}) — EXCLUDED from consensus")
+            stale.append(f"{label} ({age_d:.0f}d)")
+            continue
         data = load_csv(csv_file, adp_col)
-        print(f"  {label:10s}: {len(data):>4} players  ({csv_file})")
+        note = f"  [stale: {age_d:.1f}d old]" if age_d and age_d > 1.5 else ""
+        print(f"  {label:10s}: {len(data):>4} players  ({csv_file}){note}")
         all_data.append((label, data))
+
+    if stale:
+        print(f"\n  [WARN] {len(stale)} source(s) excluded as stale: {', '.join(stale)}")
 
     print("\n[3/4] Merging...")
     rows = merge(all_data)
@@ -525,7 +554,11 @@ def main():
     for pos in ['QB', 'RB', 'WR', 'TE', 'DST']:
         print(f"    {pos}: {pos_counts.get(pos, 0)}")
 
-    out_file = 'combined_adp.csv'
+    # Always write to the repo root — every consumer (ff_cheatsheet scripts,
+    # refresh helpers) reads FF_ADP/combined_adp.csv.  A cwd-relative path
+    # here silently wrote to ff_adp/ when invoked by the cheat sheet
+    # pipeline, leaving the root copy stale for a month.
+    out_file = str(Path(__file__).parent.parent / 'combined_adp.csv')
     with open(out_file, 'w', newline='', encoding='utf-8') as f:
         writer = csv.DictWriter(f, fieldnames=OUTPUT_COLS, extrasaction='ignore')
         writer.writeheader()
