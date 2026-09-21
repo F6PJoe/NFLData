@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
 """
+RETIRED -- NOT IN THE PIPELINE. DO NOT RUN.
+
+The column letters below (H/I) are from BEFORE Subvertadown's
+column was deleted from the Live tab; the tab is now A-K and
+everything from Def Rating rightward shifted one column left.
+Running this would write into the wrong columns. Kept only for the
+source-access notes in CLAUDE.md. See push_schedule_to_sheet.py /
+push_def_rating_to_sheet.py for the live equivalents.
+
 Push FTN DAVE ratings (from fetch_ftn_dave.py) into the Stream-O-Matic
 sheet's "Live" tab, per Joe's spec:
 

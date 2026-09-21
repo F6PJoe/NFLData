@@ -65,11 +65,11 @@ def main():
 
     n = len(live_rows)
     sheet.values().update(
-        spreadsheetId=SHEET_ID, range=f"{TAB}!J2", valueInputOption="RAW",
+        spreadsheetId=SHEET_ID, range=f"{TAB}!I2", valueInputOption="RAW",
         body={"values": j_col},
     ).execute()
 
-    print(f"Wrote {n} rows to '{TAB}'!J2:J{1 + n} (Opp pressure-rate rank).")
+    print(f"Wrote {n} rows to '{TAB}'!I2:I{1 + n} (Opp pressure-rate rank).")
     if missing:
         print("Unmatched opponents (left blank):", ", ".join(missing))
 

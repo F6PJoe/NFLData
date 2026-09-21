@@ -1,10 +1,15 @@
 name: Defense Stream-O-Matic - Frequent Refresh
 #
-# Runs everything EXCEPT FTN DAVE and Sharp pressure rate (weekly-only --
-# see run_frequent.py). Meant to run repeatedly through the week --
-# per Joe's plan, Wednesday morning through Sunday -- to keep
-# Subvertadown's projection, live odds, Yahoo roster/start%/projection,
-# and FantasyPros ECR current. Does NOT need FTN credentials at all.
+# Runs everything EXCEPT Sharp pressure rate (weekly-only -- see
+# run_frequent.py). Meant to run repeatedly through the week -- per Joe's
+# plan, Wednesday morning through Sunday -- to keep the schedule, the
+# nflverse-derived defense rating and opponent-offense EPA, live odds,
+# Yahoo roster/start%/projection, and FantasyPros ECR current.
+#
+# Needs NO login credentials beyond the odds API key and the Google
+# service account: the team list, matchups, and both EPA columns come
+# from nflverse's public release files. Subvertadown and FTN are gone --
+# their secrets are no longer written here, and nothing reads them.
 #
 # No native `schedule:` trigger, matching every other workflow in this
 # repo -- GitHub's own scheduler has been unreliable here before. Wire
@@ -42,14 +47,10 @@ jobs:
 
       - name: Write credentials
         env:
-          SUBVERTADOWN_EMAIL:    ${{ secrets.SUBVERTADOWN_EMAIL }}
-          SUBVERTADOWN_PASSWORD: ${{ secrets.SUBVERTADOWN_PASSWORD }}
           ODDS_API_KEY:           ${{ secrets.ODDS_API_KEY }}
           GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
         run: |
           cat > ff_defense/.env <<EOF
-          SUBVERTADOWN_EMAIL=${SUBVERTADOWN_EMAIL}
-          SUBVERTADOWN_PASSWORD=${SUBVERTADOWN_PASSWORD}
           ODDS_API_KEY=${ODDS_API_KEY}
           EOF
 

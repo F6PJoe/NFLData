@@ -31,6 +31,18 @@ def normalize(name_or_abbr):
     return TEAM_ALIASES.get(abbr, abbr)
 
 
+ABBR_TO_NAME = {abbr: name for name, abbr in NAME_TO_ABBR.items()}
+
+
+def abbr_to_nickname(abbr):
+    """"PHI" (or "JAX", "@PHI") -> "Eagles" -- what column B actually holds.
+
+    Needed since the team list moved to nflverse's schedule, which speaks
+    abbreviations while the sheet's Team column speaks nicknames.
+    """
+    return ABBR_TO_NAME.get(normalize(abbr), abbr)
+
+
 def nickname_to_abbr(full_name):
     """"San Francisco 49ers" -> "SF" (matches by the name's last word)."""
     return normalize(full_name.split()[-1])

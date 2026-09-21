@@ -64,11 +64,11 @@ def main():
 
     n = len(live_teams)
     sheet.values().update(
-        spreadsheetId=SHEET_ID, range=f"{TAB}!K2", valueInputOption="RAW",
+        spreadsheetId=SHEET_ID, range=f"{TAB}!J2", valueInputOption="RAW",
         body={"values": k_col},
     ).execute()
 
-    print(f"Wrote {n} rows to '{TAB}'!K2:K{1 + n} (ECR, inverted).")
+    print(f"Wrote {n} rows to '{TAB}'!J2:J{1 + n} (ECR, inverted).")
     if missing:
         print("Unmatched (left blank):", ", ".join(missing))
 

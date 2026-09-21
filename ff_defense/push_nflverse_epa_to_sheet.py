@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Push opponent offensive EPA ranks (from fetch_nflverse_epa.py) into the
-Stream-O-Matic sheet's "Live" tab, column I -- replacing FTN's DAVE as
+Stream-O-Matic sheet's "Live" tab, column H -- replacing FTN's DAVE as
 the source for "how good is the offense this defense is facing."
 
 Rank is used AS-IS, no inversion: 1 = best offense, 32 = worst, so a high
@@ -11,10 +11,12 @@ convention the FTN Off Rank used, so nothing downstream changes.
 Reads the sheet's existing Team/Opp columns rather than assuming row
 order, same as every other push here.
 
-NOTE: this writes ONLY column I. Column H (the defense's own quality) is
-still open -- backtesting showed defensive EPA is a poor choice there
-(QB hit rate and success rate allowed are ~2x more predictive), so H
-should get its own metric rather than the other half of this file.
+NOTE: this writes ONLY column H. Column G (the defense's own quality) is
+deliberately NOT the defensive half of this same file -- backtesting
+showed defensive EPA alone is a poor standalone rating (corr 0.118 at 100
+plays vs offense's 0.402). It's built separately in fetch_def_rating.py,
+which blends EPA allowed with success rate allowed and shrinks toward
+Joe's preseason ranks.
 
 Usage:
     python push_nflverse_epa_to_sheet.py [--csv nflverse_epa.csv]
@@ -41,7 +43,7 @@ def main():
 
     if not os.path.exists(args.csv):
         print(f"[WARN] {args.csv} not found -- fetch_nflverse_epa.py likely failed. "
-              "Leaving column I unchanged.")
+              "Leaving column H unchanged.")
         return
 
     with open(args.csv, newline="", encoding="utf-8") as f:
@@ -59,21 +61,21 @@ def main():
     existing = sheet.values().get(spreadsheetId=SHEET_ID, range=f"{TAB}!B2:E").execute()
     live_rows = existing.get("values", [])
 
-    i_col, missing = [], []
+    h_col, missing = [], []
     for row in live_rows:
         opp = normalize(row[3]) if len(row) > 3 and row[3] else None
         rank = rank_by_team.get(opp) if opp else None
-        i_col.append([rank if rank is not None else ""])
+        h_col.append([rank if rank is not None else ""])
         if opp and rank is None:
             missing.append(opp)
 
     n = len(live_rows)
     sheet.values().update(
-        spreadsheetId=SHEET_ID, range=f"{TAB}!I2", valueInputOption="RAW",
-        body={"values": i_col},
+        spreadsheetId=SHEET_ID, range=f"{TAB}!H2", valueInputOption="RAW",
+        body={"values": h_col},
     ).execute()
 
-    print(f"Wrote {n} rows to '{TAB}'!I2:I{1 + n} (Opp offensive EPA rank).")
+    print(f"Wrote {n} rows to '{TAB}'!H2:H{1 + n} (Opp offensive EPA rank).")
     if missing:
         print("Unmatched opponents (left blank):", ", ".join(sorted(set(missing))))
 

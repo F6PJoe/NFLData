@@ -2,8 +2,8 @@
 
 Feeds Joe's "Stream-O-Matic" Google Sheet (id
 `1lTRoatl-YQHlv78YeisG7eFyz2xqaConGUoPo4medpQ`), specifically the "Live"
-tab: `SCORE | Team | Rost% | Start% | Opp | Imp | Subvertadown | Def DAVE |
-Opp Off DAVE | Pressure | ECR | Proj` (A-L). Sheet writes use the same
+tab: `SCORE | Team | Rost% | Start% | Opp | Imp | Def Rating | Opp Off EPA |
+Pressure | ECR | Proj` (A-K). Sheet writes use the same
 service-account credentials as the rest of this repo
 (`triple-baton-456523-e4-b9ec3cbd6e3d.json` at the repo root) — Joe shared
 the "Live" sheet with that service account's email directly.
@@ -14,50 +14,121 @@ abbreviation ("@KC") to this sheet's standard code, aliasing each source's
 quirks (FTN's "JAX", eatdrinkandsleepfootball's stale stl/sd/oak codes).
 `nickname_to_abbr()` derives the code from a full team name's last word.
 
+## Retired sources — do not wire these back in without checking
+Subvertadown (column G + the team list) and FTN DAVE (columns H/I) were
+both **paid/borrowed** feeds that stopped working: Subvertadown revoked
+Joe's access, and he wanted off DVOA regardless. `fetch_subvertadown_defense.py`,
+`push_subvertadown_to_sheet.py`, `fetch_ftn_dave.py` and
+`push_ftn_dave_to_sheet.py` are still in the tree for reference but are
+**not in the pipeline** and nothing calls them.
+
+Everything they supplied now comes from nflverse's free public release
+files (no login, no scraping, nothing revocable):
+- team list + matchups → `fetch_schedule.py` (schedules release)
+- column G (own defense quality) → `fetch_def_rating.py` (play-by-play)
+- column H (opponent offense) → `fetch_nflverse_epa.py` (play-by-play)
+
+**Subvertadown's column was deleted outright** (it sat between Imp and
+Def Rating), so the tab went from A–L to **A–K** and everything from Def
+Rating rightward shifted one column left. Every push script's target
+letter moved with it. If you're reading older code or notes that mention
+`H2` for Def Rating or `L2` for Proj, that's the pre-deletion layout.
+
 ## Weekly refresh order
 ```
-python fetch_subvertadown_defense.py && python push_subvertadown_to_sheet.py
-python fetch_ftn_dave.py && python push_ftn_dave_to_sheet.py
+python fetch_schedule.py --week N && python push_schedule_to_sheet.py
+python fetch_def_rating.py && python push_def_rating_to_sheet.py
+python fetch_nflverse_epa.py && python push_nflverse_epa_to_sheet.py
 python fetch_implied_totals.py && python push_implied_totals_to_sheet.py
 python fetch_yahoo_def.py --week N && python push_yahoo_def_to_sheet.py
 python fetch_fantasypros_dst_ecr.py --week N && python push_fantasypros_ecr_to_sheet.py
 python fetch_pressure_rate.py && python push_pressure_rate_to_sheet.py
 python finalize_live_sheet.py
 ```
-`--week N` (Yahoo, FantasyPros) needs bumping each week. `finalize_live_sheet.py`
+Or just `python run_all.py` / `python run_frequent.py` (week auto-detected).
+`fetch_schedule.py` must run FIRST — it establishes the team list in column
+B that every other push matches its rows against. `finalize_live_sheet.py`
 must run LAST — see below.
 
 Two row-matching patterns are used throughout, per column:
-- **Own team** (columns B, C, D, G, H, L): matched by the row's own Team (B).
-- **Opponent** (columns F, I, J, K... wait K is own-team too — see per-source
-  notes below): matched by looking up the row's Opp (E) in the source's data.
+- **Own team** (columns B, C, D, G, J, K): matched by the row's own Team (B).
+- **Opponent** (columns F, H, I): matched by looking up the row's Opp (E)
+  in the source's data.
 
 ## Column-by-column source map
 | Col | Header | Source | Match | Direction |
 |---|---|---|---|---|
-| B | Team | Subvertadown | — (establishes row order) | — |
+| B | Team | nflverse schedules | — (establishes row order) | — |
 | C | Rost% | Yahoo (`R_O` view) | own team | plain %, written as a real fraction + "0%" format |
 | D | Start% | Yahoo (`R_O` view) | own team | same as C |
-| E | Opp | Subvertadown | — | "@ABBR" if away, "ABBR" if home |
+| E | Opp | nflverse schedules | — | "@ABBR" if away, "ABBR" if home |
 | F | Imp | The Odds API | **opponent's** rank | 1 = highest implied total (toughest offense), 32 = lowest |
-| G | Subvertadown | Subvertadown | own team | 1 = worst projected D/ST, 32 = best |
-| H | Def DAVE | FTN `/stats/nfl/dave` | own team | FTN's Def Rank inverted (33-rank), so 32 = best own defense |
-| I | Opp Off DAVE | FTN `/stats/nfl/dave` | **opponent's** rank | FTN's Off Rank AS-IS (1 = best offense already means high = weak offense = good matchup, no inversion needed) |
-| J | Pressure | Sharp Football Analysis | **opponent's** rank | 1 = allows least pressure, 32 = allows most |
-| K | ECR | FantasyPros consensus (DST, 36 experts) | own team | FantasyPros rank inverted (33-rank), so 32 = best |
-| L | Proj | Yahoo (`S_PW_<week>` view) | own team | that week's Yahoo-projected fantasy points, plain number |
-| A | SCORE | `finalize_live_sheet.py` | — | `=SUM(F:K)+IF(@ in Opp, 0, 5)` per row, filled by script |
+| G | Def Rating | nflverse pbp + Joe's preseason ranks | own team | already ranked 32 = best own defense, written as-is (no inversion) |
+| H | Opp Off EPA | nflverse pbp (offensive EPA/play) | **opponent's** rank | 1 = best offense, used AS-IS (high = weak offense = good matchup, no inversion needed) |
+| I | Pressure | Sharp Football Analysis | **opponent's** rank | 1 = allows least pressure, 32 = allows most |
+| J | ECR | FantasyPros consensus (DST, 36 experts) | own team | FantasyPros rank inverted (33-rank), so 32 = best |
+| K | Proj | Yahoo (`S_PW_<week>` view) | own team | that week's Yahoo-projected fantasy points, plain number — **ranked inside the SCORE formula**, not pre-ranked by a push script |
+| A | SCORE | `finalize_live_sheet.py` | — | `=SUM(F:J)+RANK.EQ(K, K:K, 1)+IF(@ in E, 0, 5)` per row, filled by script |
 
 ## Per-source fetcher notes
 
-**Subvertadown** (`fetch_subvertadown_defense.py`) — logs into
+**Schedule / team list** (`fetch_schedule.py`) — nflverse's `schedules`
+release (`games.csv.gz`, the whole season, ~272 games). One output row per
+team per week, so bye weeks fall out naturally: a team with no game simply
+isn't there, and the sheet ends up with however many teams actually play.
+Cached locally but **age-checked, not existence-checked** (12h): nflverse
+revises this file in-season for flexed and rescheduled games, so a stale
+cache would quietly serve the wrong matchups. Verified against the Week 2
+board the old Subvertadown scrape produced: all 32 teams and all 32
+opponents matched exactly, 0 reciprocity errors.
+
+**Defense rating** (`fetch_def_rating.py`) — column G, the self-owned
+answer to Def DAVE. A 50/50 z-blend of **EPA/play allowed** and **success
+rate allowed** from nflverse play-by-play, then shrunk toward **Joe's own
+preseason defensive ranks** (`preseason_def_ranks.csv`, 1 = best) at
+`K_PRIOR = 300` plays (~4.5 games).
+
+The prior is not optional garnish — defense barely carries over year to
+year (last season → this season correlates only 0.169), so a few games is
+mostly noise, and shrinking toward *league average* instead would flatten
+all 32 teams and let that noise decide the ranking. Backtested, the blend
+beats both of its own halves: at 100 plays, observed 0.118 / prior 0.161 /
+**blended 0.204**; at 300 plays, 0.223 / 0.155 / **0.276**. (That's a
+*ranking* result. An earlier RMSE test suggested a prior needs ρ ≥ 0.45 to
+help, but that measured value accuracy — this tool only ever uses the rank,
+and the conclusion flips.) Success rate is in the blend because it's what
+DVOA is built on underneath and it's ~2× more predictive than defensive
+EPA early (0.220 vs 0.118 at 100 plays); EPA is in it because the blend is
+the most stable of the three late (0.316 at 600 plays).
+
+`preseason_def_ranks.csv` is hand-entered by Joe and is **explicitly
+un-ignored** in `.gitignore` (which otherwise ignores `ff_defense/*.csv`)
+— nothing regenerates it, and CI needs it. Update it each preseason.
+
+**Offensive EPA** (`fetch_nflverse_epa.py`) — column H, the opponent's
+offense. EPA/play regressed toward league average at `K_OFFENSE = 350`.
+Every choice was settled by `backtest_epa_regression.py` over 2021-25, not
+guessed: garbage time is **included at full weight** (excluding it makes
+EPA *less* predictive — 0.122 vs 0.065 — and partial weights were
+monotonically worse), there's **no opponent adjustment** (Open Source
+Football found it slightly reduces predictive power), and regression is
+toward league average rather than last season.
+
+Both nflverse fetchers normalize team codes **before** grouping, because
+nflverse carries both `LA` and `LAR` for the Rams across seasons — renaming
+after a groupby would leave two half-sized rows for the same team.
+
+**Subvertadown** (`fetch_subvertadown_defense.py`) — **RETIRED, not in the
+pipeline.** Kept for reference only. Logged into
 subvertadown.com (plain Laravel form POST, not Livewire) via
 `SUBVERTADOWN_EMAIL`/`SUBVERTADOWN_PASSWORD`; logged out only 2 of 32 teams
 render (confirmed server-side gated, not CSS-blurred). Parses each
 `<tr id="row-XXX">`'s team, opponent (`vs.` = home, `@` = away — the Opp
 column literally mirrors this), and week's projected D/ST points.
 
-**FTN DAVE** (`fetch_ftn_dave.py`) — `ftnfantasy.com/stats/nfl/dave` is
+**FTN DAVE** (`fetch_ftn_dave.py`) — **RETIRED, not in the pipeline.**
+Kept for reference only (the cookie trick below is genuinely hard-won and
+worth not rediscovering). `ftnfantasy.com/stats/nfl/dave` is
 cookie-gated (not Bearer-token gated like FTN's rankings API elsewhere in
 this repo): login via `api.ftnfantasy.com/users/login` returns
 access_token/refresh_token/user_id, and **all three** must be set as
@@ -125,18 +196,34 @@ resolve as the season goes on. Sharp is simply the source Joe picked given
 FTN's specific data-lag problem — not a claim that it's more "correct."
 
 ## finalize_live_sheet.py — must run last
-Three jobs, using `subvertadown_defense.csv`'s row count as the
-authoritative "how many teams have a game this week" number (bye weeks
-mean fewer than 32):
+Three jobs, using `schedule.csv`'s row count as the authoritative "how
+many teams have a game this week" number (bye weeks mean fewer than 32):
 1. Deletes any leftover sheet rows beyond that count (up to a fixed
    buffer of row 40) — actual row deletion via `deleteDimension`, not
    just clearing cell contents, so a bye week doesn't leave stale blank
    or (worse) stale non-blank rows sitting around from a fuller previous
    week.
 2. Fills column A's SCORE formula down through the last real team row,
-   writing each row's formula explicitly (`=SUM(F{r}:K{r})+IF(...)`) since
-   there's no spreadsheet UI "fill handle" to rely on headlessly.
-3. Sorts `A2:L<last row>` descending by column A — header row untouched.
+   writing each row's formula explicitly since there's no spreadsheet UI
+   "fill handle" to rely on headlessly:
+   `=SUM(F{r}:J{r})+RANK.EQ(K{r}, K:K, 1)+IF(ISNUMBER(SEARCH("@", E{r})), 0, 5)`
+
+   Three things to know about it:
+   - `F:J` is contiguous now that Subvertadown's column is gone.
+   - `RANK.EQ(K, K:K, 1)` scores the Yahoo projection. **Order `1` is
+     ascending**, so the lowest projection ranks 1 and the highest ranks 32
+     — matching every other column, where a bigger number is better. It's
+     ranked rather than added raw so one column of fantasy points can't
+     outweigh five columns of 1–32 ranks. The whole-column `K:K` reference
+     is safe: RANK.EQ ignores the text header and blank rows. This means
+     column K is the one scored column with no ranking push script behind
+     it — the sheet does it.
+   - The "@" home-bonus test reads column **E** (Opp). It used to read
+     **D** (Start%), which never contains an "@" — so every team, home and
+     road alike, collected the +5. That never changed the ORDER (a constant
+     shifts all 32 scores equally), but the home bonus was doing nothing at
+     all until it was fixed.
+3. Sorts `A2:K<last row>` descending by column A — header row untouched.
 
 Because every other push script re-reads the sheet's current Team/Opp
 columns fresh each time rather than assuming a fixed row order, running

@@ -63,7 +63,7 @@ K_OFFENSE = 350
 FIELDNAMES = ["Rank", "Team", "OffEpaAdj", "OffEpaRaw", "Plays"]
 
 
-def fetch_pbp(year, max_age_hours=6):
+def fetch_pbp(year, max_age_hours=6, extra_cols=()):
     """Download the season's play-by-play, re-using a recent local copy.
 
     nflverse updates this file through the season, so a stale cache would
@@ -88,15 +88,22 @@ def fetch_pbp(year, max_age_hours=6):
         with open(path, "wb") as f:
             f.write(resp.content)
 
-    df = pd.read_csv(path, compression="gzip", low_memory=False,
-                     usecols=["season", "week", "posteam", "defteam", "epa", "play_type"])
+    # extra_cols lets other scripts (fetch_def_rating.py) reuse this loader
+    # and its cache without pulling the whole 400-column file.
+    cols = ["season", "week", "posteam", "defteam", "epa", "play_type"]
+    cols += [c for c in extra_cols if c not in cols]
+    df = pd.read_csv(path, compression="gzip", low_memory=False, usecols=cols)
     return df[df["play_type"].isin(["pass", "run"])
               & df["epa"].notna() & df["posteam"].notna()].copy()
 
 
 def build_rows(plays):
     league_mean = plays["epa"].mean()
-    g = plays.groupby("posteam").agg(OffEpaRaw=("epa", "mean"), Plays=("epa", "size"))
+    # Normalize BEFORE grouping: nflverse carries both "LA" and "LAR" for the
+    # Rams across seasons, and renaming after the fact would leave two
+    # half-sized rows for the same team.
+    plays = plays.assign(team=[normalize(t) for t in plays["posteam"]])
+    g = plays.groupby("team").agg(OffEpaRaw=("epa", "mean"), Plays=("epa", "size"))
 
     # Shrink toward league average by K_OFFENSE plays' worth of evidence,
     # so week 1 barely moves a team off average and the observed number
@@ -109,7 +116,7 @@ def build_rows(plays):
     for rank, (team, r) in enumerate(g.iterrows(), start=1):
         rows.append({
             "Rank": rank,
-            "Team": normalize(team),
+            "Team": team,
             "OffEpaAdj": round(r["OffEpaAdj"], 4),
             "OffEpaRaw": round(r["OffEpaRaw"], 4),
             "Plays": int(r["Plays"]),

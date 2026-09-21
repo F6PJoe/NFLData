@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 """
-Run the Stream-O-Matic refresh, skipping the two sources that only need
-updating once a week: FTN DAVE (columns H/I) and pressure rate (column J).
-Everything else here changes often enough to be worth rerunning more
-often -- Subvertadown's weekly projection, implied totals (live odds),
-Yahoo roster/start%/projection, and FantasyPros ECR.
+Run the Stream-O-Matic refresh, skipping the one source that only needs
+updating once a week: pressure rate (column J).
+
+This used to skip the DAVE fetch too, since FTN's login was slow and the
+numbers only moved weekly. Columns H and I now come from nflverse
+play-by-play instead -- a cached file download with no login -- so they
+cost little to refresh and they genuinely change as each week's games
+finish. They stay in.
 
 Also skips generate_reddit_post.py -- Joe only wants that generated once,
 on the main/full run_all.py run, not on every quick refresh.
@@ -20,8 +23,7 @@ import sys
 from current_week import current_week
 from run_all import STEPS, run_steps
 
-SKIP = {"fetch_ftn_dave.py", "push_ftn_dave_to_sheet.py",
-        "fetch_pressure_rate.py", "push_pressure_rate_to_sheet.py",
+SKIP = {"fetch_pressure_rate.py", "push_pressure_rate_to_sheet.py",
         "generate_reddit_post.py"}
 
 FREQUENT_STEPS = [(script, args) for script, args in STEPS if script not in SKIP]
@@ -39,13 +41,13 @@ def main():
     failures = run_steps(FREQUENT_STEPS, week)
 
     if failures:
-        print(f"\nDone (DVOA and pressure rate skipped -- weekly-only), "
+        print(f"\nDone (pressure rate skipped -- weekly-only), "
               f"but {len(failures)} step(s) failed:")
         for script, code in failures:
             print(f"  - {script} (exit {code})")
         sys.exit(1)
 
-    print("\nAll done (DVOA and pressure rate skipped -- weekly-only).")
+    print("\nAll done (pressure rate skipped -- weekly-only).")
 
 
 if __name__ == "__main__":

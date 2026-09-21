@@ -17,7 +17,16 @@ from current_week import current_week
 
 HERE = Path(__file__).parent
 
-# (script, extra_args) -- in the order they must run. No step stops the
+# (script, extra_args) -- in the order they must run. fetch_schedule.py
+# has to come first: it establishes the team list (column B) that every
+# other push matches its rows against.
+#
+# Columns H and I used to come from FTN's DAVE and the team list from
+# Subvertadown; both are gone (see CLAUDE.md). They're now built here from
+# nflverse's free play-by-play and schedule releases, so nothing in this
+# pipeline depends on a login that can be revoked.
+#
+# No step stops the
 # pipeline on failure -- Joe's call: a failure on any one source (a lapsed
 # subscription, a CI/datacenter IP block like FTN's -- see
 # fetch_weekly_projections.yml's own comment about that exact issue) should
@@ -27,14 +36,16 @@ HERE = Path(__file__).parent
 # leaves its columns as whatever they already were) if the matching
 # fetch_*.py failed to produce one -- so a missing file here is never a
 # crash, just a skipped column. finalize_live_sheet.py separately falls
-# back to the sheet's own current row count if subvertadown_defense.csv is
-# missing, so bye-week row cleanup / SCORE formula / sort still run even
-# when Subvertadown itself is down.
+# back to the sheet's own current row count if schedule.csv is missing, so
+# bye-week row cleanup / SCORE formula / sort still run even when the
+# schedule fetch is down.
 STEPS = [
-    ("fetch_subvertadown_defense.py", []),
-    ("push_subvertadown_to_sheet.py", []),
-    ("fetch_ftn_dave.py", []),
-    ("push_ftn_dave_to_sheet.py", []),
+    ("fetch_schedule.py", ["--week", "{week}"]),
+    ("push_schedule_to_sheet.py", []),
+    ("fetch_def_rating.py", []),
+    ("push_def_rating_to_sheet.py", []),
+    ("fetch_nflverse_epa.py", []),
+    ("push_nflverse_epa_to_sheet.py", []),
     ("fetch_implied_totals.py", []),
     ("push_implied_totals_to_sheet.py", []),
     ("fetch_yahoo_def.py", ["--week", "{week}"]),

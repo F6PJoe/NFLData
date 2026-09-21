@@ -3,26 +3,24 @@
 Weekly housekeeping on the Stream-O-Matic sheet's "Live" tab, run LAST
 after all the fetch_*/push_* scripts for the week:
 
-1. Bye weeks mean fewer than 32 teams. subvertadown_defense.csv (from the
-   most recent fetch_subvertadown_defense.py run) is this week's
-   authoritative team count -- it's the source that drives column B/G,
-   so its row count IS however many teams have a game this week. Any
-   leftover rows below that (from a previous week that had more teams,
-   or just unused buffer rows) get deleted outright, not just cleared.
-   If that CSV is missing (fetch_subvertadown_defense.py failed -- e.g. a
-   lapsed subscription, login blocked from CI -- see run_all.py), falls
-   back to however many rows column B on the sheet already has, so this
-   step still runs and every other column's fresh push still lands
-   somewhere sensible instead of the whole run stopping.
-2. Column A's SCORE formula (=SUM(F{r}:K{r})+IF(ISNUMBER(SEARCH("@",
-   D{r})), 0, 5)) is filled down from row 2 through the last real team
-   row -- written explicitly per row rather than relying on a
+1. Bye weeks mean fewer than 32 teams. schedule.csv (from the most recent
+   fetch_schedule.py run) is this week's authoritative team count -- it's
+   the source that drives columns B/E, so its row count IS however many
+   teams have a game this week. Any leftover rows below that (from a
+   previous week that had more teams, or just unused buffer rows) get
+   deleted outright, not just cleared. If that CSV is missing
+   (fetch_schedule.py failed -- see run_all.py), falls back to however
+   many rows column B on the sheet already has, so this step still runs
+   and every other column's fresh push still lands somewhere sensible
+   instead of the whole run stopping.
+2. Column A's SCORE formula is filled down from row 2 through the last
+   real team row -- written explicitly per row rather than relying on a
    spreadsheet "fill handle," since this runs headless.
-3. The team rows (A2:L<last>) are sorted descending by column A (SCORE)
+3. The team rows (A2:K<last>) are sorted descending by column A (SCORE)
    -- the header row is never touched.
 
 Usage:
-    python finalize_live_sheet.py [--csv subvertadown_defense.csv]
+    python finalize_live_sheet.py [--csv schedule.csv]
 
 Requires: google-api-python-client, google-auth
 """
@@ -40,12 +38,29 @@ TAB_GID = 0  # confirmed via spreadsheets.get -- Live is the first sheet
 # Generous upper bound on rows ever in play (32 teams + header, plus margin).
 MAX_ROW = 40
 
-SCORE_FORMULA = '=SUM(F{r}:K{r})+IF(ISNUMBER(SEARCH("@", D{r})), 0, 5)'
+# F:J are the five ranked columns (Imp, Def Rating, Opp Off EPA, Pressure,
+# ECR). Subvertadown's old column sat between Imp and Def Rating and was
+# deleted outright once its source was gone, so the range is contiguous
+# again -- there's no longer a gap to skip.
+#
+# RANK.EQ(K{r}, K:K, 1) scores the Yahoo projection in column K. Order 1 is
+# ASCENDING, so the lowest projection ranks 1 and the highest ranks 32 --
+# matching every other column here, where a bigger number is better. It's
+# ranked rather than added raw so one column of fantasy points can't
+# outweigh five columns of 1-32 ranks. The whole-column K:K reference is
+# safe: RANK.EQ ignores the text header and blank rows.
+#
+# The "@" test reads column E (Opp). It used to read D (Start%), which never
+# contains an "@" -- so every team got the +5 home bonus, including road
+# teams. Harmless to the ORDER, since a constant shifts all 32 scores
+# equally, but the home bonus was doing nothing at all.
+SCORE_FORMULA = ('=SUM(F{r}:J{r})+RANK.EQ(K{r}, K:K, 1)'
+                 '+IF(ISNUMBER(SEARCH("@", E{r})), 0, 5)')
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--csv", default="subvertadown_defense.csv")
+    ap.add_argument("--csv", default="schedule.csv")
     args = ap.parse_args()
 
     from google.oauth2.service_account import Credentials
@@ -96,7 +111,7 @@ def main():
             "range": {
                 "sheetId": TAB_GID,
                 "startRowIndex": 1, "endRowIndex": last_row,   # rows 2..last_row
-                "startColumnIndex": 0, "endColumnIndex": 12,   # columns A..L
+                "startColumnIndex": 0, "endColumnIndex": 11,   # columns A..K
             },
             "sortSpecs": [{"dimensionIndex": 0, "sortOrder": "DESCENDING"}],
         }

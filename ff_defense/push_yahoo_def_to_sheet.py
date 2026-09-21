@@ -84,7 +84,7 @@ def main():
         body={"values": d_col},
     ).execute()
     sheet.values().update(
-        spreadsheetId=SHEET_ID, range=f"{TAB}!L2", valueInputOption="RAW",
+        spreadsheetId=SHEET_ID, range=f"{TAB}!K2", valueInputOption="RAW",
         body={"values": l_col},
     ).execute()
 
@@ -106,7 +106,7 @@ def main():
     }).execute()
 
     print(f"Wrote {n} rows to '{TAB}'!C2:C{1 + n} (Rost%), !D2:D{1 + n} (Start%), "
-          f"and !L2:L{1 + n} (Proj).")
+          f"and !K2:K{1 + n} (Proj).")
     if missing:
         print("Unmatched (left blank):", ", ".join(missing))
 
