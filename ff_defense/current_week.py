@@ -15,8 +15,11 @@ confirmed live.
 """
 
 import datetime
+from zoneinfo import ZoneInfo
 
 NFL_WEEK1_TUESDAY = datetime.date(2026, 9, 8)  # <-- update each new season
+
+ET = ZoneInfo("America/New_York")
 
 
 def current_week(today=None):
@@ -25,6 +28,23 @@ def current_week(today=None):
     if days_since < 0:
         return 1  # preseason / before kickoff -- default to week 1
     return days_since // 7 + 1
+
+
+def week_window_utc(week=None):
+    """(start, end) UTC datetimes bounding one NFL week, Tue 00:00 ET to the
+    following Tue 00:00 ET -- the same Tuesday boundary current_week() uses.
+
+    Used to decide which games belong to "this week." The Odds API returns
+    every UPCOMING game, which by late in a week is mostly NEXT week's slate
+    (checked live on a Sunday afternoon: only 6 of the 22 games returned
+    were still this week's), so filtering by this window is what keeps next
+    week's lines from being written in as if they were this week's.
+    """
+    week = week or current_week()
+    start_date = NFL_WEEK1_TUESDAY + datetime.timedelta(days=7 * (week - 1))
+    start = datetime.datetime.combine(start_date, datetime.time.min, tzinfo=ET)
+    end = start + datetime.timedelta(days=7)
+    return start.astimezone(datetime.timezone.utc), end.astimezone(datetime.timezone.utc)
 
 
 if __name__ == "__main__":

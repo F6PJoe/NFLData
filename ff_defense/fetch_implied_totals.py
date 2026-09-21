@@ -10,12 +10,22 @@ manually-curated page with no guaranteed update cadence -- switched to
 The Odds API instead so this always reflects live sportsbook lines
 whenever it's run, not whatever the page last happened to show.
 
-/v4/sports/americanfootball_nfl/odds/ returns every upcoming game, not
-just this week's -- confirmed live (2026-09-16) it comes back as two
-clean 16-game blocks (this week's slate, then next week's, with a
-multi-day gap between the last game of one and the first of the next),
-so the soonest 16 games by commence_time are unambiguously the current
-week's slate.
+/v4/sports/americanfootball_nfl/odds/ returns every UPCOMING game and
+drops games once they kick off, so "this week's slate" has to be carved
+out by date, not by taking the soonest N games.
+
+An earlier version took the soonest 16 games, on the assumption the API
+returns a clean 16-game block per week. That holds early in the week but
+breaks badly later: checked live on Sunday afternoon of week 2, only 6 of
+the week's games were still upcoming, so "soonest 16" was 6 real games
+plus 10 games from WEEK 3 -- writing next week's lines into the sheet as
+if they were this week's. Now filtered to current_week.week_window_utc(),
+the Tue-to-Tue ET window that current_week() itself uses.
+
+Teams whose game has already kicked off simply won't appear in the
+output. That's expected and correct -- push_implied_totals_to_sheet.py
+keeps their existing value rather than blanking it, so a Thursday-night
+team holds its pre-kickoff number for the rest of the week.
 
 Implied total = O/U / 2 - team's own spread / 2 (spread is negative for
 the favorite) -- verified against the eatdrinkandsleepfootball numbers
@@ -38,8 +48,11 @@ import argparse
 import csv
 import os
 
+import datetime
+
 import requests
 
+from current_week import week_window_utc
 from team_names import nickname_to_abbr
 
 ODDS_URL = "https://api.the-odds-api.com/v4/sports/americanfootball_nfl/odds/"
@@ -66,7 +79,7 @@ def _pick_bookmaker(game):
     return books.get(PREFERRED_BOOKMAKER) or (game["bookmakers"][0] if game["bookmakers"] else None)
 
 
-def fetch_games():
+def fetch_games(week=None):
     _load_dotenv()
     api_key = os.environ.get("ODDS_API_KEY")
     if not api_key:
@@ -79,8 +92,17 @@ def fetch_games():
     )
     resp.raise_for_status()
     games = resp.json()
-    games.sort(key=lambda g: g["commence_time"])
-    return games[:GAMES_PER_WEEK]
+
+    start, end = week_window_utc(week)
+    in_week = []
+    for g in games:
+        kickoff = datetime.datetime.fromisoformat(g["commence_time"].replace("Z", "+00:00"))
+        if start <= kickoff < end:
+            in_week.append(g)
+    in_week.sort(key=lambda g: g["commence_time"])
+    print(f"{len(games)} upcoming games returned; {len(in_week)} fall in this week's "
+          f"window ({start:%a %m/%d} - {end:%a %m/%d} UTC).")
+    return in_week
 
 
 def build_rows(games):
@@ -125,15 +147,28 @@ def write_csv(rows, out_file):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default="implied_totals.csv")
+    ap.add_argument("--week", type=int, default=None,
+                     help="NFL week (default: auto-detected from today's date)")
     args = ap.parse_args()
 
-    games = fetch_games()
+    games = fetch_games(args.week)
     rows = build_rows(games)
-    if len(rows) < 2 * GAMES_PER_WEEK:
+    if not rows:
         raise SystemExit(
-            f"Only built {len(rows)} team rows (expected {2 * GAMES_PER_WEEK}) -- "
-            "some games may be missing spreads/totals odds yet."
+            "No games with spreads/totals found in this week's window -- "
+            "either the whole slate has already been played or the API "
+            "returned nothing usable."
         )
+
+    # A partial slate is NORMAL from Thursday night onward: the API drops
+    # games once they kick off. Those teams keep their existing sheet value
+    # (push_implied_totals_to_sheet.py preserves it), so this is a note,
+    # not an error.
+    if len(rows) < 2 * GAMES_PER_WEEK:
+        played = 2 * GAMES_PER_WEEK - len(rows)
+        print(f"NOTE: {len(rows)} of {2 * GAMES_PER_WEEK} team slots have live lines; "
+              f"~{played} team(s) have already kicked off and will keep their "
+              "existing sheet value.")
 
     write_csv(rows, args.out)
     print(f"Wrote {len(rows)} teams to {args.out} "
