@@ -18,14 +18,12 @@ name: Utilization Report Weekly Update
 # Required repo secrets (Settings -> Secrets and variables -> Actions):
 #   FANTASYLIFE_EMAIL, FANTASYLIFE_PASSWORD, FANTASYLIFE_FIREBASE_API_KEY
 #     -- already exist, shared with fetch_weekly_projections.yml.
-#   SFTP_HOST, SFTP_PORT, SFTP_USERNAME, SFTP_REMOTE_ROOT
-#     -- new, from ff_utilization/.env locally.
-#   SFTP_PRIVATE_KEY
-#     -- new: the OpenSSH-format private key's full file CONTENTS (not the
-#        local file path -- that path only exists on your machine). Same
-#        key your local SFTP_KEY_PATH points at.
+#   SFTP_HOST, SFTP_PORT, SFTP_USERNAME, SFTP_REMOTE_ROOT, SFTP_KEY,
 #   SFTP_KEY_PASSPHRASE
-#     -- new, only if that key has one; fine to leave empty otherwise.
+#     -- already exist, shared with points_against_refresh.yml (same
+#        SiteGround site/account). SFTP_KEY is the OpenSSH-format private
+#        key's full file contents, same secret naming that workflow uses --
+#        matched deliberately so nothing new needs to be added here.
 
 on:
   workflow_dispatch:
@@ -53,16 +51,15 @@ jobs:
           FANTASYLIFE_EMAIL:            ${{ secrets.FANTASYLIFE_EMAIL }}
           FANTASYLIFE_PASSWORD:         ${{ secrets.FANTASYLIFE_PASSWORD }}
           FANTASYLIFE_FIREBASE_API_KEY: ${{ secrets.FANTASYLIFE_FIREBASE_API_KEY }}
+          SFTP_KEY:                     ${{ secrets.SFTP_KEY }}
+          SFTP_KEY_PASSPHRASE:          ${{ secrets.SFTP_KEY_PASSPHRASE }}
           SFTP_HOST:                    ${{ secrets.SFTP_HOST }}
           SFTP_PORT:                    ${{ secrets.SFTP_PORT }}
           SFTP_USERNAME:                ${{ secrets.SFTP_USERNAME }}
           SFTP_REMOTE_ROOT:             ${{ secrets.SFTP_REMOTE_ROOT }}
-          SFTP_KEY_PASSPHRASE:          ${{ secrets.SFTP_KEY_PASSPHRASE }}
-          SFTP_PRIVATE_KEY:             ${{ secrets.SFTP_PRIVATE_KEY }}
         run: |
-          mkdir -p "$HOME/.ssh"
-          printf '%s\n' "$SFTP_PRIVATE_KEY" > "$HOME/.ssh/f6p_sftp_key"
-          chmod 600 "$HOME/.ssh/f6p_sftp_key"
+          echo "${SFTP_KEY}" > "${RUNNER_TEMP}/sftp_key"
+          chmod 600 "${RUNNER_TEMP}/sftp_key"
 
           cat > ff_utilization/.env <<EOF
           FANTASYLIFE_EMAIL=${FANTASYLIFE_EMAIL}
@@ -72,7 +69,7 @@ jobs:
           SFTP_PORT=${SFTP_PORT}
           SFTP_USERNAME=${SFTP_USERNAME}
           SFTP_REMOTE_ROOT=${SFTP_REMOTE_ROOT}
-          SFTP_KEY_PATH=${HOME}/.ssh/f6p_sftp_key
+          SFTP_KEY_PATH=${RUNNER_TEMP}/sftp_key
           SFTP_KEY_PASSPHRASE=${SFTP_KEY_PASSPHRASE}
           EOF
 
