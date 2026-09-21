@@ -60,3 +60,5 @@ Thumbs.db
 # ── Tools ────────────────────────────────────────────────────────────────────
 .ruff_cache/
 .mypy_cache/
+ff_defense/nflverse_data/
+ff_defense/nflverse_epa_exploration.xlsx
