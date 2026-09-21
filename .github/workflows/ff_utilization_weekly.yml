@@ -1,0 +1,92 @@
+name: Utilization Report Weekly Update
+
+# Pulls official-basis snaps/rush/targets/rec/EZ/ADOT (nflverse) + routes
+# (FantasyLife), merges them, rebuilds the member + teaser JSONs, and
+# uploads all 3 over SFTP -- the same cycle documented as "THE WEEKLY
+# PIPELINE" in ff_utilization/CLAUDE.md, just unattended.
+#
+# No native `schedule:` trigger -- driven by cron-job.org hitting
+# workflow_dispatch (Fri/Mon/Tue mornings), same pattern as the other
+# scheduled workflows in this repo. Do NOT add a `schedule:` trigger here,
+# or it will double-run alongside the cron-job.org job.
+#
+# --year/--weeks are intentionally omitted below: run_weekly.py auto-detects
+# the current NFL season/week from the league's own schedule data, so this
+# workflow never needs editing as the season progresses. --yes skips the
+# "upload now? [y/N]" prompt, since nothing here can answer it.
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   FANTASYLIFE_EMAIL, FANTASYLIFE_PASSWORD, FANTASYLIFE_FIREBASE_API_KEY
+#     -- already exist, shared with fetch_weekly_projections.yml.
+#   SFTP_HOST, SFTP_PORT, SFTP_USERNAME, SFTP_REMOTE_ROOT
+#     -- new, from ff_utilization/.env locally.
+#   SFTP_PRIVATE_KEY
+#     -- new: the OpenSSH-format private key's full file CONTENTS (not the
+#        local file path -- that path only exists on your machine). Same
+#        key your local SFTP_KEY_PATH points at.
+#   SFTP_KEY_PASSPHRASE
+#     -- new, only if that key has one; fine to leave empty otherwise.
+
+on:
+  workflow_dispatch:
+    # Triggered by cron-job.org, or manually from the Actions tab.
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r ff_utilization/requirements.txt
+
+      - name: Write credentials
+        env:
+          FANTASYLIFE_EMAIL:            ${{ secrets.FANTASYLIFE_EMAIL }}
+          FANTASYLIFE_PASSWORD:         ${{ secrets.FANTASYLIFE_PASSWORD }}
+          FANTASYLIFE_FIREBASE_API_KEY: ${{ secrets.FANTASYLIFE_FIREBASE_API_KEY }}
+          SFTP_HOST:                    ${{ secrets.SFTP_HOST }}
+          SFTP_PORT:                    ${{ secrets.SFTP_PORT }}
+          SFTP_USERNAME:                ${{ secrets.SFTP_USERNAME }}
+          SFTP_REMOTE_ROOT:             ${{ secrets.SFTP_REMOTE_ROOT }}
+          SFTP_KEY_PASSPHRASE:          ${{ secrets.SFTP_KEY_PASSPHRASE }}
+          SFTP_PRIVATE_KEY:             ${{ secrets.SFTP_PRIVATE_KEY }}
+        run: |
+          mkdir -p "$HOME/.ssh"
+          printf '%s\n' "$SFTP_PRIVATE_KEY" > "$HOME/.ssh/f6p_sftp_key"
+          chmod 600 "$HOME/.ssh/f6p_sftp_key"
+
+          cat > ff_utilization/.env <<EOF
+          FANTASYLIFE_EMAIL=${FANTASYLIFE_EMAIL}
+          FANTASYLIFE_PASSWORD=${FANTASYLIFE_PASSWORD}
+          FANTASYLIFE_FIREBASE_API_KEY=${FANTASYLIFE_FIREBASE_API_KEY}
+          SFTP_HOST=${SFTP_HOST}
+          SFTP_PORT=${SFTP_PORT}
+          SFTP_USERNAME=${SFTP_USERNAME}
+          SFTP_REMOTE_ROOT=${SFTP_REMOTE_ROOT}
+          SFTP_KEY_PATH=${HOME}/.ssh/f6p_sftp_key
+          SFTP_KEY_PASSPHRASE=${SFTP_KEY_PASSPHRASE}
+          EOF
+
+      - name: Run weekly update (fetch, build, upload) -- unattended
+        working-directory: ff_utilization
+        run: python run_weekly.py --yes
+
+      - name: Upload build outputs as artifact (for debugging)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: usage-weekly-outputs
+          path: |
+            ff_utilization/data/utilization_weekly.json
+            ff_utilization/data/utilization_teaser_weekly.json
+            ff_utilization/data/utilization_teaser_season.json
+          retention-days: 7
