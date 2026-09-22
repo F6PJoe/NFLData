@@ -55,11 +55,6 @@ def fetch_rows(year, week):
         raise SystemExit(f"FantasyPros returned week {echoed}, not {week} -- "
                          "refusing to write mismatched ECR.")
 
-    if (data.get("total_experts") or 0) < 10:
-        print(f"[WARN] only {data.get('total_experts')} experts have submitted "
-              f"week {week} DST ranks so far -- the consensus is thin this early. "
-              "The mid-week reruns will pick up more.")
-
     return [{"Week": week, "Rank": 33 - p["rank_ecr"], "Team": p["player_team_id"]}
             for p in players]
 
