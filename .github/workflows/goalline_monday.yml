@@ -1,0 +1,90 @@
+name: Goal-Line Guide - Monday (advance week)
+
+# Everything about the UPCOMING week -- none of it needs the just-played
+# week's Monday Night Football game to be over yet:
+#   1. duplicate the current week tab -> next week (with live formulas),
+#      freeze the current one to static values
+#   2. write the new week's real matchups
+#   3. pull live pre-game implied totals + O/U for the new week
+#   4. catch Off/Def up on whichever of the just-played week's games are
+#      already final (typically everything except that week's Monday
+#      night game -- intentional, see ff_goalline/CLAUDE.md. This is
+#      reference data for a write-up: the writer gets a head start with
+#      what's in by Monday afternoon, then goalline_tuesday.yml finishes
+#      the week once MNF posts.)
+#
+# The week number is never hardcoded -- run_monday.py reads it from the
+# sheet's own tabs (highest existing "W<N>"), so this workflow never needs
+# editing as the season progresses.
+#
+# No native `schedule:` trigger, matching every other workflow in this
+# repo -- GitHub's own scheduler has been unreliable here before. Wire
+# this up via cron-job.org (workflow_dispatch) for Monday afternoon;
+# do NOT add a `schedule:` trigger without checking cron-job.org first,
+# or this could double-run and, worse, double-advance the sheet (though
+# advance_week.py refusing to overwrite an existing tab makes a double-run
+# safe rather than silently destructive).
+#
+# Required repo secrets (Settings -> Secrets and variables -> Actions):
+#   GOOGLE_SERVICE_ACCOUNT -- the service account JSON's full file
+#     contents, already used by ff_defense's workflows. Written to the
+#     repo root as triple-baton-456523-e4-b9ec3cbd6e3d.json, same path
+#     every ff_goalline script expects.
+#   ODDS_API_KEY -- already used by ff_defense's workflows. Passed as a
+#     plain env var (no .env file needed -- fill_week_odds.py falls back
+#     to the real environment when ff_defense/.env doesn't exist in CI).
+
+on:
+  workflow_dispatch:
+    # Triggered by cron-job.org (Monday afternoon), or manually from the
+    # Actions tab.
+
+permissions:
+  contents: write
+
+jobs:
+  advance:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r ff_goalline/requirements.txt
+
+      - name: Write service account credentials
+        env:
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+        run: echo "${GOOGLE_SERVICE_ACCOUNT}" > triple-baton-456523-e4-b9ec3cbd6e3d.json
+
+      - name: Run Monday advance (duplicate week, matchups, odds, partial goal-line catch-up)
+        working-directory: ff_goalline
+        env:
+          ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+        run: python run_monday.py
+
+      - name: Commit updated counted-games manifest
+        if: always()
+        run: |
+          if [ -z "$(git status --porcelain ff_goalline/data/counted_games.json)" ]; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ff_goalline/data/counted_games.json
+          git commit -m "ff_goalline: Monday advance -- counted games through $(date -u +%Y-%m-%d)"
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && \
+              git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            echo "push attempt $i failed, retrying"
+            sleep 5
+          done
+          exit 1

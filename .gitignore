@@ -1,6 +1,11 @@
 # ── Credentials — never commit these ─────────────────────────────────────────
 .env
 *.json
+# ...except this one: it's not a credential, it's ff_goalline's durable
+# per-game de-dup manifest (which games have already been folded into the
+# Off/Def season totals). Nothing regenerates it from scratch -- CI commits
+# it back after every run so the Monday/Tuesday split doesn't double-count.
+!ff_goalline/data/counted_games.json
 
 # ── Virtual environment ───────────────────────────────────────────────────────
 .venv/
@@ -38,6 +43,7 @@ ff_points_against/cached/
 ff_idp_points_against/cached/
 ff_utilization/cached/
 ff_draft_proj/cached/
+ff_goalline/cached/
 ff_weekly_model/data/
 ff_sfb16/historical_*.csv
 

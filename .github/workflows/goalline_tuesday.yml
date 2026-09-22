@@ -1,0 +1,70 @@
+name: Goal-Line Guide - Tuesday (finish the week)
+
+# Finishes the week that just played by picking up whichever game(s)
+# weren't final yet when Monday's run (goalline_monday.yml) went out --
+# almost always just Monday Night Football. Targets LATEST-1 (see
+# run_tuesday.py) since Monday's run already advanced the sheet to the new
+# week's tab. update_weekly.py is per-game de-duped, so this is safe even
+# if Monday happened to catch everything already -- it'll just find
+# nothing new and no-op.
+#
+# No native `schedule:` trigger, matching every other workflow in this
+# repo. Wire this up via cron-job.org (workflow_dispatch) for Tuesday
+# morning, after Monday Night Football has posted to nflverse.
+#
+# Required repo secrets: GOOGLE_SERVICE_ACCOUNT only -- this half doesn't
+# touch odds at all, just Off/Def via the Sheets API and nflverse's public
+# (no-key) play-by-play file.
+
+on:
+  workflow_dispatch:
+    # Triggered by cron-job.org (Tuesday morning), or manually from the
+    # Actions tab.
+
+permissions:
+  contents: write
+
+jobs:
+  finish-week:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r ff_goalline/requirements.txt
+
+      - name: Write service account credentials
+        env:
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+        run: echo "${GOOGLE_SERVICE_ACCOUNT}" > triple-baton-456523-e4-b9ec3cbd6e3d.json
+
+      - name: Finish the just-played week's goal-line numbers
+        working-directory: ff_goalline
+        run: python run_tuesday.py
+
+      - name: Commit updated counted-games manifest
+        if: always()
+        run: |
+          if [ -z "$(git status --porcelain ff_goalline/data/counted_games.json)" ]; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add ff_goalline/data/counted_games.json
+          git commit -m "ff_goalline: Tuesday finish -- counted games through $(date -u +%Y-%m-%d)"
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && \
+              git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            echo "push attempt $i failed, retrying"
+            sleep 5
+          done
+          exit 1
