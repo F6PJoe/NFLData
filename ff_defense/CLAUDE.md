@@ -41,6 +41,7 @@ python fetch_def_rating.py && python push_def_rating_to_sheet.py
 python fetch_nflverse_epa.py && python push_nflverse_epa_to_sheet.py
 python fetch_implied_totals.py && python push_implied_totals_to_sheet.py
 python fetch_yahoo_def.py --week N && python push_yahoo_def_to_sheet.py
+python fetch_subvertadown_adjustment.py --week N && python push_proj_to_sheet.py
 python fetch_fantasypros_dst_ecr.py --week N && python push_fantasypros_ecr_to_sheet.py
 python fetch_pressure_rate.py && python push_pressure_rate_to_sheet.py
 python finalize_live_sheet.py
@@ -57,7 +58,7 @@ cron-job.org (no native `schedule:` — see the workflow comments).
 | | `run_all.py` / `defense_full_refresh.yml` | `run_frequent.py` / `defense_frequent_refresh.yml` |
 |---|---|---|
 | When | Tuesday afternoon, once | Wednesday–Sunday, repeatedly |
-| Columns | all of them, + Reddit post | F (odds), C/D/K (Yahoo), J (ECR) |
+| Columns | all of them, + Reddit post | F (odds), C/D (Yahoo), K (Proj), J (ECR) |
 
 **The Tuesday run must land first each week.** It writes the team list in
 column B, and every mid-week push matches its rows against that list — so a
