@@ -47,5 +47,47 @@ def week_window_utc(week=None):
     return start.astimezone(datetime.timezone.utc), end.astimezone(datetime.timezone.utc)
 
 
+def stale_week(rows, week=None, field="Week"):
+    """Return the CSV's stamped week if it ISN'T the week we're pushing.
+
+    Week-specific CSVs (Yahoo projections, FantasyPros ECR) look identical
+    whatever week produced them -- same 32 teams, same columns, plausible
+    numbers. So a leftover file from last week pushes silently and wrong,
+    which is exactly what happened once: a week-2 yahoo_def.csv got blended
+    with week-3 Subvertadown adjustments and put the Chargers at 8.51
+    projected points in the worst matchup on the board. Only a human
+    noticing the number was implausible caught it.
+
+    Returns None when the file is for the right week, or has no stamp at
+    all (an old file from before stamping existed -- the pushes warn rather
+    than refuse in that case, since there's nothing to check against).
+    """
+    week = week or current_week()
+    for r in rows:
+        stamped = r.get(field)
+        if stamped:
+            return int(stamped) if int(stamped) != week else None
+    return None
+
+
+def guard_week(path, rows, label):
+    """Refuse to push a week-specific CSV left over from another week.
+
+    Returns True when it's safe to push. Callers bail out on False rather
+    than raising, so one stale file skips its own column instead of
+    stopping the whole run -- same contract as the missing-file checks.
+    """
+    wrong = stale_week(rows)
+    if wrong is not None:
+        print(f"[SKIP] {path} is stamped week {wrong}, but it's week "
+              f"{current_week()} -- refusing to push stale {label}. "
+              f"Re-run its fetcher.")
+        return False
+    if rows and "Week" not in rows[0]:
+        print(f"[WARN] {path} has no week stamp (pre-dates stamping) -- "
+              f"pushing it unchecked.")
+    return True
+
+
 if __name__ == "__main__":
     print(current_week())

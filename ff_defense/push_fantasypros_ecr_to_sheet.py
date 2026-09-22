@@ -19,6 +19,7 @@ import csv
 import os
 from pathlib import Path
 
+from current_week import guard_week
 from team_names import normalize
 
 SHEET_ID = "1lTRoatl-YQHlv78YeisG7eFyz2xqaConGUoPo4medpQ"
@@ -38,6 +39,9 @@ def main():
 
     with open(args.csv, newline="", encoding="utf-8") as f:
         ecr_rows = list(csv.DictReader(f))
+
+    if not guard_week(args.csv, ecr_rows, "FantasyPros ECR"):
+        return
 
     rank_by_team = {normalize(r["Team"]): int(r["Rank"]) for r in ecr_rows}
 

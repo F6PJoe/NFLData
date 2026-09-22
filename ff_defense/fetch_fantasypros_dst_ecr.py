@@ -31,7 +31,9 @@ import requests
 CONSENSUS_URL = "https://partners.fantasypros.com/api/v1/consensus-rankings.php"
 HEADERS = {"User-Agent": "Mozilla/5.0 (personal rankings consensus tool)"}
 
-FIELDNAMES = ["Rank", "Team"]
+# Week is stamped so the push can refuse a leftover file -- see
+# current_week.stale_week().
+FIELDNAMES = ["Week", "Rank", "Team"]
 
 
 def fetch_rows(year, week):
@@ -44,7 +46,8 @@ def fetch_rows(year, week):
     data = resp.json()
     players = data.get("players", [])
     print(f"total_experts={data.get('total_experts')} last_updated={data.get('last_updated')}")
-    return [{"Rank": 33 - p["rank_ecr"], "Team": p["player_team_id"]} for p in players]
+    return [{"Week": week, "Rank": 33 - p["rank_ecr"], "Team": p["player_team_id"]}
+            for p in players]
 
 
 def write_csv(rows, out_file):

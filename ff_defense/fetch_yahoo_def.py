@@ -58,7 +58,9 @@ HEADERS = {
                   "(KHTML, like Gecko) Chrome/124.0 Safari/537.36",
 }
 
-FIELDNAMES = ["Team", "RosterPct", "StartPct", "Projection"]
+# Week is stamped so the pushes can refuse a leftover file from last week
+# -- see current_week.stale_week().
+FIELDNAMES = ["Week", "Team", "RosterPct", "StartPct", "Projection"]
 
 PCT_RE = re.compile(r"([\-0-9.]+)%?")
 
@@ -133,7 +135,8 @@ def fetch_projections(league_id, week):
     return out
 
 
-def write_csv(rows, out_file):
+def write_csv(rows, out_file, week):
+    rows = [dict(r, Week=week) for r in rows]
     with open(out_file, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDNAMES)
         w.writeheader()
@@ -164,7 +167,7 @@ def main():
         "Projection": projections.get(team),
     } for team in teams]
 
-    write_csv(rows, args.out)
+    write_csv(rows, args.out, args.week)
     print(f"Week {args.week}: wrote {len(rows)} teams to {args.out}.")
 
 

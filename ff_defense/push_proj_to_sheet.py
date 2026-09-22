@@ -31,6 +31,7 @@ import csv
 import os
 from pathlib import Path
 
+from current_week import guard_week
 from team_names import normalize
 
 SHEET_ID = "1lTRoatl-YQHlv78YeisG7eFyz2xqaConGUoPo4medpQ"
@@ -53,6 +54,10 @@ def main():
         print(f"[WARN] {args.yahoo} not found -- fetch_yahoo_def.py likely failed. "
               "Leaving column K unchanged.")
         return
+
+    with open(args.yahoo, newline="", encoding="utf-8") as f:
+        if not guard_week(args.yahoo, list(csv.DictReader(f)), "Yahoo projections"):
+            return
 
     proj_by_team = load(args.yahoo, "Team", "Projection")
 

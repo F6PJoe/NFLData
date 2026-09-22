@@ -26,6 +26,7 @@ import csv
 import os
 from pathlib import Path
 
+from current_week import guard_week
 from team_names import normalize
 
 SHEET_ID = "1lTRoatl-YQHlv78YeisG7eFyz2xqaConGUoPo4medpQ"
@@ -49,6 +50,9 @@ def main():
 
     def to_float(v):
         return float(v) if v not in (None, "") else None
+
+    if not guard_week(args.csv, yahoo_rows, "Yahoo roster/start%"):
+        return
 
     roster_by_team = {normalize(r["Team"]): to_float(r["RosterPct"]) for r in yahoo_rows}
     start_by_team = {normalize(r["Team"]): to_float(r["StartPct"]) for r in yahoo_rows}
