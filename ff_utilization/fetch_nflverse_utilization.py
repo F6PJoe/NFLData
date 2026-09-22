@@ -249,7 +249,8 @@ def gamebook_snaps(year, week, gsis, away, home, force=False):
 
 
 def collect_gamebook_snaps(year, wmin, wmax, refresh_schedule=False):
-    """-> ({(team,init,surname): (snaps, pct)}, n_games_ok, n_games_failed)
+    """-> ({(week, (team,surname,pos)): {first_prefix: (snaps, pct)}},
+           n_games_ok, n_games_failed)
 
     `refresh_schedule` controls only the games.csv fetch (see the comment
     below) -- it does NOT propagate to the per-game gamebook PDFs. Those have
@@ -273,9 +274,21 @@ def collect_gamebook_snaps(year, wmin, wmax, refresh_schedule=False):
 
     snaps, ok, bad = {}, 0, 0
     for g in games:
+        wk = int(num(g["week"]))
         try:
-            snaps.update(gamebook_snaps(year, int(num(g["week"])), g["gsis"],
-                                        g["away_team"], g["home_team"]))
+            # short_key() deliberately excludes week (it's scoped to matching
+            # names within ONE game's gamebook), so accumulating multiple
+            # weeks into a flat dict keyed only by (team,surname,pos) let a
+            # later week's .update() silently overwrite an earlier week's
+            # entry for the same player -- every one of that player's rows,
+            # regardless of week, then read back whichever week was fetched
+            # last. Caught for real: the published CSV had Tyler Allgeier's
+            # week 1 snaps (44) replaced by his week 2 snaps (32) once a
+            # multi-week range was built for the first time. Keying the
+            # accumulator by (week, key) instead keeps each week isolated.
+            for key_, entries in gamebook_snaps(year, wk, g["gsis"],
+                                                g["away_team"], g["home_team"]).items():
+                snaps[(wk, key_)] = entries
             ok += 1
         except Exception as exc:
             bad += 1
@@ -413,7 +426,7 @@ def build(year, wmin, wmax, use_cache=False, snap_source="auto"):
         for (gid, wk), (key_, first, pos, team, full) in name_to_gsis.items():
             if pos not in POSITIONS:
                 continue
-            entries = gb.get(key_)
+            entries = gb.get((wk, key_))
             if not entries:
                 continue
             hit = match_prefix(entries, first)

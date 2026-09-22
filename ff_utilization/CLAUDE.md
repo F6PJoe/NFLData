@@ -219,6 +219,27 @@ tgt%, EZ, EZ%, ADOT.
    an already-good week 1 gamebook PDF was byte-identical and untouched
    both times, while the one not-yet-posted game (this week's MNF) kept
    re-attempting and correctly reporting the failure each run.
+6. **Multi-week gamebook snaps collided across weeks -- week 1 silently
+   inherited week 2's snap counts.** `short_key()` (team, surname, position)
+   deliberately excludes week -- it's scoped to matching names within ONE
+   game's gamebook PDF, where a week component would be meaningless.
+   `collect_gamebook_snaps()` reused that same key as the accumulator key
+   across the ENTIRE requested week range, so `snaps.update(...)` for week
+   2's game silently overwrote week 1's entry for the same player (same
+   key, since team/surname/position don't change week to week). Every row
+   for that player -- regardless of which week it belonged to -- then read
+   back whichever week was processed last. This bug existed from the start
+   but could never trigger until a multi-week range was actually built,
+   which didn't happen until this week (every prior build was `--weeks
+   1-1`, one single week, wmin==wmax, no collision possible). Caught by the
+   user eyeballing the live site: Tyler Allgeier's week 1 row showed 32
+   snaps -- his real week 2 count -- instead of his actual 44. Fixed by
+   keying the accumulator (and the corresponding lookup in `build()`) as
+   `(week, key)` instead of bare `key`, so weeks never collide. Verified
+   directly against the published CSV: Allgeier/Love's week 1 snaps are
+   back to 44/32 (matching the very first Week 1 build, done before this
+   bug could exist) while week 2 stays 32/20, independently. Re-uploaded
+   the corrected data immediately.
 
 ## Parallel build: `fetch_nflverse_utilization.py` (official-basis)
 Second pipeline, run alongside the FL one, same column names and file shape so
