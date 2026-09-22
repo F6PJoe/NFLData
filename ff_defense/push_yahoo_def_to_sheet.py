@@ -42,7 +42,7 @@ def main():
 
     if not os.path.exists(args.csv):
         print(f"[WARN] {args.csv} not found -- fetch_yahoo_def.py likely failed. "
-              "Leaving columns C/D/L unchanged.")
+              "Leaving columns C/D unchanged.")
         return
 
     with open(args.csv, newline="", encoding="utf-8") as f:

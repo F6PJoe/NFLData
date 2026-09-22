@@ -3,7 +3,7 @@
 Rank this week's implied team totals and push them to the Stream-O-Matic
 sheet's "Live" tab, column F ("Imp"): the OPPONENT's implied-total rank
 (1 = highest implied total i.e. toughest offense to face, 32 = lowest),
-looked up via the row's own Opp column (E) -- same pattern as column I.
+looked up via the row's own Opp column (E) -- same pattern as columns H and I.
 
 THE IMP TAB IS THE BACKUP STORE. The Odds API only returns games that
 haven't kicked off yet, so from Thursday night onward fetch_implied_

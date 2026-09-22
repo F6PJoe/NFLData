@@ -3,7 +3,7 @@
 Compute team offensive EPA/play from nflverse's free public play-by-play
 data, regressed toward league average, and write it to a CSV.
 
-This replaces FTN's DAVE for column I ("Opp Off DAVE") -- the OPPONENT's
+This replaces FTN's DAVE for column H ("Opp Off EPA") -- the OPPONENT's
 offensive quality. Unlike DVOA it's fully self-owned: nflverse publishes
 per-play data (including nflfastR's precomputed `epa`) as plain files on
 GitHub, so there's no login, no scraping and no site that can revoke

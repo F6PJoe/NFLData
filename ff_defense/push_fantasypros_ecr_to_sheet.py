@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Push FantasyPros' D/ST ECR (from fetch_fantasypros_dst_ecr.py) into the
-Stream-O-Matic sheet's "Live" tab, column K: the row's OWN team's
+Stream-O-Matic sheet's "Live" tab, column J: the row's OWN team's
 inverted consensus rank (already inverted by the fetcher -- highest =
 best defense, matching every other column on this sheet).
 
@@ -34,7 +34,7 @@ def main():
 
     if not os.path.exists(args.csv):
         print(f"[WARN] {args.csv} not found -- fetch_fantasypros_dst_ecr.py likely failed. "
-              "Leaving column K unchanged.")
+              "Leaving column J unchanged.")
         return
 
     with open(args.csv, newline="", encoding="utf-8") as f:

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
 Push pressure-rate-allowed ranks (from fetch_pressure_rate.py) into the
-Stream-O-Matic sheet's "Live" tab, column J ("Pressure"): the OPPONENT's
+Stream-O-Matic sheet's "Live" tab, column I ("Pressure"): the OPPONENT's
 rank (1 = allows the least pressure / best pass protection, 32 = allows
 the most), looked up via the row's own Opp column (E) -- same pattern as
-columns F and I.
+columns F and H.
 
 Reads the existing Team/Opp columns rather than assuming row order, same
 as the other pushes in this project.
@@ -34,7 +34,7 @@ def main():
 
     if not os.path.exists(args.csv):
         print(f"[WARN] {args.csv} not found -- fetch_pressure_rate.py likely failed. "
-              "Leaving column J unchanged.")
+              "Leaving column I unchanged.")
         return
 
     with open(args.csv, newline="", encoding="utf-8") as f:

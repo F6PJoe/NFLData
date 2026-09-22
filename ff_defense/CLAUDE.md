@@ -132,17 +132,24 @@ opponents matched exactly, 0 reciprocity errors.
 answer to Def DAVE. A 50/50 z-blend of **EPA/play allowed** and **success
 rate allowed** from nflverse play-by-play, then shrunk toward **Joe's own
 preseason defensive ranks** (`preseason_def_ranks.csv`, 1 = best) at
-`K_PRIOR = 300` plays (~4.5 games).
+`K_PRIOR = 100` plays.
 
 The prior is not optional garnish — defense barely carries over year to
 year (last season → this season correlates only 0.169), so a few games is
 mostly noise, and shrinking toward *league average* instead would flatten
 all 32 teams and let that noise decide the ranking. Backtested, the blend
-beats both of its own halves: at 100 plays, observed 0.118 / prior 0.161 /
-**blended 0.204**; at 300 plays, 0.223 / 0.155 / **0.276**. (That's a
-*ranking* result. An earlier RMSE test suggested a prior needs ρ ≥ 0.45 to
-help, but that measured value accuracy — this tool only ever uses the rank,
-and the conclusion flips.) Success rate is in the blend because it's what
+beats both of its own halves. (That's a *ranking* result. An earlier RMSE
+test suggested a prior needs ρ ≥ 0.45 to help, but that measured value
+accuracy — this tool only ever uses the rank, and the conclusion flips.)
+
+**How fast it fades** is settled separately in `backtest_prior_decay.py`:
+K started at 300 and Joe pushed back that it lingered far too long — 28% of
+the rating still in week 13. He was right. K=300 came second-worst of the
+schedules tested and a lower K won in every part of the season; K=100 and
+K=150 tied, so 100. The prior is 45% at week 2, 25% by week 5, 11% by week
+13. It is deliberately **not** ramped to zero: every ramp-to-zero schedule
+lost to a small constant prior, and a DAVE-style week-13 cliff barely beat
+using no prior at all. Success rate is in the blend because it's what
 DVOA is built on underneath and it's ~2× more predictive than defensive
 EPA early (0.220 vs 0.118 at 100 plays); EPA is in it because the blend is
 the most stable of the three late (0.316 at 600 plays).
