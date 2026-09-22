@@ -87,9 +87,16 @@ UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/124.0 Safari/537.36")
 
 POSITIONS = ("RB", "WR", "TE")
-# nflverse uses LA/LAR and JAX; FL uses LA and JAC. Normalise to FL's spelling
-# so the two outputs can be diffed and the grid's team filter matches.
-TEAM_FIX = {"LAR": "LA", "JAX": "JAC"}
+# nflverse sources disagree with each other on LA/LAR and JAX/JAC depending
+# on which file you're reading, and FL has its own spelling too -- normalise
+# everything to ONE spelling so the two outputs can be diffed and the grid's
+# team filter/dropdown, which is built straight from whatever's in the data,
+# shows one consistent code instead of splitting a team across two rows.
+# LAR (not LA) at the user's request, since LA alone read as ambiguous next
+# to LAC; JAC kept as FL's own spelling. fetch_fantasylife_utilization.py's
+# TEAMS list still queries FL's API with "LA" (that's the query param FL's
+# endpoint expects) but renames the output row to LAR to match.
+TEAM_FIX = {"LA": "LAR", "JAX": "JAC"}
 
 csv.field_size_limit(10 ** 7)
 

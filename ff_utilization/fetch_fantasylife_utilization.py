@@ -383,6 +383,16 @@ def fetch_weekly(sess, year, wmin, wmax, name_map=None):
                 continue
             name = f"{player.get('firstName','')} {player.get('lastName','')}".strip()
             alias = ((player.get("team") or {}).get("alias")) or team
+            # FL calls the Rams "LA"; the site's team filter shows "LAR"
+            # instead (LA alone read as ambiguous next to LAC). The TEAMS
+            # list above still queries FL's API as "LA" -- that's the query
+            # param FL's endpoint expects -- only the output label changes.
+            # build_published.py's surname-fallback match key includes team,
+            # so this MUST match fetch_nflverse_utilization.py's TEAM_FIX
+            # output exactly, or Rams players needing that fallback path
+            # would silently stop matching.
+            if alias == "LA":
+                alias = "LAR"
             for log in item.get("log_items") or []:
                 week = int(num(log.get("week")))
                 if not wmin <= week <= wmax:

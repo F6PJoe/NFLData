@@ -1029,6 +1029,41 @@ correctly, WR click after that adds (RB+WR), TE click after that completes
 the set and re-lights "All", and the "All" shortcut restores the full row
 count from any narrowed state.
 
+## Rams display as LAR, not LA (Chargers stay LAC)
+User request: "LA" alone read as ambiguous sitting next to "LAC" in the
+team filter/dropdown -- which team is "LA"? Fixed at the source in both
+fetch scripts, not just relabeled after the fact, since the team code
+feeds a real join, not just display:
+
+- `fetch_nflverse_utilization.py`'s `TEAM_FIX` flipped from `{"LAR": "LA",
+  ...}` to `{"LA": "LAR", ...}` -- nflverse's own source files disagree
+  with each other on LA vs LAR depending on which one you're reading, and
+  `TEAM_FIX.get(team, team)` already normalizes whichever spelling shows
+  up to one consistent value; only the target spelling changed.
+- `fetch_fantasylife_utilization.py` needed a separate, explicit fix:
+  FL's API expects `"LA"` as the query parameter (that's still in the
+  `TEAMS` list, unchanged -- renaming the query itself would risk
+  breaking the actual API call), but the OUTPUT row's team label is
+  rewritten `"LA" -> "LAR"` right after FL's response is read.
+- Both had to change together, not just the display-facing one:
+  `build_published.py`'s surname-fallback match key (used when the two
+  feeds spell a name differently) is `(surname, team, week, pos)` --
+  built from FL's team on one side, looked up using nflverse's team on
+  the other. Changing only one side's spelling would have silently
+  broken that fallback path for any Rams player who needed it (the
+  primary match, on normalized full name, doesn't involve team at all,
+  so it wouldn't have failed loudly -- just quietly dropped a player).
+  Verified after rebuilding: join rate unchanged (685/771, 89%, same
+  single non-Rams warning as before), and confirmed by name that Kyren
+  Williams/Blake Corum/Davante Adams/Terrance Ferguson all still have
+  real snap/route/target data under `team=LAR`, not zeros.
+
+The grid's team dropdown needed no code change at all -- `component.html`/
+`component_teaser.html` build it dynamically from whatever team codes are
+actually in the fetched data (see "Position filter is multi-select" above
+for the equivalent pattern on positions), so once the data said `LAR` the
+tool just showed it.
+
 ## Open / next
 1. ~~Point the teaser CTA at the real join URL.~~ Done — `https://fantasysixpack.net/plans` + promo code F6PNFL26 text.
 2. ~~Decide whether the teaser goes on one post or both.~~ Done — one post,
