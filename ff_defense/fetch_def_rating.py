@@ -34,8 +34,9 @@ needed rho >= 0.45 to be worth using, but that measured value accuracy,
 and this tool only ever uses the rank -- a distinction that flips the
 conclusion.
 
-K_PRIOR = 300 plays (~4.5 games), the backtested optimum, so the prior
-dominates in September and real play takes over by midseason.
+K_PRIOR = 100 plays, the backtested optimum (see backtest_prior_decay.py):
+the prior carries the rating in September and fades to a low single-digit
+weight by December without ever being switched off.
 
 Rank convention matches the column it replaces: 1 = worst defense,
 32 = best, so higher is better, same as everywhere else on the sheet.
@@ -57,7 +58,18 @@ from fetch_nflverse_epa import fetch_pbp
 from team_names import normalize
 
 PRESEASON_FILE = "preseason_def_ranks.csv"
-K_PRIOR = 300
+
+# Backtested in backtest_prior_decay.py over 2021-25. K=300 was too heavy --
+# it left the prior at 28% of the rating in week 13 and lost to a lower K in
+# every part of the season. K=100 and K=150 tie on accuracy; 100 is used
+# because it decays faster (45% at week 2, 25% by week 5, 11% by week 13).
+#
+# Deliberately NOT ramped to zero. Every ramp-to-zero schedule tested lost to
+# a small constant prior, and a DAVE-style week-13 cliff barely beat using no
+# prior at all. Past ~600 plays the prior is worth ~12%, where it acts as mild
+# regularization rather than a preseason opinion -- removing it measurably
+# costs ranking accuracy.
+K_PRIOR = 100
 
 FIELDNAMES = ["Rank", "Team", "Rating", "EpaAllowed", "SuccessAllowed",
               "PreseasonRank", "Plays"]
