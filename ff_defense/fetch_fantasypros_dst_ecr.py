@@ -46,6 +46,20 @@ def fetch_rows(year, week):
     data = resp.json()
     players = data.get("players", [])
     print(f"total_experts={data.get('total_experts')} last_updated={data.get('last_updated')}")
+
+    # The API echoes the week back; trust that over what we asked for, so a
+    # request that silently resolved to a different week can't be stamped
+    # as this one. (Same reasoning as fetch_yahoo_def.selected_week.)
+    echoed = data.get("week")
+    if echoed is not None and int(echoed) != week:
+        raise SystemExit(f"FantasyPros returned week {echoed}, not {week} -- "
+                         "refusing to write mismatched ECR.")
+
+    if (data.get("total_experts") or 0) < 10:
+        print(f"[WARN] only {data.get('total_experts')} experts have submitted "
+              f"week {week} DST ranks so far -- the consensus is thin this early. "
+              "The mid-week reruns will pick up more.")
+
     return [{"Week": week, "Rank": 33 - p["rank_ecr"], "Team": p["player_team_id"]}
             for p in players]
 

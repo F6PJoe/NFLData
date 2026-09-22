@@ -87,13 +87,30 @@ def team_from_player_cell(td):
     return normalize(teampos_span.get_text(strip=True).split(" - ")[0])
 
 
-def fetch_paginated(url_template, **fmt):
+# Which S_PW_<week> the returned page says is actually selected. Yahoo's
+# dropdown only offers the CURRENT and FUTURE weeks -- ask for a past one
+# and it silently serves a different view with nothing selected rather than
+# erroring, so the only way to know the request was honoured is to read
+# this back off the page.
+SELECTED_WEEK_RE = re.compile(
+    r'<option[^>]*\bselected\b[^>]*value="S_PW_(\d+)"'
+    r'|<option[^>]*value="S_PW_(\d+)"[^>]*\bselected\b')
+
+
+def selected_week(html):
+    m = SELECTED_WEEK_RE.search(html)
+    return int(m.group(1) or m.group(2)) if m else None
+
+
+def fetch_paginated(url_template, seen_html=None, **fmt):
     rows = []
     offset = 0
     while True:
         url = url_template.format(offset=offset, **fmt)
         resp = requests.get(url, headers=HEADERS, timeout=30)
         resp.raise_for_status()
+        if seen_html is not None:
+            seen_html.append(resp.text)
         soup = BeautifulSoup(resp.text, "html.parser")
         table = soup.find("table")
         tbody = table.find("tbody") if table else None
@@ -122,7 +139,22 @@ def fetch_ownership(league_id):
 
 
 def fetch_projections(league_id, week):
-    trs = fetch_paginated(PROJ_URL, league_id=league_id, week=week)
+    html = []
+    trs = fetch_paginated(PROJ_URL, seen_html=html, league_id=league_id, week=week)
+
+    # Verify Yahoo actually served the week we asked for. Without this, a
+    # wrong --week produces perfectly plausible numbers for some other view
+    # and nothing downstream can tell -- which is exactly how week-2
+    # projections once got blended with week-3 adjustments and put the
+    # Chargers at 8.51 points in the worst matchup on the board.
+    got = selected_week(html[0]) if html else None
+    if got != week:
+        raise SystemExit(
+            f"Yahoo did not serve week {week}: the page reports "
+            f"{'week ' + str(got) if got else 'no week'} selected. Yahoo only "
+            f"offers the current and future weeks, so a past --week is "
+            f"silently ignored. Refusing to write projections that aren't "
+            f"week {week}.")
     out = {}
     for tr in trs:
         tds = tr.find_all("td")
