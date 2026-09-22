@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """
-Push Yahoo D/ST Roster %, Start %, and weekly projection (from
-fetch_yahoo_def.py) into the Stream-O-Matic sheet's "Live" tab: columns C
-(Rost%), D (Start%), and L (Proj), matched to the row's OWN team in column
-B (not the opponent, unlike the DAVE/implied-total pushes).
+Push Yahoo D/ST Roster % and Start % (from fetch_yahoo_def.py) into the
+Stream-O-Matic sheet's "Live" tab: columns C (Rost%) and D (Start%),
+matched to the row's OWN team in column B (not the opponent, unlike the
+EPA/implied-total pushes).
+
+Yahoo's weekly PROJECTION is also in yahoo_def.csv but is NOT written
+here. It's the baseline half of column K, which push_proj_to_sheet.py owns
+because that column is Yahoo plus Subvertadown's situational adjustment --
+one number from two sources.
 
 Roster%/Start% are written as real fractions (7 -> 0.07) with a "0%"
 number format applied, so the sheet actually renders "7%" instead of the
@@ -47,7 +52,6 @@ def main():
 
     roster_by_team = {normalize(r["Team"]): to_float(r["RosterPct"]) for r in yahoo_rows}
     start_by_team = {normalize(r["Team"]): to_float(r["StartPct"]) for r in yahoo_rows}
-    proj_by_team = {normalize(r["Team"]): to_float(r["Projection"]) for r in yahoo_rows}
 
     from google.oauth2.service_account import Credentials
     from googleapiclient.discovery import build
@@ -61,16 +65,14 @@ def main():
     existing = sheet.values().get(spreadsheetId=SHEET_ID, range=f"{TAB}!B2:B").execute()
     live_teams = [row[0] if row else None for row in existing.get("values", [])]
 
-    c_col, d_col, l_col = [], [], []
+    c_col, d_col = [], []
     missing = []
     for team in live_teams:
         abbr = normalize(team) if team else None
         roster = roster_by_team.get(abbr) if abbr else None
         start = start_by_team.get(abbr) if abbr else None
-        proj = proj_by_team.get(abbr) if abbr else None
         c_col.append([roster / 100 if roster is not None else ""])
         d_col.append([start / 100 if start is not None else ""])
-        l_col.append([proj if proj is not None else ""])
         if abbr and roster is None:
             missing.append(abbr)
 
@@ -83,11 +85,6 @@ def main():
         spreadsheetId=SHEET_ID, range=f"{TAB}!D2", valueInputOption="RAW",
         body={"values": d_col},
     ).execute()
-    sheet.values().update(
-        spreadsheetId=SHEET_ID, range=f"{TAB}!K2", valueInputOption="RAW",
-        body={"values": l_col},
-    ).execute()
-
     # Whole-percent display ("7%", no decimals) for the Rost%/Start% columns.
     def percent_format_request(col_index):
         return {
@@ -105,8 +102,7 @@ def main():
         "requests": [percent_format_request(2), percent_format_request(3)],  # C, D
     }).execute()
 
-    print(f"Wrote {n} rows to '{TAB}'!C2:C{1 + n} (Rost%), !D2:D{1 + n} (Start%), "
-          f"and !K2:K{1 + n} (Proj).")
+    print(f"Wrote {n} rows to '{TAB}'!C2:C{1 + n} (Rost%) and !D2:D{1 + n} (Start%).")
     if missing:
         print("Unmatched (left blank):", ", ".join(missing))
 

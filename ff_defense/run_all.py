@@ -50,6 +50,8 @@ STEPS = [
     ("push_implied_totals_to_sheet.py", []),
     ("fetch_yahoo_def.py", ["--week", "{week}"]),
     ("push_yahoo_def_to_sheet.py", []),
+    ("fetch_subvertadown_adjustment.py", ["--week", "{week}"]),
+    ("push_proj_to_sheet.py", []),
     ("fetch_fantasypros_dst_ecr.py", ["--week", "{week}"]),
     ("push_fantasypros_ecr_to_sheet.py", []),
     ("fetch_pressure_rate.py", []),

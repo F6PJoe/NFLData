@@ -112,7 +112,7 @@ Two row-matching patterns are used throughout, per column:
 | H | Opp Off EPA | nflverse pbp (offensive EPA/play) | **opponent's** rank | 1 = best offense, used AS-IS (high = weak offense = good matchup, no inversion needed) |
 | I | Pressure | Sharp Football Analysis | **opponent's** rank | 1 = allows least pressure, 32 = allows most |
 | J | ECR | FantasyPros consensus (DST, 36 experts) | own team | FantasyPros rank inverted (33-rank), so 32 = best |
-| K | Proj | Yahoo (`S_PW_<week>` view) | own team | that week's Yahoo-projected fantasy points, plain number — **ranked inside the SCORE formula**, not pre-ranked by a push script |
+| K | Proj | Yahoo (`S_PW_<week>` view) **+ Subvertadown adjustment** | own team | Yahoo's projected points plus Subvertadown's situational adjustment, as one plain number — **ranked inside the SCORE formula**, not pre-ranked by a push script |
 | A | SCORE | `finalize_live_sheet.py` | — | `=SUM(F:J)+RANK.EQ(K, K:K, 1)+IF(@ in E, 0, 5)` per row, filled by script |
 
 ## Per-source fetcher notes
@@ -193,6 +193,34 @@ commence_time — confirmed live this returns a clean 16-game block per
 week with a multi-day gap to the next week's block. FanDuel preferred
 (matches the original page's own methodology), falls back to whichever
 book is available. `implied_total = O/U/2 - team's own spread/2`.
+
+**Subvertadown situational adjustment** (`fetch_subvertadown_adjustment.py`)
+— a Google Sheet Subvertadown shares with Joe directly
+(`1xGTyPr2LrPBME5G_-jHChjFoWvACg2P-RiQxfoyjV8E`, owned by
+subvertadown@gmail.com), read-only via the same service account. Plain
+32-row grid, **no header**: A nickname, B abbreviation, C signed adjustment
+in fantasy points, D rank. Only column C is used, and it's ADDED to Yahoo's
+projection in `push_proj_to_sheet.py` — Joe wanted one projection column,
+not two competing ones.
+
+**Staleness is the real risk here, not access.** The sheet carries no week
+marker anywhere in its contents, so a copy from three weeks ago is
+indistinguishable from a fresh one. What does tell us is Drive's
+`modifiedTime`, which is why this fetcher asks for
+`drive.metadata.readonly` on top of the usual Sheets scope — the only
+script here that needs a second scope. Two thresholds:
+- **Older than this week's Tuesday** → warn, still write. On a Tuesday
+  morning he may just not have posted yet, and last week's read beats
+  nothing. Joe's explicit call: he said he isn't worried about staleness.
+- **Older than LAST week's Tuesday** → refuse to write the CSV, exit 1.
+  That's the sheet going quiet rather than running late, and silently
+  adding month-old adjustments to every projection for the rest of the
+  season is the one failure nobody would spot. `push_proj_to_sheet.py`
+  falls back to raw Yahoo. `--ignore-staleness` overrides.
+
+The exit 1 is deliberate: it surfaces in run_all's failure summary and
+turns the workflow red, so Joe gets told. Degraded output he doesn't know
+about is worse than a red check.
 
 **Yahoo D/ST** (`fetch_yahoo_def.py`) — two different `stat1` views on
 the same public league Players page (no login — confirmed publicly
