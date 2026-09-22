@@ -19,12 +19,17 @@ them mid-week would make the chart WORSE, not just waste time:
 
   * Pressure rate (column J). Weekly-only at the source.
 
-  * generate_reddit_post.py -- Joe posts the top 10 once, off the Tuesday
-    run, not on every refresh.
-
 What's left is the stuff that genuinely changes day to day: live odds,
 Yahoo roster/start%/projection, and FantasyPros ECR -- plus
 finalize_live_sheet.py to re-score and re-sort.
+
+generate_reddit_post.py runs here too, even though Joe posts only once.
+ECR in particular firms up through the week (8 experts on a Tuesday
+against 123 by the weekend), so the board he'd actually be copying keeps
+improving. Regenerating the "Reddit" tab every run means it always matches
+the current board -- leaving it Tuesday-only would hand him a post the
+tool no longer agrees with if he posts Wednesday or later. It costs one
+sheet read and one write.
 
 Note finalize_live_sheet.py needs no schedule.csv here. It falls back to
 the sheet's own row count, which Tuesday's run already trimmed to this
@@ -45,8 +50,7 @@ from run_all import STEPS, run_steps
 SKIP = {"fetch_schedule.py", "push_schedule_to_sheet.py",
         "fetch_def_rating.py", "push_def_rating_to_sheet.py",
         "fetch_nflverse_epa.py", "push_nflverse_epa_to_sheet.py",
-        "fetch_pressure_rate.py", "push_pressure_rate_to_sheet.py",
-        "generate_reddit_post.py"}
+        "fetch_pressure_rate.py", "push_pressure_rate_to_sheet.py"}
 
 FREQUENT_STEPS = [(script, args) for script, args in STEPS if script not in SKIP]
 

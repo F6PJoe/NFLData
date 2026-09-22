@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build a self-owned "how good is this defense" rating for column H -- the
+Build a self-owned "how good is this defense" rating for column G -- the
 replacement for FTN's DAVE.
 
 This is a general quality rating, deliberately, not a narrow stat. It

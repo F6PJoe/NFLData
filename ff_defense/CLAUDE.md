@@ -58,13 +58,13 @@ cron-job.org (no native `schedule:` — see the workflow comments).
 | | `run_all.py` / `defense_full_refresh.yml` | `run_frequent.py` / `defense_frequent_refresh.yml` |
 |---|---|---|
 | When | Tuesday afternoon, once | Wednesday–Sunday, repeatedly |
-| Columns | all of them, + Reddit post | F (odds), C/D (Yahoo), K (Proj), J (ECR) |
+| Columns | all of them | F (odds), C/D (Yahoo), K (Proj), J (ECR) |
 
 **The Tuesday run must land first each week.** It writes the team list in
 column B, and every mid-week push matches its rows against that list — so a
 mid-week run that goes first just refreshes last week's teams.
 
-Four things are **Tuesday-only**, and three of them are not just about
+Three things are **Tuesday-only**, and two of them are not just about
 saving time:
 - **Team list + matchups (B/E).** Opponents don't change once a slate is
   set; a flexed game moves the kickoff, not who's playing whom.
@@ -76,9 +76,14 @@ saving time:
   teams actually requires. This is a correctness constraint, not a
   performance one; don't "improve" it by refreshing more often.
 - **Pressure rate (I).** Weekly-only at the source.
-- **The Reddit post.** Joe posts the top 10 once.
 
-`generate_reddit_post.py` writes the post three places: a local
+`generate_reddit_post.py` runs on BOTH passes, even though Joe posts only
+once. ECR firms up through the week (8 experts on a Tuesday against 123 by
+the weekend), so the board keeps improving after Tuesday; regenerating the
+tab every run means it always matches the current board rather than handing
+him a Tuesday post the tool no longer agrees with.
+
+It writes the post three places: a local
 `reddit_post.md`, stdout (so it's in the Actions log), and a **"Reddit" tab
 on the sheet**, which is what Joe actually copies from now that the Tuesday
 run happens on GitHub and a file on the runner is useless. Title in A1,
