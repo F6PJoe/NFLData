@@ -18,6 +18,10 @@ import scoring
 SOURCES = ["espn", "cbs", "ftn", "yahoo", "fantasysharks", "draftsharks",
            "fantasydata", "4for4", "fantasylife", "fftoday"]
 
+# Player must appear in at least this many sources to make the consensus.
+# Filters out retired/inactive players that only linger in 1-2 source databases.
+MIN_SOURCES = 3
+
 STAT_COLUMNS = {
     "QB": ["Pass Att", "Pass Comp", "Pass Yds", "Pass TD", "Pass Int",
            "Rush Att", "Rush Yds", "Rush TD", "Fumbles"],
@@ -208,6 +212,8 @@ def merge_position(pos):
         if sort_key <= 0:
             continue
         if pos == "QB" and not avg_stats.get("Pass Att"):
+            continue
+        if len(player["sources"]) < MIN_SOURCES:
             continue
         records.append((sort_key, record))
 
