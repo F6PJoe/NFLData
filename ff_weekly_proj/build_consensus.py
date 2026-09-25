@@ -140,6 +140,13 @@ def merge_position(pos):
     for source in SOURCES:
         rows = load_source(source, pos)
         for row in rows:
+            # A row whose every stat is 0 (or blank) is a source listing the
+            # player WITHOUT projecting him -- injured, inactive, or a scrape
+            # miss. Averaging it in as a real zero dragged the consensus down
+            # (e.g. Brock Purdy, wk3 2026, before the ESPN season fix), and it
+            # also counted toward MIN_SOURCES. Skip it entirely.
+            if not any(num(row.get(col, "")) for col in STAT_COLUMNS[pos]):
+                continue
             name = clean_name(row[pos])
             key = normalize_name(name)
             team = clean_team(row.get("Team", ""))

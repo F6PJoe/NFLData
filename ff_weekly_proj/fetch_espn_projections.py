@@ -90,9 +90,15 @@ def iter_players(data):
 
 
 def projected_stats(p, year, week):
+    # seasonId MUST match. ESPN returns projections for the current AND the
+    # previous season in the same list, in no fixed order; without this check
+    # the first "week N" entry won, and for 571 of 700 players in week 3 of
+    # 2026 that was LAST season's week-N projection -- empty for anyone who was
+    # hurt that week (Brock Purdy: 0 across the board instead of 21/30, 260).
     for stat in p.get("stats") or []:
         if (
-            stat.get("statSourceId") == 1
+            stat.get("seasonId") == year
+            and stat.get("statSourceId") == 1
             and stat.get("statSplitTypeId") == 1
             and stat.get("scoringPeriodId") == week
         ):
