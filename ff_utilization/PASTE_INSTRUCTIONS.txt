@@ -1,77 +1,85 @@
-HOW TO PASTE THE USAGE TABLES INTO WORDPRESS
+HOW TO PASTE THE USAGE TABLE INTO WORDPRESS
 ============================================
 
-These instructions deliberately live OUTSIDE the embed files. An earlier
-version put them in an HTML comment at the top of each embed, and that broke
-the page: the comment contained a nested "-->" (from the example markers) which
-closed the comment early, dumping the rest of the banner onto the page as
-visible text -- and the "[/s2If-paywall]" inside that example closed the real
-paywall block early, so the table never initialized.
+These instructions deliberately live OUTSIDE wp_page.html. An earlier version
+put them in an HTML comment at the top of the embed, and that broke the page:
+the comment contained a nested "-->" (from the example markers) which closed
+the comment early, dumping the rest of the banner onto the page as visible
+text -- and the "[/s2If-paywall]" inside that example closed the real paywall
+block early, so the table never initialized.
 
-Rule: the embed files are pasted whole, unmodified. Nothing else goes in them.
+Rule: wp_page.html is pasted whole, unmodified. Nothing else goes in it --
+the [s2If-paywall]/[s2If-ads] shortcodes are already inside the file, wrapped
+around the member/teaser content respectively. Do not add your own.
 
 
-WHICH FILE GOES WHERE
----------------------
-  embed_weekly.html  ->  the WEEKLY usage post
-  embed_season.html  ->  the SEASON-LONG usage post
+ONE FILE, ONE POST
+------------------
+wp_page.html -> the ONE tool post (both member and non-member views, both
+Weekly and Season, live on the same page via toggles).
 
-Both read the same uploaded data file. Only the pinned view differs.
+There used to be a two-post setup (a separate weekly post and season post,
+each fed by its own embed_weekly.html/embed_season.html, with you manually
+wrapping shortcodes around each). That's gone -- settled on one combined
+page instead. embed_weekly.html/embed_season.html/embed_combined.html/
+embed_teaser_combined.html still get generated as leftovers in case a split
+page is ever wanted again, but none of them are what you paste. wp_page.html
+is the only file this applies to.
 
 
 STEPS
 -----
-1. Upload  data/utilization_weekly.json  to
-       /wp-content/plugins/s2member-files/utilization_weekly.json
-   Same filename every week -- overwrite it, never rename. That is why the
-   posts never need touching again.
+1. Upload the 3 data files (same filenames every week -- overwrite, never
+   rename, so the post itself never needs touching again):
 
-   ONE FILE FEEDS BOTH POSTS. The season post reads this same weekly file and
-   sums it in the browser; there is no separate season JSON. Both embeds point
-   at utilization_weekly.json and differ only in VIEW_MODE.
+     data/utilization_weekly.json         -> /wp-content/plugins/s2member-files/utilization_weekly.json
+     data/utilization_teaser_weekly.json  -> /wp-content/uploads/f6p-data/utilization_teaser_weekly.json
+     data/utilization_teaser_season.json  -> /wp-content/uploads/f6p-data/utilization_teaser_season.json
 
-2. Add a Gutenberg CUSTOM HTML BLOCK. This is the confirmed-working setup.
+   `python sftp_upload.py` does all three in one command (or `run_weekly.py`
+   does the whole fetch/build/upload cycle). This step is the recurring
+   weekly one; step 2 below is not.
 
-   A Custom HTML block bypasses WordPress's wpautop filter. The auction chart
-   lives in the Classic editor's Text view instead -- don't assume this post
-   inherits that; the first attempt here failed until it moved to a Custom
-   HTML block.
+2. (Only when component.html or component_teaser.html changed, NOT weekly)
+   Add a Gutenberg CUSTOM HTML BLOCK to the post if it doesn't have one yet.
 
-   Do NOT reformat, re-indent, or "prettify" the pasted block. The <style> and
-   <script> are deliberately collapsed onto single lines: WordPress's wpautop
-   filter injects <p> and <br> tags into anything with line breaks inside
-   those tags, which breaks the CSS and JS. Collapsed, there are no line
+   A Custom HTML block bypasses WordPress's wpautop filter. Don't assume a
+   post inherits Classic-editor Text-view behavior from elsewhere on the
+   site -- this specific setup was confirmed working as a Custom HTML block.
+
+   Do NOT reformat, re-indent, or "prettify" the pasted block. The <style>
+   and <script> content is deliberately collapsed onto single lines:
+   wpautop injects <p> and <br> into anything with line breaks inside those
+   tags, which breaks the CSS and JS. Collapsed, there are no line
    boundaries for it to act on. Adding line breaks back re-introduces the bug.
 
    Symptom if it happens: the area renders but stays empty, with NO error
    message -- the script never parsed, so its error handler never ran.
 
-3. Paste the ENTIRE contents of the embed file into that block.
-
-4. Wrap it in the member shortcodes, so the structure is:
-
-       [s2If-paywall]
-       ...entire contents of the embed file...
-       [/s2If-paywall]
-
-   Put the shortcodes on their own lines, outside the pasted HTML.
+3. Paste the ENTIRE contents of wp_page.html into that block, replacing
+   whatever was there before.
 
 
-AFTER PUBLISHING, CHECK
------------------------
-* The table populates. "Usage data is unavailable right now (HTTP 4xx)" means
-  the gateway URL or the uploaded filename is wrong.
+AFTER PUBLISHING (or re-pasting), CHECK
+----------------------------------------
+* The member table populates for a logged-in member. "Usage data is
+  unavailable right now (HTTP 4xx)" means the s2member-files gateway path
+  or the uploaded filename is wrong.
+* The teaser (locked columns, CTA) shows for a logged-out view / non-member.
 * No raw text or stray "-->" is visible anywhere on the page.
 * s2Member file downloads are UNLIMITED for the member level -- the table
   fetches the JSON on every page load, so a capped allowance locks members out.
-* Log out (or use a private window) and confirm non-members see nothing.
+* Log out (or use a private window) and confirm non-members see the teaser,
+  not the member table, and vice versa when logged in.
 
 
-IF YOU CHANGE THE TABLE
------------------------
-Edit component.html, then:
+IF YOU CHANGE THE TABLE ITSELF
+-------------------------------
+Edit component.html (member table) or component_teaser.html (non-member
+teaser), then:
 
     python build_embed.py
 
-and re-paste. Never edit embed_weekly.html / embed_season.html directly --
-they are regenerated and your changes are lost.
+and re-paste the newly rebuilt wp_page.html. Never edit wp_page.html (or any
+other embed_*.html file) directly -- they are regenerated from component.html/
+component_teaser.html and your changes will be lost on the next build.
