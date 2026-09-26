@@ -240,6 +240,29 @@ tgt%, EZ, EZ%, ADOT.
    back to 44/32 (matching the very first Week 1 build, done before this
    bug could exist) while week 2 stays 32/20, independently. Re-uploaded
    the corrected data immediately.
+7. **A Friday-morning run (TNF only) can wipe the whole new week, silently.**
+   Official-basis data is ready same-day from pbp, but FL's own routes data
+   lags -- confirmed for real on a Friday 7:30 AM cron run: FL hadn't posted
+   ANY week 3 routes yet, so literally every skill player from both Thursday
+   teams (Drake London, Bijan Robinson, Matthew Golden, Christian Watson...)
+   had no FL match and got dropped by the by-design "drop, don't zero-fill"
+   policy. With zero surviving rows for the new week, the live table's
+   "show the latest week present" logic quietly fell back to showing the
+   PRIOR week instead -- reading as "the cron job didn't work" rather than
+   "FL is running behind." `build_published.py` now detects this specific
+   case (the newest week in the official fetch has zero published rows) and
+   prints an unmissable `*** WARNING ***` block naming the likely cause and
+   that it resolves on its own -- not a fix for the underlying FL lag (that
+   isn't a bug to fix, it's just how early a Friday run catches things), just
+   making the symptom self-diagnosing in the Action's log instead of a silent
+   fallback. Separately, this exposed a real UX gap that's still open: EVEN
+   ONCE FL catches up (as it does for the Thursday game specifically, often
+   same day or next), "Weekly" shows only the ~2 teams that have played the
+   new week so far -- correct data, but reads as "empty/broken" to a visitor
+   checking the site before Sunday. Flagged to the user, not yet decided:
+   options are leaving it as-is (accurate, just sparse until Sunday), adding
+   a meta-line callout when the newest week's team count is well under 32,
+   or something else. Revisit before treating this as settled.
 
 ## Parallel build: `fetch_nflverse_utilization.py` (official-basis)
 Second pipeline, run alongside the FL one, same column names and file shape so
@@ -1063,6 +1086,38 @@ The grid's team dropdown needed no code change at all -- `component.html`/
 actually in the fetched data (see "Position filter is multi-select" above
 for the equivalent pattern on positions), so once the data said `LAR` the
 tool just showed it.
+
+## Season view didn't actually default to the full season
+`buildControls()` ran exactly once, at page load. The Week/Range label, the
+season-only Total/Per Game toggle, and the default `wkFrom`/`wkTo` were all
+fixed at whatever `view` happened to be at that one moment (`"weekly"`,
+since that's the initial default) and never touched again -- the Weekly/
+Season toggle's click handler only changed the `view` variable and called
+`render()`, nothing rebuilt the controls themselves. Consequence: clicking
+over to Season kept showing "Week" as the label, kept the single-week range
+Weekly had been on, and the Total/Per Game buttons never appeared at all --
+Season silently behaved like "Weekly aggregated over one week," which looks
+identical to Weekly and defeats the entire point of the tab. Caught by the
+user asking for Season to default to the full range; testing confirmed it
+currently didn't default to anything sensible in either direction.
+
+Fixed by pulling the view-dependent pieces (the label, the two week
+`<select>`s, and the Total/Per Game group) into their own
+`buildWeekControls()`, called once at startup like before AND again inside
+the toggle's click handler, alongside resetting `wkFrom`/`wkTo`/`basis` each
+time using the same expression the original startup code used
+(`wkFrom = (view === "season") ? WEEKS[0] : WEEKS[WEEKS.length - 1]`) --
+Season now always opens on week 1 -> current, Weekly always resets back to
+just the current week, symmetrically. The rebuilt container
+(`weekHolder`) uses `display:contents` so re-filling it on every toggle
+doesn't disturb the flex layout of the filter row it sits in alongside
+Position/Team/Search. `component_teaser.html` never had this bug -- it has
+no week-range selector at all, just a straight swap between two already-
+fetched datasets. Verified in-browser: Season now opens on "Range" / week
+1-3 / with Total+Per Game buttons present; toggling to Per Game changes
+values as expected; switching back to Weekly resets to "Week" / week 3-3
+with no Total/Per Game group, and the cycle repeats correctly on repeat
+toggles.
 
 ## Open / next
 1. ~~Point the teaser CTA at the real join URL.~~ Done — `https://fantasysixpack.net/plans` + promo code F6PNFL26 text.

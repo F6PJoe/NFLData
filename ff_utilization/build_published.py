@@ -203,6 +203,29 @@ def main():
               f"check these aren't a real match miss:")
         for r in notable[:8]:
             print(f"    {r['player']} ({r['team']}) rush={r['rush_att']} tgt={r['targets']}")
+
+    # A player or two missing FL routes is normal and expected (see above).
+    # EVERY player for the newest week missing is categorically different: it
+    # means FL hasn't posted that week's routes at all yet (seen for real on
+    # a Friday-morning run right after Thursday night's game -- the official
+    # side had the data same-day, FL didn't catch up until Saturday). Silent
+    # in this function's normal output, this week's rows just don't exist,
+    # so the live table's "show the latest week" logic quietly falls back to
+    # showing the PRIOR week instead -- which reads as "the update didn't
+    # work" rather than "FL is running behind, try again in a few hours."
+    off_weeks = {int(r["week"]) for r in off}
+    published_weeks = {int(r["week"]) for r in rows}
+    newest = max(off_weeks) if off_weeks else None
+    if newest is not None and newest not in published_weeks:
+        print(f"\n*** WARNING: week {newest} has ZERO published rows. ***")
+        print(f"    The official-basis fetch found week {newest} games, but "
+              f"every one of those players is still missing an FL route "
+              f"match -- FantasyLife almost certainly hasn't posted week "
+              f"{newest}'s routes yet. This is not a matching bug to fix; "
+              f"it resolves on its own once FL catches up (by Sunday/Monday "
+              f"at the latest). The live site will keep showing week "
+              f"{newest - 1} as \"current\" until then. Re-run later today "
+              f"or tomorrow rather than assuming something is broken.")
     print(f"\n{csv_path.name}  ({csv_path.stat().st_size/1024:.0f} KB)")
     print(f"UPLOAD -> {json_path}  ({json_path.stat().st_size/1024:.0f} KB)")
 

@@ -327,22 +327,16 @@
       fail("Usage data is unavailable right now (" + err.message + ").");
     });
 
-  function buildControls() {
-    if (VIEW_MODE === "both") {
-      var seg = el("div", "f6p-grp f6p-seg");
-      [["weekly", "Weekly"], ["season", "Season"]].forEach(function (p) {
-        var b = el("button", view === p[0] ? "on" : null, p[1]);
-        b.type = "button";
-        b.addEventListener("click", function () {
-          view = p[0];
-          seg.querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x === b); });
-          sortKey = "snaps"; sortAsc = false;
-          render();
-        });
-        seg.appendChild(b);
-      });
-      viewswitch.appendChild(seg);
-    }
+  /* Week/Range label + dropdowns, and the season-only Total/Per Game
+     toggle, all depend on `view` -- rebuilt fresh every time the Weekly/
+     Season toggle is clicked (see the click handler below), not just once
+     at startup. weekHolder uses display:contents so re-filling it doesn't
+     disturb the flex layout of the other controls sitting in the same row. */
+  var weekHolder = el("div", null);
+  weekHolder.style.display = "contents";
+
+  function buildWeekControls() {
+    while (weekHolder.firstChild) { weekHolder.removeChild(weekHolder.firstChild); }
 
     var gw = el("div", "f6p-grp");
     gw.appendChild(el("label", null, view === "season" ? "Range" : "Week"));
@@ -365,7 +359,7 @@
     gw.appendChild(selFrom);
     gw.appendChild(el("span", "f6p-dash", "to"));
     gw.appendChild(selTo);
-    ctl.appendChild(gw);
+    weekHolder.appendChild(gw);
 
     if (view === "season") {
       var gb = el("div", "f6p-grp f6p-seg");
@@ -381,8 +375,39 @@
         });
         gb.appendChild(b);
       });
-      ctl.appendChild(gb);
+      weekHolder.appendChild(gb);
     }
+  }
+
+  function buildControls() {
+    if (VIEW_MODE === "both") {
+      var seg = el("div", "f6p-grp f6p-seg");
+      [["weekly", "Weekly"], ["season", "Season"]].forEach(function (p) {
+        var b = el("button", view === p[0] ? "on" : null, p[1]);
+        b.type = "button";
+        b.addEventListener("click", function () {
+          view = p[0];
+          seg.querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x === b); });
+          sortKey = "snaps"; sortAsc = false;
+          /* Season defaults to the full range (week 1 -> current), not
+             whichever single week Weekly happened to be on -- otherwise
+             switching to Season silently showed just one week aggregated,
+             which looks identical to Weekly and defeats the point of the
+             tab. Weekly resets back to just the current week symmetrically.
+             Matches the exact same expression used on first load. */
+          wkFrom = (view === "season") ? WEEKS[0] : WEEKS[WEEKS.length - 1];
+          wkTo = WEEKS[WEEKS.length - 1];
+          basis = "total";
+          buildWeekControls();
+          render();
+        });
+        seg.appendChild(b);
+      });
+      viewswitch.appendChild(seg);
+    }
+
+    buildWeekControls();
+    ctl.appendChild(weekHolder);
 
     /* Position is multi-select -- RB/WR/TE each toggle independently (at
        least one always stays on) and "All" is a shortcut that turns all
