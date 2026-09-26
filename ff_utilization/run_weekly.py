@@ -50,13 +50,18 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 
+# Must match build_published.py's own constant -- this is how run() below
+# tells "FL isn't ready yet, stop and wait" apart from an actual crash.
+FL_NOT_READY_EXIT_CODE = 3
 
-def run(cmd):
+
+def run(cmd, allow_exit_code=None):
     print(f"\n$ {' '.join(cmd)}", flush=True)
     result = subprocess.run([sys.executable] + cmd, cwd=HERE)
-    if result.returncode != 0:
-        sys.exit(f"\nFAILED: {' '.join(cmd)} (exit {result.returncode}) -- "
-                 f"stopping here, nothing uploaded.")
+    if result.returncode == 0 or result.returncode == allow_exit_code:
+        return result.returncode
+    sys.exit(f"\nFAILED: {' '.join(cmd)} (exit {result.returncode}) -- "
+             f"stopping here, nothing uploaded.")
 
 
 def auto_current_week():
@@ -113,7 +118,23 @@ def main():
 
     run(["fetch_nflverse_utilization.py", "--year", y, "--weeks", w])
     run(["fetch_fantasylife_utilization.py", "--year", y, "--weeks", w])
-    run(["build_published.py", "--year", y, "--weeks", w])
+    rc = run(["build_published.py", "--year", y, "--weeks", w],
+             allow_exit_code=FL_NOT_READY_EXIT_CODE)
+    if rc == FL_NOT_READY_EXIT_CODE:
+        # By design, not a bug: the newest week's official-basis data exists
+        # but FantasyLife hasn't posted that week's routes yet, so every
+        # player for it got dropped (see build_published.py's own warning
+        # above for the detail). Stopping here, before the teasers or SFTP
+        # upload even run, means the live site is untouched -- it keeps
+        # showing last week as current rather than getting overwritten with
+        # a rebuild that doesn't actually contain anything new. A failed
+        # exit here is also what makes GitHub mail a "workflow run failed"
+        # notification for a scheduled run (double-check your GitHub
+        # notification settings for Actions if you're not seeing those).
+        sys.exit(f"\nSTOPPING: FantasyLife hasn't posted this week's routes "
+                 f"yet -- nothing built further, nothing uploaded, the live "
+                 f"site is untouched. Re-run this later once FL has caught "
+                 f"up (see the WARNING above for detail).")
     run(["build_teaser.py", "--year", y, "--weeks", w, "--view", "weekly"])
     run(["build_teaser.py", "--year", y, "--weeks", w, "--view", "season"])
 

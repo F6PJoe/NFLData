@@ -43,8 +43,15 @@ import argparse
 import csv
 import json
 import re
+import sys
 import unicodedata
 from pathlib import Path
+
+# Distinct from a crash (any other nonzero exit) -- run_weekly.py checks for
+# exactly this code to tell "FL isn't ready yet, stop and wait" apart from
+# "something is actually broken." Picked to not collide with argparse's own
+# exit(2) on a bad CLI arg.
+FL_NOT_READY_EXIT_CODE = 3
 
 HERE = Path(__file__).resolve().parent
 DATA = HERE / "data"
@@ -223,9 +230,16 @@ def main():
               f"match -- FantasyLife almost certainly hasn't posted week "
               f"{newest}'s routes yet. This is not a matching bug to fix; "
               f"it resolves on its own once FL catches up (by Sunday/Monday "
-              f"at the latest). The live site will keep showing week "
-              f"{newest - 1} as \"current\" until then. Re-run later today "
-              f"or tomorrow rather than assuming something is broken.")
+              f"at the latest). Re-run later today or tomorrow rather than "
+              f"assuming something is broken.")
+        print(f"\n{csv_path.name}  ({csv_path.stat().st_size/1024:.0f} KB) "
+              f"written locally, but STOPPING here on purpose -- by design,"
+              f" nothing downstream of this (the teaser builds, the SFTP "
+              f"upload) should run off a week that isn't really ready yet, "
+              f"even though the official side of it is. run_weekly.py "
+              f"checks for this exact exit code and stops the whole chain;"
+              f" run this script directly and it exits the same way.")
+        sys.exit(FL_NOT_READY_EXIT_CODE)
     print(f"\n{csv_path.name}  ({csv_path.stat().st_size/1024:.0f} KB)")
     print(f"UPLOAD -> {json_path}  ({json_path.stat().st_size/1024:.0f} KB)")
 

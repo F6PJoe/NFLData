@@ -1119,6 +1119,44 @@ values as expected; switching back to Weekly resets to "Week" / week 3-3
 with no Total/Per Game group, and the cycle repeats correctly on repeat
 toggles.
 
+## FL-not-ready now aborts the whole run instead of just warning
+The loud `*** WARNING ***` added earlier (see the FL-lag bug in
+`fetch_nflverse_utilization.py`'s section above) printed but still let
+`run_weekly.py` carry on to build the teasers and upload -- harmless in
+practice (re-uploading a file that's a near-duplicate of what's already
+live), but the user's actual requirement is stronger: if FL isn't ready,
+NOTHING downstream should run at all, and they want to be notified rather
+than have to notice a warning buried in a log they weren't looking at.
+
+`build_published.py` now `sys.exit(FL_NOT_READY_EXIT_CODE)` (== 3, chosen
+to not collide with argparse's own exit(2)) right after printing that
+warning, instead of continuing on to write the upload-bound JSON as if
+everything were fine. `run_weekly.py` defines the identical constant and
+checks for it specifically in `run()` (an `allow_exit_code` parameter --
+that one exact code returns normally instead of being treated as a crash),
+then stops the whole chain with its own clear message before `build_teaser.py`
+or `sftp_upload.py` ever run. Any OTHER nonzero exit from `build_published.py`
+still hits the generic FAILED path, unchanged.
+
+A failed exit here is also what makes GitHub's own "workflow run failed"
+email fire for a scheduled cron-job.org-triggered run -- that's the
+notification mechanism, no new integration built. Caveat: this depends on
+the account's GitHub notification settings for Actions actually being
+enabled; worth the user double-checking that rather than assuming it's on
+by default.
+
+Verified with a synthetic test (fake year 9999, one official-basis row with
+zero matching FL rows at all) rather than waiting for a real FL-lag window:
+confirmed `build_published.py` alone exits 3 with the right message, and that
+`run_weekly.py`'s `run()` correctly treats exit 3 as "stop cleanly," not "crash."
+Test files were written under the shared `data/utilization_weekly.json`
+filename (same file `sftp_upload.py` reads) since `build_published.py` writes
+there unconditionally before the newest-week check runs -- caught immediately
+after (before any upload), restored by rebuilding the real 2026 week 1-3 data,
+confirmed via `sftp_upload.py --dry-run` that local matched what was already
+live. The live site itself was never touched by the test; only a local file
+briefly held test data, and only between build steps that never reached SFTP.
+
 ## Open / next
 1. ~~Point the teaser CTA at the real join URL.~~ Done — `https://fantasysixpack.net/plans` + promo code F6PNFL26 text.
 2. ~~Decide whether the teaser goes on one post or both.~~ Done — one post,
