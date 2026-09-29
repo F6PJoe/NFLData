@@ -216,19 +216,28 @@ marker anywhere in its contents, so a copy from three weeks ago is
 indistinguishable from a fresh one. What does tell us is Drive's
 `modifiedTime`, which is why this fetcher asks for
 `drive.metadata.readonly` on top of the usual Sheets scope — the only
-script here that needs a second scope. Two thresholds:
-- **Older than this week's Tuesday** → warn, still write. On a Tuesday
-  morning he may just not have posted yet, and last week's read beats
-  nothing. Joe's explicit call: he said he isn't worried about staleness.
-- **Older than LAST week's Tuesday** → refuse to write the CSV, exit 1.
-  That's the sheet going quiet rather than running late, and silently
-  adding month-old adjustments to every projection for the rest of the
-  season is the one failure nobody would spot. `push_proj_to_sheet.py`
-  falls back to raw Yahoo. `--ignore-staleness` overrides.
+script here that needs a second scope.
 
-The exit 1 is deliberate: it surfaces in run_all's failure summary and
-turns the workflow red, so Joe gets told. Degraded output he doesn't know
-about is worse than a red check.
+**One rule: if it's not from THIS week, it isn't used.** Modified before
+this week's Tuesday 00:00 ET → the CSV isn't written and
+`push_proj_to_sheet.py` falls back to raw Yahoo. `--ignore-staleness`
+overrides.
+
+This started out as a softer two-tier rule (warn-and-use for last week,
+refuse only at two weeks). Joe tightened it after the week 4 post went out
+carrying week 3 adjustments: a stale situational read isn't a slightly
+worse read, it describes *last week's matchups*, which is worse than no
+situational read at all.
+
+Refusing to write the CSV is not sufficient on its own — a file left by an
+earlier run would still be on disk for the push to pick up. It doesn't
+matter in CI (clean checkout every run) but it does locally, so the stale
+output file is **deleted** too.
+
+It exits **0**, not 1. Being unposted early in the week is expected and
+self-correcting — the next daily refresh picks it up the moment he updates
+— and a red workflow every Tuesday morning would train Joe to ignore
+genuine failures, the same reason the thin-ECR warning was removed.
 
 **Yahoo D/ST** (`fetch_yahoo_def.py`) — two different `stat1` views on
 the same public league Players page (no login — confirmed publicly
