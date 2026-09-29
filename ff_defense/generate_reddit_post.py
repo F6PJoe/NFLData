@@ -57,6 +57,15 @@ def build_post(week, rows):
         "",
         "Here is the Top 10 from the tool. Check out the rest on Fantasy Six Pack.",
         "",
+        # Joe added this by hand to the week 4 post and wants it every week.
+        # It's accurate: run_frequent.py refreshes exactly these four --
+        # implied totals, Yahoo roster/start%, the projection, and ECR --
+        # daily Wednesday through Sunday. If that step list ever changes,
+        # change this line with it.
+        "Note: This is updated every day with the most recent projections, "
+        "implied totals, ECR and roster/start percentages. So check back "
+        "later in the week as things change.",
+        "",
         "|SCORE|Team|Rost%|Start%|Opp|",
         "|:-|:-|:-|:-|:-|",
     ]
