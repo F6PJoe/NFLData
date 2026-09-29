@@ -211,33 +211,30 @@ in fantasy points, D rank. Only column C is used, and it's ADDED to Yahoo's
 projection in `push_proj_to_sheet.py` — Joe wanted one projection column,
 not two competing ones.
 
-**Staleness is the real risk here, not access.** The sheet carries no week
-marker anywhere in its contents, so a copy from three weeks ago is
-indistinguishable from a fresh one. What does tell us is Drive's
-`modifiedTime`, which is why this fetcher asks for
-`drive.metadata.readonly` on top of the usual Sheets scope — the only
-script here that needs a second scope.
+**There is no staleness check, and there can't be one.** An earlier version
+read Drive's `modifiedTime` and refused anything predating this week's
+Tuesday. That was wrong in a way worth recording: the sheet is built from
+VLOOKUPs and FILTERs pulling from Subvertadown's other sheets, and Drive
+only bumps `modifiedTime` when the file ITSELF is edited — recalculating a
+formula against an external source doesn't touch it. The timestamp sat
+frozen at 2026-09-22 while the values underneath kept updating, so the
+check threw away good adjustments on every run. Confirmed by reading the
+sheet twice a week apart under an unchanged timestamp: `-1.5 IND to +1.2
+ARI` became `-1.1 MIN to +1.5 TEN`.
 
-**One rule: if it's not from THIS week, it isn't used.** Modified before
-this week's Tuesday 00:00 ET → the CSV isn't written and
-`push_proj_to_sheet.py` falls back to raw Yahoo. `--ignore-staleness`
-overrides.
+Nothing in this sheet reveals its freshness — no week marker in the
+contents, and a modification date that cannot move. Joe's call is to assume
+it's current, which is the only option available. If it ever does go stale
+it shows up as adjustments that don't fit the week's matchups, not as
+anything a script can detect.
 
-This started out as a softer two-tier rule (warn-and-use for last week,
-refuse only at two weeks). Joe tightened it after the week 4 post went out
-carrying week 3 adjustments: a stale situational read isn't a slightly
-worse read, it describes *last week's matchups*, which is worse than no
-situational read at all.
+The `drive.metadata.readonly` scope existed only for that check and is
+gone; this fetcher needs Sheets read-only and nothing else.
 
-Refusing to write the CSV is not sufficient on its own — a file left by an
-earlier run would still be on disk for the push to pick up. It doesn't
-matter in CI (clean checkout every run) but it does locally, so the stale
-output file is **deleted** too.
-
-It exits **0**, not 1. Being unposted early in the week is expected and
-self-correcting — the next daily refresh picks it up the moment he updates
-— and a red workflow every Tuesday morning would train Joe to ignore
-genuine failures, the same reason the thin-ECR warning was removed.
+**General lesson for this repo:** `modifiedTime` is a valid freshness
+signal only for a file a human edits directly. For any sheet driven by
+IMPORTRANGE / VLOOKUP / FILTER against another source, it reports when the
+formulas were last typed, not when the numbers last changed.
 
 **Yahoo D/ST** (`fetch_yahoo_def.py`) — two different `stat1` views on
 the same public league Players page (no login — confirmed publicly
