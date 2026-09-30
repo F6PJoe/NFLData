@@ -123,6 +123,28 @@ def get_html(pos, week, league_id, offset, html_file=None):
             delay *= 2
 
 
+def stat_base(table):
+    """Index of the first stat column (passing Yds), read from the header.
+
+    Fixed indices broke on 2026-09-30 when Yahoo inserted a "% Ros" column
+    ahead of the stats: every stat shifted one cell right and the parser died
+    on "100%". Locating the columns by header keeps a new column from silently
+    shifting every stat. The stats run in a fixed order from there: pass Yds,
+    TD, Int, rush Att, Yds, TD, Tgt, Rec, rec Yds, TD, return TD, 2PT, fumbles
+    Lost.
+    """
+    thead = table.find("thead")
+    if thead is not None:
+        hdr = [c.get_text(" ", strip=True)
+               for c in thead.find_all("tr")[-1].find_all(["th", "td"])]
+        if "Yds" in hdr:
+            base = hdr.index("Yds")
+            if len(hdr) > base + 12 and hdr[base + 12] == "Lost":
+                return base
+            raise ValueError(f"Yahoo header layout changed: {hdr}")
+    return 10   # the layout before "% Ros" appeared
+
+
 def fetch_position(pos, week, league_id, opponents):
     rows = []
     offset = 0
@@ -145,10 +167,11 @@ def fetch_position(pos, week, league_id, opponents):
         trs = tbody.find_all("tr")
         if not trs:
             break
+        b = stat_base(table)
 
         for tr in trs:
             tds = tr.find_all("td")
-            if len(tds) < 23:
+            if len(tds) < b + 13:
                 continue
             player_cell = tds[2]
             name_a = player_cell.find("a", class_="name")
@@ -159,17 +182,17 @@ def fetch_position(pos, week, league_id, opponents):
             team = TEAM_ALIASES.get(team, team)
             opp = opponents.get(team, "")
 
-            pass_yds = num(tds[10].get_text())
-            pass_td = num(tds[11].get_text())
-            pass_int = num(tds[12].get_text())
-            rush_att = num(tds[13].get_text())
-            rush_yds = num(tds[14].get_text())
-            rush_td = num(tds[15].get_text())
-            targets = num(tds[16].get_text())
-            rec = num(tds[17].get_text())
-            rec_yds = num(tds[18].get_text())
-            rec_td = num(tds[19].get_text())
-            fum_lost = num(tds[22].get_text())
+            pass_yds = num(tds[b + 0].get_text())
+            pass_td = num(tds[b + 1].get_text())
+            pass_int = num(tds[b + 2].get_text())
+            rush_att = num(tds[b + 3].get_text())
+            rush_yds = num(tds[b + 4].get_text())
+            rush_td = num(tds[b + 5].get_text())
+            targets = num(tds[b + 6].get_text())
+            rec = num(tds[b + 7].get_text())
+            rec_yds = num(tds[b + 8].get_text())
+            rec_td = num(tds[b + 9].get_text())
+            fum_lost = num(tds[b + 12].get_text())
 
             if all(v is None for v in (pass_yds, pass_td, pass_int, rush_att,
                                        rush_yds, rush_td, targets, rec, rec_yds,
