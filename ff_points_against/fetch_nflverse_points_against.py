@@ -101,13 +101,30 @@ def fetch(url, dest, refresh=False):
         print(f"  cached   {dest.name}")
         return dest
     req = urllib.request.Request(url, headers=UA)
-    try:
-        with urllib.request.urlopen(req, timeout=120) as r:
-            data = r.read()
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            raise SystemExit(f"no data yet ({url} -> 404)")
-        raise
+    # GitHub's release/raw hosts throw the occasional 502/503/504 -- one
+    # blip took down a whole scheduled run (2026-10-02, games.csv -> 504)
+    # before this retry existed, so back off and try again.
+    for attempt in range(1, 5):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                data = r.read()
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                raise SystemExit(f"no data yet ({url} -> 404)")
+            if exc.code < 500 or attempt == 4:
+                raise
+            wait = 5 * attempt
+            print(f"  {exc.code} on {dest.name}, retrying in {wait}s "
+                  f"(attempt {attempt}/4)")
+            time.sleep(wait)
+        except (urllib.error.URLError, TimeoutError) as exc:
+            if attempt == 4:
+                raise
+            wait = 5 * attempt
+            print(f"  {exc} on {dest.name}, retrying in {wait}s "
+                  f"(attempt {attempt}/4)")
+            time.sleep(wait)
     dest.write_bytes(data)
     print(f"  fetched  {dest.name}  ({len(data)/1024:.0f} KB)")
     time.sleep(0.2)

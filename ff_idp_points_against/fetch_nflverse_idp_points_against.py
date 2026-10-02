@@ -109,13 +109,29 @@ def fetch(year, refresh=False):
         print(f"  cached   {dest.name}")
         return dest
     req = urllib.request.Request(url, headers=UA)
-    try:
-        with urllib.request.urlopen(req, timeout=120) as r:
-            data = r.read()
-    except urllib.error.HTTPError as exc:
-        if exc.code == 404:
-            raise SystemExit(f"no data yet for {year} ({url} -> 404)")
-        raise
+    # Same transient-5xx retry as ff_points_against (a GitHub 504 killed a
+    # scheduled run there on 2026-10-02).
+    for attempt in range(1, 5):
+        try:
+            with urllib.request.urlopen(req, timeout=120) as r:
+                data = r.read()
+            break
+        except urllib.error.HTTPError as exc:
+            if exc.code == 404:
+                raise SystemExit(f"no data yet for {year} ({url} -> 404)")
+            if exc.code < 500 or attempt == 4:
+                raise
+            wait = 5 * attempt
+            print(f"  {exc.code} on {dest.name}, retrying in {wait}s "
+                  f"(attempt {attempt}/4)")
+            time.sleep(wait)
+        except (urllib.error.URLError, TimeoutError) as exc:
+            if attempt == 4:
+                raise
+            wait = 5 * attempt
+            print(f"  {exc} on {dest.name}, retrying in {wait}s "
+                  f"(attempt {attempt}/4)")
+            time.sleep(wait)
     dest.write_bytes(data)
     print(f"  fetched  {dest.name}  ({len(data)/1024:.0f} KB)")
     time.sleep(0.2)
