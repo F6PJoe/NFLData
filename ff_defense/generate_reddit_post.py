@@ -137,13 +137,17 @@ def main():
     service = build("sheets", "v4", credentials=creds, cache_discovery=False)
     sheet = service.spreadsheets()
 
-    resp = sheet.values().get(spreadsheetId=SHEET_ID, range=f"{TAB}!A2:E11").execute()
-    rows = resp.get("values", [])
+    resp = sheet.values().get(spreadsheetId=SHEET_ID, range=f"{TAB}!A2:E14").execute()
+    # Drop any row without a team. finalize_live_sheet.py removes blank rows
+    # now, but a crash here takes out the whole post over one stray row, and
+    # that already happened once: a bye-week blank sorted to the top on #N/A
+    # and this blew up with IndexError on r[1].
+    rows = [r for r in resp.get("values", []) if len(r) > 1 and r[1].strip()]
     if len(rows) < 10:
-        raise SystemExit(f"Only found {len(rows)} rows in {TAB}!A2:E11 (need 10) -- "
+        raise SystemExit(f"Only found {len(rows)} usable rows in {TAB}!A2:E14 (need 10) -- "
                           "did finalize_live_sheet.py run first?")
 
-    title, body = build_post(args.week, rows)
+    title, body = build_post(args.week, rows[:10])
 
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(f"{title}\n\n{body}\n")

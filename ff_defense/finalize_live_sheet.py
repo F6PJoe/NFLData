@@ -3,19 +3,24 @@
 Weekly housekeeping on the Stream-O-Matic sheet's "Live" tab, run LAST
 after all the fetch_*/push_* scripts for the week:
 
-1. Bye weeks mean fewer than 32 teams. schedule.csv (from the most recent
-   fetch_schedule.py run) is this week's authoritative team count -- it's
-   the source that drives columns B/E, so its row count IS however many
-   teams have a game this week. Any leftover rows below that (from a
-   previous week that had more teams, or just unused buffer rows) get
-   deleted outright, not just cleared. If that CSV is missing
-   (fetch_schedule.py failed -- see run_all.py), falls back to however
-   many rows column B on the sheet already has, so this step still runs
-   and every other column's fresh push still lands somewhere sensible
-   instead of the whole run stopping.
+1. Bye weeks mean fewer than 32 teams. Rows with no team in column B are
+   deleted BY POSITION -- the actual blank rows, found by reading column B,
+   wherever they sit. This is deliberate and was learned the hard way: it
+   used to delete by COUNT, trimming everything below schedule.csv's row
+   total, which assumed the spare rows were at the bottom.
+   push_schedule_to_sheet.py blanks a bye team's row in place, so on the
+   first bye week of 2026 the blanks were mid-sheet and the bottom-trim
+   deleted Denver instead. schedule.csv is now only a cross-check that
+   warns on a mismatch.
+   Trailing leftover rows (from a week that had more teams) are still
+   removed by range, up to MAX_ROW.
 2. Column A's SCORE formula is filled down from row 2 through the last
    real team row -- written explicitly per row rather than relying on a
-   spreadsheet "fill handle," since this runs headless.
+   spreadsheet "fill handle," since this runs headless. RANK.EQ is wrapped
+   in IFERROR: on an empty Proj cell it returns #N/A, which propagates
+   through the whole SUM and -- because errors sort ABOVE numbers in a
+   descending sort -- lands that row at the top of the chart. A missing
+   projection now contributes 0, the same as a blank in SUM.
 3. The team rows (A2:K<last>) are sorted descending by column A (SCORE)
    -- the header row is never touched.
 
@@ -54,7 +59,7 @@ MAX_ROW = 40
 # contains an "@" -- so every team got the +5 home bonus, including road
 # teams. Harmless to the ORDER, since a constant shifts all 32 scores
 # equally, but the home bonus was doing nothing at all.
-SCORE_FORMULA = ('=SUM(F{r}:J{r})+RANK.EQ(K{r}, K:K, 1)'
+SCORE_FORMULA = ('=SUM(F{r}:J{r})+IFERROR(RANK.EQ(K{r}, K:K, 1), 0)'
                  '+IF(ISNUMBER(SEARCH("@", E{r})), 0, 5)')
 
 
@@ -72,41 +77,91 @@ def main():
     service = build("sheets", "v4", credentials=creds, cache_discovery=False)
     sheet = service.spreadsheets()
 
+    # Which rows actually hold a team RIGHT NOW. This is what decides which
+    # rows get deleted -- not a count.
+    #
+    # It used to be a count: schedule.csv's row total, with everything below
+    # that deleted. That silently assumed the extra rows sat at the BOTTOM.
+    # They don't. push_schedule_to_sheet.py blanks a bye team's row IN PLACE,
+    # wherever that team happened to be sitting, so on the first bye week of
+    # 2026 the blanks were mid-sheet and deleting the bottom rows removed
+    # Denver instead. The surviving blank row then took the SCORE formula,
+    # RANK.EQ on an empty cell returned #N/A, and #N/A sorts ABOVE numbers
+    # descending -- so it landed at row 2 and crashed generate_reddit_post.py.
+    #
+    # Note values().get trims trailing empty rows, so `teams` covers the
+    # interior only; trailing leftovers are handled by the range delete below.
+    existing = sheet.values().get(
+        spreadsheetId=SHEET_ID, range=f"{TAB}!B2:B{MAX_ROW}").execute()
+    teams = [(row[0].strip() if row and row[0] else "")
+             for row in existing.get("values", [])]
+    blank_rows = [i + 2 for i, t in enumerate(teams) if not t]
+    n_teams = sum(1 for t in teams if t)
+
     if os.path.exists(args.csv):
         with open(args.csv, newline="", encoding="utf-8") as f:
-            n_teams = sum(1 for _ in csv.DictReader(f))
-        source = args.csv
-    else:
-        existing = sheet.values().get(spreadsheetId=SHEET_ID, range=f"{TAB}!B2:B").execute()
-        n_teams = len(existing.get("values", []))
-        source = f"'{TAB}'!B2:B (fallback -- {args.csv} not found)"
-        print(f"[WARN] {args.csv} not found -- using the sheet's current row count instead.")
+            expected = sum(1 for _ in csv.DictReader(f))
+        if expected != n_teams:
+            # Not fatal: push_schedule_to_sheet.py appends any team that's
+            # missing on its next run, so this heals itself. Worth saying out
+            # loud though -- it's how Denver's disappearance would have been
+            # caught the same day instead of a week later.
+            print(f"[WARN] {args.csv} lists {expected} teams but the sheet has "
+                  f"{n_teams}. Going with the sheet. If the sheet is short, the "
+                  f"next push_schedule_to_sheet.py run re-adds the missing team.")
 
     last_row = n_teams + 1  # +1 for the header
-    print(f"Team count source: {source} -> {n_teams} teams.")
+    print(f"{n_teams} teams on the sheet"
+          + (f", {len(blank_rows)} blank row(s) to remove: {blank_rows}"
+             if blank_rows else ", no blank rows")
+          + ".")
 
-    requests = []
+    # STEP 1 -- delete rows in their OWN batchUpdate, before anything is
+    # written. Sequencing matters here and getting it wrong is subtle: if the
+    # formulas are written first and the deletes applied after, every row
+    # below a deleted one shifts up by one and the last row ends up with no
+    # formula at all. That happened on the first attempt at this fix -- the
+    # Broncos landed at the bottom with an empty SCORE.
+    delete_requests = []
 
-    if last_row < MAX_ROW:
-        # Delete rows (last_row+1)..MAX_ROW (1-indexed) -- 0-indexed
-        # startIndex is last_row itself (row last_row+1 - 1), endIndex is
-        # exclusive so MAX_ROW covers through 1-indexed row MAX_ROW.
-        requests.append({
+    # Blank rows bottom-up, so an earlier deletion can't shift the index of
+    # one still to come.
+    for r in sorted(blank_rows, reverse=True):
+        delete_requests.append({
             "deleteDimension": {
-                "range": {
-                    "sheetId": TAB_GID, "dimension": "ROWS",
-                    "startIndex": last_row, "endIndex": MAX_ROW,
-                }
+                "range": {"sheetId": TAB_GID, "dimension": "ROWS",
+                          "startIndex": r - 1, "endIndex": r}
             }
         })
 
+    # Then any trailing rows left over from a week with more teams. After the
+    # blanks are gone the data is contiguous from row 2, so everything from
+    # last_row+1 down is surplus. (0-indexed startIndex is last_row; endIndex
+    # is exclusive, so MAX_ROW covers through 1-indexed row MAX_ROW.)
+    if last_row < MAX_ROW:
+        delete_requests.append({
+            "deleteDimension": {
+                "range": {"sheetId": TAB_GID, "dimension": "ROWS",
+                          "startIndex": last_row, "endIndex": MAX_ROW}
+            }
+        })
+
+    if delete_requests:
+        sheet.batchUpdate(spreadsheetId=SHEET_ID,
+                          body={"requests": delete_requests}).execute()
+
+    # STEP 2 -- now that rows 2..last_row are exactly the real teams, fill the
+    # SCORE formula. Written explicitly per row: there's no "fill handle"
+    # headlessly.
     formula_rows = [[SCORE_FORMULA.format(r=r)] for r in range(2, last_row + 1)]
     sheet.values().update(
         spreadsheetId=SHEET_ID, range=f"{TAB}!A2", valueInputOption="USER_ENTERED",
         body={"values": formula_rows},
     ).execute()
 
-    requests.append({
+    # STEP 3 -- sort. sortRange moves whole rows, so this is the one step
+    # allowed to reorder them.
+    sheet.batchUpdate(spreadsheetId=SHEET_ID, body={"requests": [{
         "sortRange": {
             "range": {
                 "sheetId": TAB_GID,
@@ -115,13 +170,11 @@ def main():
             },
             "sortSpecs": [{"dimensionIndex": 0, "sortOrder": "DESCENDING"}],
         }
-    })
-
-    sheet.batchUpdate(spreadsheetId=SHEET_ID, body={"requests": requests}).execute()
+    }]}).execute()
 
     print(f"{n_teams} teams this week -> rows 2:{last_row}. "
-          f"Deleted rows {last_row + 1}:{MAX_ROW}, filled SCORE formula, "
-          f"sorted by SCORE descending.")
+          f"Removed {len(blank_rows)} blank row(s) and anything below row "
+          f"{last_row}, filled SCORE formula, sorted by SCORE descending.")
 
 
 if __name__ == "__main__":
