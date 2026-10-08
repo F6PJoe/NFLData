@@ -452,6 +452,20 @@ session) since a file-wide timestamp that already got overwritten can't be
 un-overwritten -- only prevented from happening again, which is what this
 fixes going forward.
 
+**Jahnke's full export, dropped in by Joe (2026-10-04).** PFF also offers one
+CSV with every position -- `weekly_fantasy_rankings_<year>_week_<N>.csv`
+(" (1)" etc. on repeat downloads): overall rank, position rank, position,
+name, team as a nickname ("Lions"), DEF as "Vikings DST". `run_weekly.py`
+looks for the live week's file in Downloads and the ff_rankings folder
+(newest wins) and `import_full_board.py` loads it into `cached/jahnke.json`
+as his half-PPR board for every slot: positions in position-rank order, FLX
+as RB/WR/TE in overall-rank order. It then competes with his FP board like
+any cached source. No "updated" time in the file, so the board's time is the
+file's save time (when Joe downloaded it); `published_at` is cleared so an
+older capture's time can't vouch for it. Verified on the week-4 file: FLX 250
+= RB 85 + WR 115 + TE 50, all 32 team nicknames mapped, 115/115 WR names
+matched FP.
+
 **Keeping Jahnke's cache fresh -- not a background task, folded into the ask.**
 Tried a `mcp__scheduled-tasks` recurring job (every 2h, browser-driven, with the
 same 12h/newer-timestamp rule and the 15-min lock-proximity guard from
@@ -602,6 +616,84 @@ samples proves a board changed even with no epoch to read. It is strictly weaker
 than the epoch -- it can say "changed since I last looked", never "saved at
 12:31" -- so it needs an earlier baseline sample from the same day to be useful.
 `sample_weekly_freshness.py --fingerprint` collects it.
+
+## Per-position source lists, K/DST, half-PPR-only slots (2026-10-01)
+Replaced the single global priority order with `POSITION_PRIORITY` in
+`weekly_freshness.py`: every slot (FLX/QB/RB/WR/TE/K/DST) has its own ranked
+list of prefixes from `SOURCE_PRIORITY`, which is now just the registry of
+every fetchable source (18 as of this writing). `sources_for_slot()` resolves
+a slot's list; `run_weekly.py` fetches and chooses per slot with it.
+
+- **Why.** Three weeks of accuracy-contest tracking (`accuracy_leaderboard.py`,
+  plus FP's 2023-2025 season tables) showed the same analysts are not equally
+  good at every position -- Koerner strong at QB/RB, bad at TE every year since
+  2024; Thorman elite at WR, weak elsewhere. One list for every slot forced
+  weak sources into positions they're bad at.
+- **Order is weight.** `source_weights()` gives the first two CHOSEN sources
+  1.5x, so the list order is a weighting decision, not just tiebreak.
+- **Lists can run past 4.** `choose_sources()` takes the first `MAX_SOURCES`
+  that have a board, so entries 5+ are automatic backups (TE, K and DST use
+  this). A source with no board this week is skipped, not blended as empty.
+- **Selection rule used for TE/K/DST:** the two steadiest multi-year records
+  get the 1.5x tier, then the best current-season performers. History beats a
+  hot 3-week stretch -- Brad Evans and Nick Zylak looked elite at TE through
+  week 2 and cratered in week 3 (#137, #99).
+- **Revised 2026-10-06 on four weeks of data** (Joe was #11 overall season-
+  to-date: QB #63, RB #21, WR #3, TE #86). At four weeks, "consistently bad"
+  started to outweigh "good history", for sources and for the rule itself.
+  QB dropped Thorman/Boone/Ratcliffe (bad in 3 of 4 weeks) for Koerner,
+  Krajewski, Gamble, Murchison. RB dropped Boone and put Brunner/Smola at
+  1.5x. TE dropped Biggs (bad every week) and Zylak (#99, #136 in weeks 3-4).
+  The new TE four are Murchison and Tyler O at 1.5x, then Klotz and Falco.
+  Thorman and Ellis Johnson are the backups. Joe chose to use overall rank
+  as a check on position rank, because overall rank covers four times the
+  sample. A specialist who is weak overall (Falco #130, Ellis Johnson #90)
+  doesn't get the 1.5x weight. DST put Ringo (top-15 every week) at 1.5x. WR, K and FLX were
+  unchanged. The full rationale is in the comment above `POSITION_PRIORITY`.
+- **Early-week tail (2026-10-06).** The specialists post late in the week.
+  On the Tuesday week-5 run, QB and K had no boards at all and TE and DST
+  had one each. Only Boone and Del Don (on FP) and Ratcliffe and Tyler O
+  (on FTN) had posted every position by Tuesday. Every list now ends with
+  whichever of those four it doesn't already include. They fill in only
+  while main sources are missing, and drop out as the main sources post.
+- **Finding new sources:** the v2 `/rankings/experts` panel list is NOT the
+  full set of fetchable experts. Klotz, Falco, Murchison, Malachovsky, Smola,
+  Ciallela etc. are absent from it but return real boards through
+  `fetch_expert_list` with the id from the `half-point-ppr-cheatsheets.php`
+  expert registry (`{"id":N,"name":"..."}` in the page source). Always test a
+  real fetch before concluding someone is unavailable. Genuinely absent so
+  far: Ray Garvin (Destination Devy) -- not in the registry at all.
+- **QB, K, DST are half-PPR only** (`HALF_ONLY_SLOTS`) -- all three are
+  format-invariant, so repeating them in PPR/STD was duplicate pasting. Paste
+  order: HALF = FLX QB RB WR TE K DST; PPR/STD = FLX RB WR TE.
+- **K/DST skip the freshness gate** (`UNGATED_SLOTS`) -- their analysts update
+  a couple of times a week, so a Sunday 12:30 cutoff rejects nearly all of
+  them. Boards are fetched per week, so ungated still means this week's board.
+- **DST is matched by team, not name.** FP writes "Minnesota Vikings", FTN
+  writes "Vikings": 0 of 32 names matched, 32 of 32 team codes did.
+  `normalize_rows` keys DST as `dst:<TEAM>`; the blend keeps the longest name.
+- **`--sources` still reaches the whole registry** and applies one list to
+  every slot -- it bypasses `POSITION_PRIORITY`, so it's a one-off override,
+  not the normal path. `--gate off` keeps the per-position lists.
+- **Site export** (`NFL_<year>_Week_<N>_Half_PPR_Weekly_Rankings.csv` in the
+  week folder, written on every half-PPR run): the exact layout of FP's own
+  weekly-rankings CSV export, which Joe uploads to his site -- QB, RB, WR, TE,
+  Flex, Superflex, DST, K side by side, verified byte-identical in header and
+  row format against a real FP export. Superflex is an EMPTY block -- Joe
+  doesn't publish one, but his import needs the columns. Depths (Joe's):
+  QB/DST/K one per team up to 32 (a bye week shrinks them), RB 100, WR 120,
+  TE 35, Flex 300; players FP shows with no opponent are skipped. These caps
+  apply to the export only -- the copy page and consensus CSVs stay
+  full-depth. Player ID/Opp/Kickoff come from FP's unfiltered consensus
+  (`fetch_consensus_list`, including OP -- FP's deepest list), falling back to
+  the sources' own FP rows for players deeper than the consensus.
+  **Players are never dropped** (Joe, 2026-10-01): one FP can't match is
+  written at his rank with a blank ID, Opp/Kickoff filled from his team's
+  game, and listed under `MISSING PLAYER ID` at the very end of the run --
+  Joe fills those in from FP by hand, since his import fails on a blank ID.
+  The run also appends each one to `player_id_overrides.csv` (Name, Team,
+  Position, Player ID -- ID blank); once Joe enters the ID there, every
+  later run uses it. FP's own ID always wins when it has one.
 
 ## Seeing freshness and hand-picking sources (weekly_status.py / --sources)
 Built 2026-09-10, the night the strict gate left Joe with exactly one source

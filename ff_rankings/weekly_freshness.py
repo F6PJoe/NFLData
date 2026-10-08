@@ -107,21 +107,24 @@ LIST_PAGES = {
     ("FLX", "STD"):  "flex.php",
 }
 
-# Slots that matter on the clock, in the order Joe pastes them into the FP
-# expert portal. FLX goes FIRST because submitting a position list makes FP
-# slightly reorder the flex -- it enforces that the flex agrees with the
-# position lists on within-position order. So the published flex ends up as:
-# cross-position interleaving from the FLX paste (which no position list
-# contains), within-position order from the position pastes. See reconcile_flex.
-SLATE_SLOT_ORDER = ["FLX", "QB", "RB", "WR", "TE"]
+# Slots in the order Joe pastes them into the FP expert portal. FLX goes FIRST
+# because submitting a position list makes FP slightly reorder the flex -- it
+# enforces that the flex agrees with the position lists on within-position
+# order. So the published flex ends up as: cross-position interleaving from the
+# FLX paste (which no position list contains), within-position order from the
+# position pastes. See reconcile_flex. K/DST go last: nothing reorders them.
+SLATE_SLOT_ORDER = ["FLX", "QB", "RB", "WR", "TE", "K", "DST"]
 
-# K and DST are published too, but from a DIFFERENT set of analysts and only
-# refreshed a couple of times a week -- they are not part of the pre-lock run
-# and are not freshness-gated against a slate cutoff. Their source pool is
-# deliberately left unset until Joe names it; nothing should silently blend the
-# skill-position sources into a kicker board.
-OCCASIONAL_SLOT_ORDER = ["K", "DST"]
-OCCASIONAL_SOURCE_PRIORITY = []          # TODO: Joe's K/DST analysts
+# Published in the half-PPR file only (Joe, 2026-10-01). All three are
+# format-invariant, so the half-PPR board IS the board -- repeating them in the
+# PPR/STD outputs was just duplicate pasting.
+HALF_ONLY_SLOTS = {"QB", "K", "DST"}
+
+# Exempt from the freshness gate. K/DST analysts refresh a couple of times a
+# week, not on Sunday morning, so a 12:30 PM Sunday cutoff would reject nearly
+# all of them. Boards are fetched per week, so "ungated" still means this week's
+# board -- it just doesn't have to be from after the slate cutoff.
+UNGATED_SLOTS = {"K", "DST"}
 
 # Format-invariant slots: byte-identical across HALF/PPR/STD (verified on
 # Koerner's 2025 week 5/10/15 boards), so they are submitted once.
@@ -129,20 +132,20 @@ FORMAT_INVARIANT_SLOTS = {"QB", "K", "DST"}
 
 
 def paste_order(scoring):
-    """(slot, scoring) pairs in paste order for one format, pre-lock slots only.
+    """(slot, scoring) pairs in paste order for one format.
 
-    K/DST are excluded -- see OCCASIONAL_SLOT_ORDER.
+    HALF gets every slot; PPR/STD skip HALF_ONLY_SLOTS.
     """
     return [(slot, "ANY" if slot in FORMAT_INVARIANT_SLOTS else scoring)
-            for slot in SLATE_SLOT_ORDER]
+            for slot in SLATE_SLOT_ORDER
+            if scoring == "HALF" or slot not in HALF_ONLY_SLOTS]
 
 
 def slate_lists(scoring=None):
-    """Every (slot, scoring) the pre-lock run needs.
+    """Every (slot, scoring) the run needs.
 
-    With no `scoring`, returns all formats: FLX/RB/WR/TE x HALF/PPR/STD plus
-    QB once = 13 lists. For a single format it is 5, which is what fits in the
-    minutes between a 12:55 run and a 1 PM lock.
+    With no `scoring`, returns all formats: 7 half-PPR lists (FLX/QB/RB/WR/TE/
+    K/DST) plus FLX/RB/WR/TE for PPR and STD = 15 lists.
     """
     scorings = [scoring] if scoring else ["HALF", "PPR", "STD"]
     out = []
@@ -153,9 +156,8 @@ def slate_lists(scoring=None):
     return out
 
 
-# The half-PPR set Joe publishes first when the clock is tight (5 lists).
-HALF_PPR_LISTS = [("FLX", "HALF"), ("QB", "ANY"), ("RB", "HALF"),
-                  ("WR", "HALF"), ("TE", "HALF")]
+# The half-PPR set Joe publishes first when the clock is tight.
+HALF_PPR_LISTS = paste_order("HALF")
 
 
 # In-season source pool, best first. The pool is deliberately larger than
@@ -182,11 +184,113 @@ SOURCE_PRIORITY = [
      "ftn_analyst": "Orginski"},
     {"prefix": "jahnke",    "label": "Nathan Jahnke",   "ids": [540]},
     {"prefix": "deldon",    "label": "Dalton Del Don",  "ids": [285]},
+    # Added 2026-10-01 after 3 weeks of accuracy-contest tracking showed none
+    # of the original 7 were performing at QB or TE this season regardless of
+    # multi-year reputation (see accuracy_leaderboard.py / CLAUDE.md) -- all
+    # four confirmed on FantasyPros' own panel (real expert_id, real current
+    # boards), not a cached/manual source like Jahnke's PFF entry.
+    {"prefix": "falco",     "label": "Steve Falco",      "ids": [6589]},
+    {"prefix": "ellisjohnson", "label": "Ellis Johnson", "ids": [2716]},
+    {"prefix": "murchison", "label": "Brandon Murchison", "ids": [1508]},
+    {"prefix": "klotz",     "label": "Benjamin Klotz",   "ids": [3294]},
+    # Added 2026-10-01, same day as the above four, once a multi-year check
+    # (2023-2025) showed stronger, steadier TE track records than any of
+    # falco/ellisjohnson/murchison/klotz have on record: Zylak #4 (2024)/#15
+    # (2025) and still #14 OVERALL in 2026 despite one bad TE week; Biggs
+    # #13/#5/#27 across all three years, never a bad season. Both promoted
+    # into the TE top-4 (see POSITION_PRIORITY below); falco/klotz moved to
+    # TE's automatic backups.
+    {"prefix": "zylak",     "label": "Nick Zylak",       "ids": [1172]},
+    {"prefix": "biggs",     "label": "David Biggs",      "ids": [329]},
+    # K/DST specialists, added 2026-10-01 from the same 2024-2026 accuracy
+    # review used for TE. All have live K and DST boards via fetch_expert_list
+    # (ids from the cheatsheets expert registry -- most are NOT in the v2
+    # /rankings/experts panel list, which is not the full fetchable set).
+    {"prefix": "smola",     "label": "Jared Smola",      "ids": [93]},
+    {"prefix": "ciallela",  "label": "Mick Ciallela",    "ids": [1667]},
+    {"prefix": "gimino",    "label": "Christopher Gimino", "ids": [7195]},
+    {"prefix": "brunner",   "label": "Zach Brunner",     "ids": [1138]},
+    {"prefix": "ringo",     "label": "Mark Ringo",       "ids": [3346]},
+    {"prefix": "krajewski", "label": "Kyle Krajewski",   "ids": [3666]},
+    {"prefix": "gamble",    "label": "Rudy Gamble",      "ids": [394]},
 ]
+
+SOURCE_BY_PREFIX = {s["prefix"]: s for s in SOURCE_PRIORITY}
+
+# Per-position priority/weight order -- added 2026-10-01. Each slot gets its
+# own ranked list of prefixes instead of every position sharing one global
+# order, because accuracy-contest tracking showed the same 4 analysts are not
+# equally good at every position (e.g. Koerner is a strong, consistent QB/RB
+# source but has been bad at TE in every tracked year; Thorman is elite at WR
+# but weak everywhere else). Order matters beyond membership: source_weights()
+# in weekly_consensus.py gives the first 2 entries 1.5x weight, so putting the
+# best-performing analyst first isn't cosmetic.
+#
+# A list can run longer than MAX_SOURCES: choose_sources() walks it in order
+# and takes the first MAX_SOURCES that have a board, so entries 5+ are
+# automatic backups for a week when a main source hasn't posted.
+#
+# Revised 2026-10-06 on four weeks of 2026 data (FP season-to-date rank
+# through wk4, plus the week-by-week ranks behind it). FP's OVERALL rank only
+# counts QB/RB/WR/TE -- K/DST are scored separately -- and Joe stood at
+# QB #63, RB #21, WR #3, TE #86, so QB and TE were the priorities.
+#
+# QB: Thorman/Boone/Ratcliffe were poor in 3 of 4 weeks (season #51/#49/#71)
+# despite strong 2024-25 records -- four weeks is no longer "one bad stretch".
+# Koerner (2024 #2, 2025 #7, 2026 #16) and Krajewski (2025 #5, 2026 #9) are
+# the proven-and-current pair at 1.5x; Gamble (#4, top-6 in 3 of 4 weeks)
+# and Murchison (#5, 1 and 21 the last two weeks) next.
+# RB: Boone (#35) out; Brunner (#1, never worse than 43 any week, 2024 #3) and
+# Smola (#5, 2025 #10) take the 1.5x tier. Week 4 RB was bad for nearly every
+# source, so Koerner (#7) and Tylero stay in the main four despite their
+# week-4 misses; Ratcliffe (#11) and Ciallela (#9) become the backups.
+# WR: unchanged -- Joe is #3 season-to-date with this lineup.
+# TE: Biggs (74/126/175/96, #153 season) and Zylak (99, 136 the last two
+# weeks) out. Four weeks of one position is mostly noise, so overall rank
+# (4x the sample) is used as a check. The 1.5x tier goes to those strong on
+# every signal: Murchison (TE #2, steadiest at 25/6/29/43, #12 overall) and
+# Tylero (2025 TE #9, #1 overall, improving 108/77/23/29). Klotz (TE #3,
+# #16 overall, 2024 #11) and Falco (TE #1 on 2/32/11/71, but #130 overall)
+# are 1.0x. Ellis Johnson (44/4/4/170, #90 overall) dropped to backup.
+# K: unchanged -- #10 in its first pipeline week, and K is mostly luck.
+# DST: Ringo in at 1.5x -- top-15 every week (1/8/6/14, season #1) -- with
+# Ratcliffe (18/20/19/53) beside him; Koerner (#16) drops to backup.
+#
+# Selection rule (unchanged): the steadiest multi-year records take the 1.5x
+# tier when they're also good now; otherwise current-season consistency wins.
+#
+# Early-week tail (2026-10-06): most of the specialists above don't post
+# until late in the week -- the Tuesday week-5 run found QB and K with zero
+# boards and TE/DST with one. Only Boone, Del Don (FP) and Ratcliffe/Tylero
+# (FTN) had posted every position. Each list now ends with whichever of
+# those four it doesn't already include, ordered by 2026 accuracy at that
+# position. They fill in only while main sources are missing; the main
+# sources push them out as they post.
+POSITION_PRIORITY = {
+    "QB":  ["koerner", "krajewski", "gamble", "murchison", "thorman", "gimino",
+            "tylero", "boone", "ratcliffe", "deldon"],
+    "RB":  ["brunner", "smola", "koerner", "tylero", "ratcliffe", "ciallela",
+            "boone", "deldon"],
+    "WR":  ["thorman", "jahnke", "deldon", "ratcliffe", "boone", "tylero"],
+    "TE":  ["murchison", "tylero", "klotz", "falco", "thorman", "ellisjohnson",
+            "ratcliffe", "boone", "deldon"],
+    "K":   ["smola", "koerner", "ciallela", "gimino", "brunner", "ringo",
+            "ratcliffe", "boone", "deldon", "tylero"],
+    "DST": ["ringo", "ratcliffe", "krajewski", "gamble", "koerner", "ciallela",
+            "deldon", "tylero", "boone"],
+    # FLX has no accuracy-contest data of its own (FantasyPros doesn't track
+    # it): defaults to the strongest general RB/WR performers from the
+    # original pool rather than the TE specialists, since an analyst's FLX
+    # board is their RB+WR+TE merged (verified 2026-09-17) and these 4 have
+    # no established RB/WR track record to lean on.
+    "FLX": ["koerner", "thorman", "ratcliffe", "tylero", "boone", "deldon"],
+}
 
 
 def sources_for(scoring):
-    """Priority-ordered sources eligible for a scoring format.
+    """Priority-ordered sources eligible for a scoring format, across the
+    WHOLE pool -- used where no single slot applies (e.g. the FTN-fetch
+    decision, which only cares whether ANY tracked source uses FTN).
 
     Drops sources that never submit that format, so the caller's top-N is
     taken from analysts who actually have a board rather than silently
@@ -195,6 +299,22 @@ def sources_for(scoring):
     if scoring == "STD":
         return [s for s in SOURCE_PRIORITY if not s.get("no_std")]
     return list(SOURCE_PRIORITY)
+
+
+def sources_for_slot(slot, scoring):
+    """Priority-ordered sources for ONE slot, per POSITION_PRIORITY.
+
+    Falls back to the whole-pool order for any slot without its own entry,
+    so this never silently returns an empty pool for a slot we forgot to
+    specialize.
+    """
+    prefixes = POSITION_PRIORITY.get(slot)
+    if prefixes is None:
+        return sources_for(scoring)
+    sources = [SOURCE_BY_PREFIX[p] for p in prefixes]
+    if scoring == "STD":
+        return [s for s in sources if not s.get("no_std")]
+    return sources
 
 
 # How many sources actually go into a blended list. See the 4-vs-6 note in
@@ -626,6 +746,23 @@ def fetch_expert_list(expert_id, slot, scoring, year, week, session=None):
     resp.raise_for_status()
     data = resp.json()
     return data.get("players", []), data.get("last_updated")
+
+
+def fetch_consensus_list(slot, year, week, session=None):
+    """FP's full industry consensus for one weekly half-PPR slot.
+
+    Same endpoint as fetch_expert_list without `filters` -- the `id` alone is
+    only a widget-tracking value, so this returns every player FP ranks. Used
+    as a metadata lookup (player_id, opponent, kickoff), not as a source.
+    """
+    params = {
+        "sport": "NFL", "year": str(year), "week": str(week),
+        "id": 120, "position": slot, "type": "WEEK", "scoring": "HALF",
+    }
+    get = (session or requests).get
+    resp = get(CONSENSUS_URL, params=_bust(params), headers=HEADERS, timeout=30)
+    resp.raise_for_status()
+    return resp.json().get("players", [])
 
 
 def fingerprint_expert_list(expert_id, slot, scoring, year, week, session=None):

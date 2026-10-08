@@ -11,7 +11,7 @@ built around the preseason file layout. Keeping them apart is the point: the
 weekly run must not be able to disturb the season-long outputs.
 
 Differences from the season-long blend, all forced by how weekly works:
-  * no OVR slot -- weekly is FLX/QB/RB/WR/TE, and FP accepts nothing else
+  * no OVR slot -- weekly is FLX/QB/RB/WR/TE/K/DST, and FP accepts nothing else
   * FLX comes straight from FP (`position=FLX`), never derived
   * the blended FLX is reconciled against the blended position lists before
     export, because FP enforces that agreement itself -- see reconcile_flex
@@ -154,6 +154,167 @@ def write_paste_csv(path, records):
         for i, (_key, rec) in enumerate(records, 1):
             w.writerow([i, rec["Player"], rec["Team"], rec["Position"]])
     return len(records)
+
+
+# (section label, slot, max rows) in the order FP's own "Weekly Rankings" CSV
+# export uses -- the file Joe uploads to his site. Depths are Joe's (2026-10-01).
+# Superflex has no slot: Joe doesn't publish one, but his import expects the
+# columns, so it's written as an empty block. Note DST before K.
+SITE_EXPORT_SECTIONS = [("QB", "QB", 32), ("RB", "RB", 100), ("WR", "WR", 120),
+                        ("TE", "TE", 35), ("Flex", "FLX", 300),
+                        ("Superflex", None, 0), ("DST", "DST", 32), ("K", "K", 32)]
+# One per team: the highest-ranked QB/K/DST on each team, so "all 32" means
+# every team's starter and a bye week shrinks the list instead of padding it.
+SITE_EXPORT_ONE_PER_TEAM = {"QB", "K", "DST"}
+SITE_EXPORT_FIELDS = ["Name", "Team", "Position", "Player ID", "Opp", "Kickoff"]
+
+# Player IDs Joe looked up by hand on FP, for players FP's API couldn't match.
+# FP IDs are permanent, so one entry lasts forever. The run appends any
+# still-missing player with a blank ID for Joe to fill in.
+PLAYER_ID_OVERRIDES_PATH = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "player_id_overrides.csv")
+PLAYER_ID_OVERRIDE_FIELDS = ["Name", "Team", "Position", "Player ID"]
+
+
+def _override_key(name, team, pos):
+    """Same key normalize_rows gives the blend, so lookups line up."""
+    if pos == "DST":
+        return f"dst:{name_match.clean_team(team)}"
+    return name_match.normalize_name(name)
+
+
+def load_id_overrides(path=PLAYER_ID_OVERRIDES_PATH):
+    """{blend key: player id} for every override row with an ID filled in."""
+    if not os.path.exists(path):
+        return {}
+    with open(path, encoding="utf-8-sig", newline="") as f:
+        return {_override_key(r["Name"], r["Team"], r["Position"]): r["Player ID"].strip()
+                for r in csv.DictReader(f) if (r.get("Player ID") or "").strip()}
+
+
+def record_missing_ids(missing, path=PLAYER_ID_OVERRIDES_PATH):
+    """Append each missing player (blank ID) unless he's already in the file.
+    Returns how many rows were added."""
+    existing = set()
+    if os.path.exists(path):
+        with open(path, encoding="utf-8-sig", newline="") as f:
+            existing = {_override_key(r["Name"], r["Team"], r["Position"])
+                        for r in csv.DictReader(f)}
+    # A player is missing once per export section he's in (WR and Flex, say),
+    # so dedupe within this run too, not just against the file.
+    new = []
+    for m in missing:
+        key = _override_key(m["name"], m["team"], m["position"])
+        if key not in existing:
+            existing.add(key)
+            new.append(m)
+    if not new:
+        return 0
+    write_header = not os.path.exists(path)
+    with open(path, "a", encoding="utf-8", newline="") as f:
+        w = csv.writer(f)
+        if write_header:
+            w.writerow(PLAYER_ID_OVERRIDE_FIELDS)
+        for m in new:
+            w.writerow([m["name"], m["team"], m["position"], ""])
+    return len(new)
+
+
+def site_export_meta(rows_by_slot):
+    """{blend key: FP player row} from FP consensus lists, keyed exactly the way
+    normalize_rows keys the blend so lookups line up (DST by team)."""
+    meta = {}
+    for rows in rows_by_slot.values():
+        for (key, *_rest), row in zip(normalize_rows(rows), rows):
+            meta.setdefault(key, row)
+    return meta
+
+
+def _site_opp(text):
+    """FP API "vs. NE" / "at CAR" -> the export's "vs NE" / "@ CAR"."""
+    text = (text or "").strip()
+    if text.startswith("vs."):
+        return "vs " + text[3:].strip()
+    if text.startswith("at "):
+        return "@ " + text[3:].strip()
+    return text
+
+
+def _site_kickoff(ts):
+    """Epoch -> "Sun 1:00pm ET", the export's format."""
+    if not ts:
+        return ""
+    dt = wf.to_et(ts)
+    return (f"{dt:%a} {dt.hour % 12 or 12}:{dt:%M}"
+            f"{'am' if dt.hour < 12 else 'pm'} ET")
+
+
+def write_site_export(path, blends, meta, id_overrides=None):
+    """FP-style weekly rankings CSV: one 6-column block per list, side by side.
+
+    Mirrors FP's own export byte-for-byte in layout (LF line endings, no BOM,
+    Name/Position/Opp/Kickoff quoted, Team/ID bare, a blank separator column
+    after each block). Every field comes from FP's row for the player, so
+    names keep FP's spelling ("Patrick Mahomes II", "JAC").
+
+    Joe's site import needs every Player ID. A player FP can't be matched to
+    gets his ID from `id_overrides` (player_id_overrides.csv) if Joe has
+    filled it in; otherwise he's still written at his rank -- never dropped --
+    with the ID blank and Opp/Kickoff filled from his team's game, and is
+    returned as {name, team, position, list, rank} so the run can name him
+    and add him to the overrides file. The only players left out are ones FP
+    shows with no opponent (bye / no game), which shrinks QB/K/DST on a bye.
+    """
+    id_overrides = id_overrides or {}
+    def q(v):
+        return '"' + v.replace('"', '""') + '"' if v else ""
+
+    # Opp/kickoff are per team, so any teammate's FP row supplies them.
+    schedule = {}
+    for row in meta.values():
+        if row.get("player_opponent") and row.get("player_game_kickoff_ts"):
+            schedule.setdefault(row.get("player_team_id"),
+                                (row["player_opponent"], row["player_game_kickoff_ts"]))
+
+    columns, missing_ids = [], []
+    for label, slot, limit in SITE_EXPORT_SECTIONS:
+        col, teams = [], set()
+        for key, rec in blends.get(slot, []) if slot else []:
+            if len(col) >= limit:
+                break
+            fp = meta.get(key) or {}
+            if fp and not fp.get("player_opponent"):
+                continue
+            team = fp.get("player_team_id") or rec["Team"]
+            if slot in SITE_EXPORT_ONE_PER_TEAM:
+                if team in teams:
+                    continue
+                teams.add(team)
+            opp, kick = schedule.get(team, ("", None))
+            name = fp.get("player_name") or rec["Player"]
+            pos = fp.get("player_position_id") or rec["Position"]
+            player_id = str(fp.get("player_id") or id_overrides.get(key) or "")
+            if not player_id:
+                missing_ids.append({"name": name, "team": team, "position": pos,
+                                    "list": label, "rank": len(col) + 1})
+            col.append([q(name),
+                        team,
+                        q(pos),
+                        player_id,
+                        q(_site_opp(fp.get("player_opponent") or opp)),
+                        q(_site_kickoff(fp.get("player_game_kickoff_ts") or kick))])
+        columns.append(col)
+
+    lines = [",".join(f"{label},,,,,," for label, *_ in SITE_EXPORT_SECTIONS) + ",",
+             ",".join(",".join(SITE_EXPORT_FIELDS) + ","
+                      for _ in SITE_EXPORT_SECTIONS) + ","]
+    for i in range(max((len(c) for c in columns), default=0)):
+        lines.append(",".join(
+            ",".join(c[i]) + "," if i < len(c) else ",,,,,,"
+            for c in columns) + ",")
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        f.write("\n".join(lines) + "\n")
+    return missing_ids
 
 
 def write_workbook(path, blends, scoring, priorities, timestamps=None):
@@ -356,13 +517,14 @@ def normalize_rows(players):
     for i, p in enumerate(players):
         raw = p.get("player_name") or ""
         name = name_match.display_name(name_match.clean_name(raw))
-        rows.append((
-            name_match.normalize_name(raw),
-            i + 1,
-            name,
-            name_match.clean_team(p.get("player_team_id") or ""),
-            p.get("player_position_id") or "",
-        ))
+        team = name_match.clean_team(p.get("player_team_id") or "")
+        pos = p.get("player_position_id") or ""
+        # DST is keyed by team, not name: FP says "Minnesota Vikings", FTN says
+        # "Vikings" (0 of 32 names matched, 32 of 32 team codes did). Keying by
+        # name split every defense in two. blend_slot keeps the longest name,
+        # so the output still reads "Minnesota Vikings".
+        key = f"dst:{team}" if pos == "DST" else name_match.normalize_name(raw)
+        rows.append((key, i + 1, name, team, pos))
     return rows
 
 

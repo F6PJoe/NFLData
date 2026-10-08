@@ -73,8 +73,9 @@ def best_timestamp(source, slot, scoring, panel_epochs, ftn_data, cached):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--scoring", default="HALF", choices=["HALF", "PPR", "STD"])
-    ap.add_argument("--slot", choices=["FLX", "QB", "RB", "WR", "TE"],
-                    help="one list only (default: all 5 pre-lock slots)")
+    ap.add_argument("--slot", choices=["FLX", "QB", "RB", "WR", "TE", "K", "DST"],
+                    help="one list only (default: FLX/QB/RB/WR/TE -- K/DST "
+                         "aren't freshness-gated, so they're opt-in here)")
     ap.add_argument("--out-root", default="weekly")
     args = ap.parse_args()
 

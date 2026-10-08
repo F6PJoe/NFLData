@@ -60,6 +60,22 @@ POOL_DISPLAY_NAMES = {
     "tylero": "Tyler Orginski - FTN",
     "jahnke": "Nathan Jahnke - Pro Football Focus",
     "deldon": "Dalton Del Don - The Deep Shot",
+    # Added 2026-10-01 alongside the TE/QB per-position specialization.
+    "falco": "Steve Falco - Front Office Pros",
+    "ellisjohnson": "Ellis Johnson - FantasyPros",
+    "murchison": "Brandon Murchison - RotoBaller",
+    "klotz": "Benjamin Klotz - Touchdown Squad",
+    # Added 2026-10-01 alongside the TE lineup finalization.
+    "zylak": "Nick Zylak - Fantasy Football Advice",
+    "biggs": "David Biggs - Drink Five",
+    # K/DST specialists, added 2026-10-01.
+    "smola": "Jared Smola - Draft Sharks",
+    "ciallela": "Mick Ciallela - Fantrax",
+    "gimino": "Christopher Gimino - RotoGrinders",
+    "brunner": "Zach Brunner - FlurrySports",
+    "ringo": "Mark Ringo - Sleepers and Busts",
+    "krajewski": "Kyle Krajewski - First Seed Sports",
+    "gamble": "Rudy Gamble - Razzball",
 }
 
 

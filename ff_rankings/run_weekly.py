@@ -34,6 +34,7 @@ import requests
 
 import cached_source
 import ftn_weekly
+import import_full_board
 import weekly_consensus as wc
 import weekly_freshness as wf
 
@@ -66,11 +67,24 @@ def panel_epochs(lists, session, workers=8):
     return out, errors
 
 
-def fetch_everything(lists, year, week, session, workers=12):
-    """{(label, slot, scoring): players} for every pool source and list."""
+def fetch_everything(lists, year, week, session, workers=12, manual_sources=None):
+    """{(label, slot, scoring): players} for every pool source and list.
+
+    Each slot only fetches ITS OWN prioritized sources (see
+    wf.POSITION_PRIORITY), not the whole pool -- e.g. the TE specialists
+    added 2026-10-01 have no established RB/WR track record and were never
+    meant to be fetched for those slots. manual_sources (a --sources
+    override) can still force a source outside its normal slot, so make
+    sure those get fetched too rather than silently having no board.
+    """
     jobs = []
     for slot, scoring in lists:
-        for source in wf.sources_for(scoring):
+        pool = wf.sources_for_slot(slot, scoring)
+        if manual_sources:
+            have = {s["prefix"] for s in pool}
+            pool = pool + [s for s in wf.sources_for(scoring)
+                           if s["prefix"] in manual_sources and s["prefix"] not in have]
+        for source in pool:
             jobs.append((source, slot, scoring))
 
     results, errors = {}, []
@@ -182,9 +196,12 @@ def choose_sources(slot, scoring, fetched, epochs, threshold, gate,
     freshness TAG shown in output is still the real one (e.g. "Thu 3:01 PM",
     STALE) so a manual call is visibly a manual call.
     """
-    pool = wf.sources_for(scoring)
     if manual_sources is not None:
-        pool = [s for s in pool if s["prefix"] in manual_sources]
+        # Full registry, not just this slot's curated pool -- a manual
+        # override can deliberately test a source outside its usual position.
+        pool = [s for s in wf.sources_for(scoring) if s["prefix"] in manual_sources]
+    else:
+        pool = wf.sources_for_slot(slot, scoring)
 
     chosen, skipped = [], []
     for source in pool:
@@ -252,6 +269,10 @@ def main():
                          f"choices: {', '.join(s['prefix'] for s in wf.SOURCE_PRIORITY)}")
     ap.add_argument("--no-ftn", action="store_true",
                     help="skip the FTN fallback (e.g. if the login is down)")
+    ap.add_argument("--jahnke-time", metavar="HH:MM",
+                    help="when Jahnke's export was downloaded, today ET -- "
+                         "overrides the file's save time (which changes if "
+                         "the file is copied or moved)")
     ap.add_argument("--year")
     ap.add_argument("--week")
     ap.add_argument("--out-root", default="weekly")
@@ -347,12 +368,27 @@ def main():
               file=sys.stderr)
 
     fetched, fetch_errors = fetch_everything(
-        lists, year, week, session, workers=args.workers)
+        lists, year, week, session, workers=args.workers,
+        manual_sources=manual_sources)
     for key, err in fetch_errors:
         print(f"WARNING: fetch {key[0]} {key[1]}/{key[2]} failed -- {err}",
               file=sys.stderr)
 
     out_dir = wc.ensure_dir(os.path.join(args.out_root, f"{year}-wk{int(week):02d}"))
+
+    # Jahnke's full rankings export, if Joe downloaded this week's -- left in
+    # Downloads or the ff_rankings folder. Re-imported every run so the newest
+    # download always wins.
+    export = import_full_board.find_export(year, week)
+    if export:
+        when = None
+        if args.jahnke_time:
+            hh, mm = (int(x) for x in args.jahnke_time.split(":"))
+            when = now_et.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        _path, counts, stamp = import_full_board.import_export(export, out_dir, when=when)
+        print(f"  Jahnke export: {os.path.basename(export)} (saved "
+              f"{_stamp(datetime.datetime.fromisoformat(stamp).timestamp())}) -> cached "
+              + ", ".join(f"{s} {n}" for s, n in counts.items()))
 
     # Boards captured by hand (Jahnke via PFF+, Thorman when a route exists).
     # They compete like any other origin and face the same freshness gate.
@@ -372,13 +408,16 @@ def main():
                       f"{', '.join(stale_keys)} -- consider refreshing before this run")
         print()
     gating, manifest = {}, []
+    missing_ids = []
 
     for scoring in scorings:
         blends, priorities, stamps = {}, {}, {}
         for slot, slot_scoring in wf.paste_order(scoring):
+            slot_threshold = None if slot in wf.UNGATED_SLOTS else threshold
             chosen, skipped = choose_sources(
                 slot, slot_scoring, fetched, epochs.get((slot, slot_scoring), {}),
-                threshold, gate, ftn_data, cached, phase, manual_sources=manual_sources)
+                slot_threshold, gate, ftn_data, cached, phase,
+                manual_sources=manual_sources)
             gating[(slot, slot_scoring)] = {
                 "used": [{"label": c["label"], "freshness": c["freshness"],
                           "updated": c["updated"], "origin": c["origin"],
@@ -457,6 +496,31 @@ def main():
         manifest.append({"scoring": scoring, "viewer": os.path.basename(viewer),
                          "slots": {s: len(r) for s, r in blends.items()}})
 
+        # The FP-format file Joe uploads to his own site. Player ID/Opp/Kickoff
+        # come from FP's full consensus, since FTN rows don't carry them; FLX
+        # players are all covered by the position lists.
+        if scoring == "HALF" and blends:
+            consensus = {}
+            # OP (superflex) is FP's deepest list -- ~560 QB/RB/WR/TE, catching
+            # players past the end of a position's own consensus.
+            for slot in ("QB", "RB", "WR", "TE", "K", "DST", "OP"):
+                try:
+                    consensus[slot] = wf.fetch_consensus_list(
+                        slot, year, week, session=session)
+                except Exception as exc:
+                    print(f"WARNING: site-export lookup for {slot} failed -- "
+                          f"{type(exc).__name__}: {exc}", file=sys.stderr)
+            # Fallback for players deeper than FP's consensus (a 130-deep TE
+            # board): the sources' own FP rows carry the same fields.
+            # Consensus entries come first, so they win any overlap.
+            consensus.update({key: rows for key, rows in fetched.items() if rows})
+            site_path = os.path.join(
+                out_dir, f"NFL_{year}_Week_{int(week)}_Half_PPR_Weekly_Rankings.csv")
+            missing_ids = wc.write_site_export(
+                site_path, blends, wc.site_export_meta(consensus),
+                id_overrides=wc.load_id_overrides())
+            print(f"  site export -> {site_path}")
+
     with open(os.path.join(out_dir, "manifest.json"), "w", encoding="utf-8") as f:
         json.dump({
             "year": year, "week": week,
@@ -476,6 +540,17 @@ def main():
         import webbrowser
         first = os.path.abspath(os.path.join(out_dir, manifest[0]["viewer"]))
         webbrowser.open("file:///" + first.replace("\\", "/"))
+
+    if missing_ids:
+        # Last thing printed on purpose: the site import fails on a blank ID.
+        added = wc.record_missing_ids(missing_ids)
+        print(f"\nMISSING PLAYER ID in the site export -- look these up on "
+              f"FantasyPros and fill them in before importing:")
+        for m in missing_ids:
+            print(f"  {m['name']} ({m['team']} {m['position']}) -- {m['list']} #{m['rank']}")
+        print(f"To fix it for every future week too, enter the IDs in "
+              f"{wc.PLAYER_ID_OVERRIDES_PATH}"
+              + (f" ({added} new row(s) added there with the ID blank)." if added else "."))
 
     if fetch_errors or epoch_errors:
         sys.exit(1)
