@@ -2,8 +2,9 @@ name: Weekly rankings (half PPR)
 
 # Run the half-PPR weekly rankings on demand -- built to be triggered from
 # Joe's phone (GitHub app -> Actions -> Run workflow). Same per-position source
-# lists as a local run; the 7 paste lists go to Dropbox as one headerless CSV
-# each ("Week N/1 FLX.csv" ... "7 DST.csv") for Excel mobile.
+# lists as a local run; the rankings workbook goes to Dropbox as
+# "Week N/Week N Half PPR.xlsx" for Excel mobile -- one tab per paste list,
+# a header row naming each ranker, and each ranker's own rank per player.
 #
 # The workflow file lives on main (GitHub only lists workflow_dispatch
 # workflows from the default branch) but always runs the code on the
