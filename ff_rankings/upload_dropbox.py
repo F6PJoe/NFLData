@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 """
-Upload the half-PPR paste lists to Dropbox, one CSV per list, for the phone.
+Upload the half-PPR rankings workbook to Dropbox, for the phone.
 
 Built for the GitHub "Weekly rankings (half PPR)" workflow: Joe triggers it
-from his phone, then opens the CSVs in Excel mobile and copies each into the
-FantasyPros portal. Files land in the Dropbox app's own folder as
+from his phone, opens the workbook in Excel mobile and copies each tab into
+the FantasyPros portal. It lands in the Dropbox app's own folder as
 
-    Week 5/1 FLX.csv, 2 QB.csv, ... 7 DST.csv
+    Week 5/Week 5 Half PPR.xlsx
 
-numbered in paste order, overwritten on every run. There's no header row, so
-select-all/copy gives exactly the copy page's rows (rank, name, team, pos).
+overwritten on every run. It's run_weekly.py's rankings_half.xlsx: one tab per
+list in paste order, a header row naming each ranker (with update time), then
+Rank/Player/Team/Position in A-D -- what Joe copies, skipping the header --
+and each ranker's own rank to the right, so he can see who's included.
 
 Needs DROPBOX_APP_KEY, DROPBOX_APP_SECRET and DROPBOX_REFRESH_TOKEN (GitHub
 secrets; .env locally). The refresh token never expires; each run trades it
@@ -20,9 +22,7 @@ for a short-lived access token.
 """
 
 import argparse
-import csv
 import glob
-import io
 import json
 import os
 import re
@@ -60,15 +60,6 @@ def access_token(session):
     return resp.json()["access_token"]
 
 
-def headerless_csv(path):
-    """The paste CSV's rows without its header line, as bytes."""
-    with open(path, encoding="utf-8-sig", newline="") as f:
-        rows = list(csv.reader(f))[1:]
-    out = io.StringIO()
-    csv.writer(out, lineterminator="\r\n").writerows(rows)
-    return out.getvalue().encode("utf-8")
-
-
 def upload(session, token, dropbox_path, data):
     resp = session.post(UPLOAD_URL, data=data, timeout=60, headers={
         "Authorization": f"Bearer {token}",
@@ -93,16 +84,16 @@ def main():
         sys.exit(f"No week directory under {args.out_root}/")
     week = int(re.search(r"wk(\d+)", os.path.basename(os.path.normpath(week_dir))).group(1))
 
+    book = os.path.join(week_dir, "rankings_half.xlsx")
+    if not os.path.exists(book):
+        sys.exit(f"No rankings_half.xlsx in {week_dir} -- is openpyxl installed?")
+
     session = requests.Session()
     token = access_token(session)
-    for n, (slot, _scoring) in enumerate(wf.paste_order("HALF"), start=1):
-        src = os.path.join(week_dir, f"paste_{slot.lower()}.csv")
-        if not os.path.exists(src):
-            print(f"  {slot}: no paste file in {week_dir} -- skipped")
-            continue
-        dest = f"/Week {week}/{n} {slot}.csv"
-        upload(session, token, dest, headerless_csv(src))
-        print(f"  {dest}")
+    dest = f"/Week {week}/Week {week} Half PPR.xlsx"
+    with open(book, "rb") as f:
+        upload(session, token, dest, f.read())
+    print(f"  {dest}")
 
 
 if __name__ == "__main__":
