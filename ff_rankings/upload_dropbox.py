@@ -39,16 +39,24 @@ ENV_KEYS = ("DROPBOX_APP_KEY", "DROPBOX_APP_SECRET", "DROPBOX_REFRESH_TOKEN")
 
 def access_token(session):
     wf._load_dotenv()
-    missing = [k for k in ENV_KEYS if not os.environ.get(k)]
+    # Pasted secrets often carry a stray space, newline or the JSON's quotes.
+    env = {k: os.environ.get(k, "").strip().strip('"').strip() for k in ENV_KEYS}
+    missing = [k for k, v in env.items() if not v]
     if missing:
         sys.exit(f"Missing {', '.join(missing)} -- add them as GitHub secrets (or to .env).")
+    if env["DROPBOX_REFRESH_TOKEN"].startswith("sl."):
+        sys.exit("DROPBOX_REFRESH_TOKEN starts with 'sl.' -- that's the 4-hour "
+                 "access_token. Save the refresh_token value instead.")
     resp = session.post(TOKEN_URL, timeout=30, data={
         "grant_type": "refresh_token",
-        "refresh_token": os.environ["DROPBOX_REFRESH_TOKEN"],
-        "client_id": os.environ["DROPBOX_APP_KEY"],
-        "client_secret": os.environ["DROPBOX_APP_SECRET"],
+        "refresh_token": env["DROPBOX_REFRESH_TOKEN"],
+        "client_id": env["DROPBOX_APP_KEY"],
+        "client_secret": env["DROPBOX_APP_SECRET"],
     })
-    resp.raise_for_status()
+    if not resp.ok:
+        # Dropbox's error body names the bad piece (invalid_client = key or
+        # secret, invalid_grant = refresh token) and never echoes a secret.
+        sys.exit(f"Dropbox refused the token exchange ({resp.status_code}): {resp.text}")
     return resp.json()["access_token"]
 
 
