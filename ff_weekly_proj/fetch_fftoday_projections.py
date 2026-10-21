@@ -34,8 +34,15 @@ import schedule as nfl_schedule
 import scoring
 
 BASE = "https://www.fftoday.com/rankings/playerwkproj.php"
-HEADERS = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                         "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"}
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                  "(KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,"
+              "image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.fftoday.com/rankings/",
+    "Upgrade-Insecure-Requests": "1",
+}
 
 POS_ID = {"QB": 10, "RB": 20, "WR": 30, "TE": 40}
 # Observed cell counts on the weekly page (smallbody cells only, not the bodycontent rank cell):
@@ -61,6 +68,10 @@ CELL_RE = re.compile(r'<TD class="smallbody"[^>]*>(.*?)</TD>', re.S)
 ROW_RE = re.compile(r'<TR>(.*?)</TR>', re.S)
 
 
+class Blocked(Exception):
+    """FFToday refused the request -- 403, typically a datacenter IP block."""
+
+
 def num(text):
     text = (text or "").replace(",", "").strip()
     if not text or text == "-" or text == "\xa0":
@@ -75,14 +86,20 @@ def get_html(year, week, pos, page, html_file=None):
     import requests, time
     params = {"Season": year, "GameWeek": week, "PosID": POS_ID[pos], "LeagueID": "",
               "order_by": "FFPts", "sort_order": "DESC", "cur_page": page}
+    last = None
     for attempt in range(3):
-        resp = requests.get(BASE, params=params, headers=HEADERS, timeout=30)
-        if resp.status_code == 403:
+        try:
+            resp = requests.get(BASE, params=params, headers=HEADERS, timeout=30)
+            if resp.status_code == 403:
+                last = Blocked(f"403 Forbidden for {pos} week {week} page {page}")
+                time.sleep(3 * (attempt + 1))
+                continue
+            resp.raise_for_status()
+            return resp.text
+        except requests.RequestException as e:
+            last = e
             time.sleep(3 * (attempt + 1))
-            continue
-        resp.raise_for_status()
-        return resp.text
-    resp.raise_for_status()
+    raise last
 
 
 def parse_rows(pos, html):
@@ -101,7 +118,15 @@ def fetch_position(year, week, pos, html_dir=None):
     page = 0
     while True:
         html_file = f"{html_dir}/ff_{pos.lower()}_page{page}.html" if html_dir else None
-        html = get_html(year, week, pos, page, html_file)
+        try:
+            html = get_html(year, week, pos, page, html_file)
+        except Exception as e:
+            if not all_rows:
+                raise  # nothing for this position -- let main() drop it
+            # Keep the pages already collected rather than losing the position.
+            print(f"[WARN] fftoday {pos}: page {page} failed ({type(e).__name__}: {e}) "
+                  f"— keeping the {len(all_rows)} rows already collected.", flush=True)
+            break
         rows = parse_rows(pos, html)
         if not rows:
             break
@@ -201,10 +226,17 @@ def main():
 
     import time
     wrote_any = False
+    blocked = []
     for pos in ("QB", "RB", "WR", "TE"):
         if pos != "QB":
             time.sleep(2)
-        rows = fetch_position(args.year, week, pos, args.html_dir)
+        try:
+            rows = fetch_position(args.year, week, pos, args.html_dir)
+        except Exception as e:
+            print(f"[WARN] fftoday {pos}: {type(e).__name__}: {e} — source dropped",
+                  flush=True)
+            blocked.append(pos)
+            continue
         recs = [build_record(pos, row) for row in rows]
         recs.sort(key=lambda r: r[0], reverse=True)
         recs = [r for _, r in recs]
@@ -218,6 +250,10 @@ def main():
             w.writerows(recs)
         print(f"Wrote {len(recs)} {pos}s to {out}.")
         wrote_any = True
+
+    if blocked:
+        print(f"[WARN] fftoday: {len(blocked)}/4 positions unavailable "
+              f"({', '.join(blocked)})", flush=True)
 
     if not wrote_any:
         sys.exit("No data parsed for any position.")
