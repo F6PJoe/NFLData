@@ -26,6 +26,7 @@ traced to the file that caused it.
 
 import collections
 import csv
+import json
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -34,6 +35,13 @@ UTIL = os.path.join(os.path.dirname(HERE), "ff_utilization", "cached", "nflverse
 
 PLAYABLE_STATUS = {"ACT"}
 BLOCKING_REPORT = {"Out", "Doubtful"}
+# Sleeper statuses that mean "cannot play", beyond the two above. These are
+# administrative facts rather than judgement calls, so they are applied and
+# not put on the review sheet. nflverse roster status is supposed to catch
+# them, but it lagged badly -- Jonathon Brooks sat on IR with an abdominal
+# injury while nflverse still read ACT, and the model handed him 5.4 points
+# and a slice of Carolina's backfield.
+SLEEPER_BLOCKING = {"IR", "PUP", "Sus", "DNR", "COV", "NA"}
 STATUS_MEANING = {"RES": "injured reserve", "EXE": "exempt list", "CUT": "released",
                   "DEV": "practice squad", "INA": "inactive", "RET": "retired",
                   "TRD": "traded"}
@@ -70,8 +78,117 @@ def _injury_report(year, week):
     return out
 
 
+SUFFIXES = {"jr", "sr", "ii", "iii", "iv", "v"}
+
+
+def norm_name(s):
+    """Lowercase, strip punctuation and generational suffixes."""
+    s = (s or "").lower()
+    s = "".join(c for c in s if c.isalnum() or c.isspace())
+    parts = [p for p in s.split() if p not in SUFFIXES]
+    return " ".join(parts)
+
+
+def _gsis_by_name(year):
+    """(name, team) and name -> gsis_id, from the newest depth-chart snapshot.
+
+    Sleeper leaves gsis_id null for most players -- 84% of tagged skill players
+    when this was written, including starting quarterbacks -- so matching on it
+    alone silently loses them. Name plus team is the fallback.
+    """
+    path = os.path.join(DATA, f"depth_charts_{year}.csv")
+    if not os.path.exists(path):
+        return {}, {}
+    snaps = collections.defaultdict(list)
+    with open(path, newline="", encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            if r.get("gsis_id") and r.get("player_name"):
+                snaps[r["dt"]].append((r["player_name"], r["team"], r["gsis_id"]))
+    if not snaps:
+        return {}, {}
+    pair, solo = {}, collections.defaultdict(set)
+    for nm, tm, gid in snaps[max(snaps)]:
+        pair[(norm_name(nm), tm)] = gid
+        solo[norm_name(nm)].add(gid)
+    # a bare name is only safe where it is unambiguous
+    return pair, {n: next(iter(g)) for n, g in solo.items() if len(g) == 1}
+
+
+SLEEPER = os.path.join(os.path.dirname(HERE), "ff_projections", "cached", "sleeper")
+
+
+def sleeper_tags(year=None, before=None):
+    """gsis_id -> (status, body part) from the newest cached Sleeper snapshot.
+
+    A SECOND injury source, and on most days a faster one. The official report
+    is a Wednesday-to-Friday artifact: on Tuesday it is empty, while Sleeper is
+    already carrying what beat reporters filed over the weekend. It has no week
+    column -- it describes right now -- so the cache's age is what matters, and
+    the caller is expected to surface it.
+    """
+    blob, stamp = _sleeper_blob(before)
+    if not blob:
+        return {}, None
+    pair, solo = _gsis_by_name(year) if year else ({}, {})
+    out = {}
+    for v in blob.values():
+        if not isinstance(v, dict):
+            continue
+        st = v.get("injury_status")
+        if not st:
+            continue
+        gid = v.get("gsis_id")
+        if not gid:
+            nm = norm_name(f"{v.get('first_name','')} {v.get('last_name','')}")
+            gid = pair.get((nm, v.get("team"))) or solo.get(nm)
+        if gid:
+            out[gid] = (st, v.get("injury_body_part") or "")
+    return out, stamp
+
+
+def _sleeper_blob(before=None):
+    """Newest snapshot -- or, with before="YYYY-MM-DD", the newest one dated
+    strictly earlier (what Sleeper said before that day)."""
+    if not os.path.isdir(SLEEPER):
+        return None, None
+    snaps = sorted(f for f in os.listdir(SLEEPER)
+                   if f.startswith("players_nfl_") and f.endswith(".json")
+                   and (before is None or f[len("players_nfl_"):-len(".json")] < before))
+    if not snaps:
+        return None, None
+    with open(os.path.join(SLEEPER, snaps[-1]), encoding="utf-8") as fh:
+        return json.load(fh), snaps[-1][len("players_nfl_"):-len(".json")]
+
+
+def sleeper_meta(year=None):
+    """gsis_id -> {player, pos, team} for anyone Sleeper knows about.
+
+    Needed because a player Sleeper has already ruled out is filtered before
+    the projections file is written, so his name has to come from somewhere
+    else for the review sheet to be able to list him.
+    """
+    blob, _ = _sleeper_blob()
+    if not blob:
+        return {}
+    pair, solo = _gsis_by_name(year) if year else ({}, {})
+    out = {}
+    for v in blob.values():
+        if not isinstance(v, dict):
+            continue
+        nm = f"{v.get('first_name','')} {v.get('last_name','')}".strip()
+        gid = v.get("gsis_id") or pair.get((norm_name(nm), v.get("team")))             or solo.get(norm_name(nm))
+        if gid:
+            out[gid] = {"player": nm, "pos": v.get("position") or "-",
+                        "team": v.get("team") or "-"}
+    return out
+
+
 def _last_week_snaps(year, week):
-    """player -> offense snaps in the most recent completed week before `week`."""
+    """-> ({team: {player: offense snaps}} in EACH TEAM's most recent game
+    before `week`, {team: that week}). Per team, not one league week: a team
+    coming off a bye has no snaps "last week", and the rotation check was
+    removing every player listed 3rd or lower on it (Miami wk7 2026, off its
+    wk6 bye: Kevin Coleman Jr., 17% of the targets, "no snaps in wk6")."""
     path = os.path.join(UTIL, f"snaps_{year}.csv")
     xwalk = {}
     px = os.path.join(UTIL, "players.csv")
@@ -82,34 +199,85 @@ def _last_week_snaps(year, week):
                     xwalk[r["pfr_id"]] = r["gsis_id"]
     if not os.path.exists(path):
         return {}, None
-    byweek = collections.defaultdict(dict)
+    byteam = collections.defaultdict(lambda: collections.defaultdict(dict))
     with open(path, newline="", encoding="utf-8") as fh:
         for r in csv.DictReader(fh):
             g = xwalk.get(r.get("pfr_player_id"))
-            if g and r.get("game_type") == "REG":
-                byweek[int(r["week"])][g] = float(r.get("offense_snaps") or 0)
-    prior = [w for w in byweek if w < week]
-    if not prior:
-        return {}, None
-    last = max(prior)
-    return byweek[last], last
+            if g and r.get("game_type") == "REG" and int(r["week"]) < week:
+                byteam[r.get("team")][int(r["week"])][g] = float(r.get("offense_snaps") or 0)
+    snaps, last = {}, {}
+    for tm, wks in byteam.items():
+        lw = max(wks)
+        last[tm] = lw
+        snaps[tm] = wks[lw]
+    return snaps, last
 
 
 def _ord(n):
     return f"{n}{'th' if 10 <= n % 100 <= 20 else {1:'st', 2:'nd', 3:'rd'}.get(n % 10, 'th')}"
 
 
-def build(year, week, *, candidates, depth_rank=None, review=None):
-    """candidates: {player_id: team}. -> ({pid: multiplier}, {pid: reason})."""
+def build(year, week, *, candidates, depth_rank=None, review=None, positions=None):
+    """candidates: {player_id: team}. -> ({pid: multiplier}, {pid: reason}).
+
+    positions ({pid: pos}) lets the rotation check use a player's rank among
+    the players still AVAILABLE, not his printed depth-chart slot. Without it,
+    a team's RB3 was cut for being "listed 3rd" even when the RB2 ahead of him
+    was out -- which in week 3 2026 handed Jaylen Warren 100% of Pittsburgh's
+    carries once Rico Dowdle was ruled out.
+    """
     status = _roster_status(year, week)
     report = _injury_report(year, week)
+    tags, _tag_date = sleeper_tags(year)
     snaps, snap_week = _last_week_snaps(year, week)
     depth_rank = depth_rank or {}
     review = review or {}
 
+    # who is gone for a reason that has nothing to do with the rotation check,
+    # so that everyone behind them moves up a slot before it runs
+    gone = set()
+    for pid in candidates:
+        st = status.get(pid)
+        rep = report.get(pid, "")
+        tag = "" if rep else tags.get(pid, ("", ""))[0]
+        if st and st not in PLAYABLE_STATUS and rep == "Questionable":
+            st = None
+        if ((st and st not in PLAYABLE_STATUS) or rep in BLOCKING_REPORT
+                or tag in BLOCKING_REPORT or tag in SLEEPER_BLOCKING
+                or review.get(pid) == 0.0):
+            gone.add(pid)
+
+    def live_rank(pid):
+        r = depth_rank.get(pid, 1)
+        if not positions or pid not in positions:
+            return r
+        tm, po = candidates[pid], positions[pid]
+        ahead = sum(1 for q, t in candidates.items()
+                    if q != pid and t == tm and positions.get(q) == po
+                    and depth_rank.get(q, 99) < r and q not in gone)
+        return ahead + 1
+
+    # a player whose empty last week was an INJURY, not the bench: officially
+    # Questionable now (designated to return), or ruled out / on reserve last
+    # week. Only these skip the rotation check -- a practice-report listing
+    # alone does not (Hollywood Brown, Sills: healthy depth, rightly removed).
+    prev_report = _injury_report(year, week - 1) if week and week > 1 else {}
+    prev_status = _roster_status(year, week - 1) if week and week > 1 else {}
+
+    def returning(pid):
+        return (report.get(pid) == "Questionable"
+                or prev_report.get(pid) in BLOCKING_REPORT
+                or prev_status.get(pid) in ("RES", "PUP", "EXE"))
+
     mult, reason = {}, {}
     for pid in candidates:
         st = status.get(pid)
+        # THIS WEEK'S official game designation outranks a roster status: a
+        # player listed Questionable has been designated to return / activated
+        # (Jordan Mason MIN wk7 2026: Questionable, roster still "RES").
+        # Out / Doubtful are handled just below either way.
+        if st and st not in PLAYABLE_STATUS and report.get(pid) == "Questionable":
+            st = None
         if st and st not in PLAYABLE_STATUS:
             mult[pid] = 0.0
             reason[pid] = f"roster: {STATUS_MEANING.get(st, st)}"
@@ -119,11 +287,24 @@ def build(year, week, *, candidates, depth_rank=None, review=None):
             mult[pid] = 0.0
             reason[pid] = f"injury report: {rep}"
             continue
-        # rotation check -- conservative on purpose
-        if snap_week is not None and depth_rank.get(pid, 1) >= 3:
-            if snaps.get(pid, 0) == 0:
+        # Sleeper only gets a say where the official report is silent -- an
+        # official designation always outranks an aggregated one.
+        if not rep:
+            tag, part = tags.get(pid, ("", ""))
+            if tag in BLOCKING_REPORT or tag in SLEEPER_BLOCKING:
                 mult[pid] = 0.0
-                reason[pid] = f"rotation: no snaps in wk{snap_week} (listed {_ord(depth_rank[pid])})"
+                reason[pid] = f"sleeper: {tag}" + (f" ({part})" if part else "")
+                continue
+        # rotation check -- conservative on purpose. Not for a player on THIS
+        # week's injury report: his empty last week was the injury, not the
+        # bench (Jordan Mason MIN wk7 2026: off IR, Questionable, listed 4th
+        # on the chart while on reserve, so "no snaps in wk6, 4th" removed him)
+        tm_ = candidates[pid]
+        if tm_ in snap_week and live_rank(pid) >= 3 and not returning(pid):
+            if snaps.get(tm_, {}).get(pid, 0) == 0:
+                mult[pid] = 0.0
+                reason[pid] = (f"rotation: no snaps in {tm_}'s last game (wk{snap_week[tm_]}) "
+                               f"(effectively {_ord(live_rank(pid))})")
                 continue
         mult[pid] = 1.0
 

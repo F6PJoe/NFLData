@@ -9,11 +9,14 @@ the multi-times-a-day model run reads these from disk and never rebuilds them):
   data/qb_weekly_<year>.csv    -- per QB-week: stat line plus that QB's share
       of team pass attempts and team rush attempts.
 
-The QB layer is an INTERNAL reconciliation input, never published. It exists
-because team_rush_att (the denominator behind every RB's rush_att_pct)
+The QB layer feeds BOTH the published quarterback projections and the internal
+reconciliation. The reconciliation came first: team_rush_att (the denominator
+behind every RB's rush_att_pct)
 INCLUDES quarterback carries -- up to ~45% of it on BUF/PHI. Projecting RB
 carries without first projecting QB carries silently misprices every mobile-QB
-backfield, and misprices it worst exactly when that QB's status changes.
+backfield, and misprices it worst exactly when that QB's status changes. What
+is NOT published is the raw usage detail in these files -- the projections
+built on top of them are.
 
 Usage:
     python build_team_qb_features.py --year 2025

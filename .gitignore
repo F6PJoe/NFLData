@@ -60,6 +60,9 @@ ff_projections/*.backup-*.xlsx
 # ── Probe/debug scripts (one-off helpers, not needed in repo) ─────────────────
 probe_*.py
 check_*.py
+# ...except the weekly model's safeguards: lock.py runs both before every lock
+!ff_weekly_model/check_freshness.py
+!ff_weekly_model/check_projections.py
 
 # ── Distribution / packaging ──────────────────────────────────────────────────
 build/

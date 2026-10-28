@@ -22,7 +22,7 @@ import os
 import statistics as st
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # research/ -> ff_weekly_model
 sys.path.insert(0, HERE)
 import project as P  # noqa: E402
 

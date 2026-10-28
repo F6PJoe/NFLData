@@ -6,7 +6,7 @@ getting last year's carries wherever he earned them, and Arizona's 2026 week 1
 (Allgeier 17 carries, Love 11, ranks 2 and 1; nothing for ranks 3-5) is the
 case in point. Sweeps depth_weight and scores each on the 2025 backtest.
 
-Usage:  python sweep_depth_weight.py
+Usage:  python sweep_prior_weight.py
 """
 
 import collections
@@ -14,7 +14,7 @@ import math
 import os
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # research/ -> ff_weekly_model
 sys.path.insert(0, HERE)
 import project as P  # noqa: E402
 
@@ -39,12 +39,13 @@ def main():
         if r["position"] in P.POSITIONS:
             by_week[int(r["week"])].append(r)
 
-    print(f"\n  depth_weight sweep -- 2025 walk-forward, half-PPR RMSE\n")
-    print(f"  {'weight':>8}{'ALL':>9}{'RB':>9}{'WR':>9}{'TE':>9}")
+    print(f"\n  prior-evidence sweep -- 2025 walk-forward, half-PPR RMSE\n")
+    print(f"  {'per-game k':>11}{'ALL':>9}{'RB':>9}{'WR':>9}{'TE':>9}")
     best = None
-    for w in (0.0, 0.15, 0.3, 0.45, 0.6, 0.8, 1.0):
-        priors = P.build_priors(tgt_cur, car_cur, tgt_prev, car_prev, pos,
-                                team_cur, team_prev, chart, depth_weight=w)
+    priors = P.build_priors(tgt_cur, car_cur, tgt_prev, car_prev, pos,
+                            team_cur, team_prev, chart)
+    for w in (0.0, 0.05, 0.1, 0.15, 0.25, 0.4, 0.6, 1.0):
+        P.PRIOR_GAME_WEIGHT = w
         err = collections.defaultdict(list)
         for wk in range(2, 19):
             active = {r["player_id"]: r["team"] for r in by_week[wk]}
@@ -60,9 +61,9 @@ def main():
         flag = ""
         if best is None or rm["ALL"] < best[1]:
             best = (w, rm["ALL"]); flag = "  <-"
-        print(f"  {w:>8.2f}{rm['ALL']:>9.3f}{rm['RB']:>9.3f}{rm['WR']:>9.3f}"
+        print(f"  {w:>11.2f}{rm['ALL']:>9.3f}{rm['RB']:>9.3f}{rm['WR']:>9.3f}"
               f"{rm['TE']:>9.3f}{flag}")
-    print(f"\n  best depth_weight = {best[0]:.2f}  (RMSE {best[1]:.3f})\n")
+    print(f"\n  best PRIOR_GAME_WEIGHT = {best[0]:.2f}  (RMSE {best[1]:.3f})\n")
 
 
 if __name__ == "__main__":

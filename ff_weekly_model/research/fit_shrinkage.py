@@ -25,7 +25,7 @@ import csv
 import math
 import os
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # research/ -> ff_weekly_model
 DATA = os.path.join(HERE, "data")
 
 K_GRID = [0, 0.5, 1, 1.5, 2, 3, 4, 5, 6, 8, 10, 13, 16, 20, 25, 30, 40, 55, 75, 100, 150, 250]

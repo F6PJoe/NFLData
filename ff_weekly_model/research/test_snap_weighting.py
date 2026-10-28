@@ -21,7 +21,7 @@ import math
 import os
 import sys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # research/ -> ff_weekly_model
 sys.path.insert(0, HERE)
 import project as P          # noqa: E402
 import analyze_snaps as A    # noqa: E402
