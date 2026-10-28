@@ -81,6 +81,7 @@ NAME_ALIASES = {
     "christopher brooks": "chris brooks",
     "kenny gainwell": "kenneth gainwell",
     "james cook iii": "james cook",
+    "zonovan knight": "bam knight",
 }
 
 
@@ -100,6 +101,8 @@ def clean_team(team):
 
 DISPLAY_OVERRIDES = {
     "kenneth walker": "Kenneth Walker III",
+    # Not a suffix restore -- picks the nickname the majority of sources use.
+    "zonovan knight": "Bam Knight",
 }
 
 

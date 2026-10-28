@@ -81,6 +81,7 @@ NAME_ALIASES = {
     "nathaniel dell": "tank dell",
     "christopher brooks": "chris brooks",
     "kenneth gainwell": "kenny gainwell",
+    "zonovan knight": "bam knight",
 }
 
 # Display-name overrides: for the nickname-preferring entries above, lock
@@ -103,6 +104,7 @@ DISPLAY_NAME_OVERRIDES = {
     "tank dell": "Tank Dell",
     "chris brooks": "Chris Brooks",
     "kenny gainwell": "Kenny Gainwell",
+    "bam knight": "Bam Knight",
 }
 
 
