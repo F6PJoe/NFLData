@@ -55,6 +55,28 @@ def collapse_script_style_blocks(html):
     return _BLOCK_RE.sub(_collapse, html)
 
 
+# Shortcode names registered on the live site (WordPress core, TablePress,
+# AdRotate, s2Member). WordPress runs do_shortcode over the post, <script>
+# bodies included, so JS like `TABLES[table]` was read as TablePress's
+# [table] shortcode and replaced with "table not found" text -- the script
+# died with a SyntaxError and the teaser rendered empty (2026-10-20). Any
+# `[name` below inside a <script> fails the build; rename the variable.
+_SHORTCODE_NAMES = ("table", "caption", "wp_caption", "gallery", "embed",
+                    "audio", "video", "playlist", "the_ad", "adrotate", "s2If",
+                    "s2Get", "s2Member", "s2Key", "s2Stream", "s2Eot")
+_SHORTCODE_RE = re.compile(r"\[\s*(" + "|".join(_SHORTCODE_NAMES) + r")(?![\w-])", re.I)
+
+
+def assert_no_shortcode_brackets(html, name):
+    for body in re.findall(r"<script[^>]*>(.*?)</script>", html, re.DOTALL):
+        m = _SHORTCODE_RE.search(body)
+        if m:
+            raise AssertionError(
+                f"{name}: '{body[m.start():m.start()+30]}' in <script> looks "
+                f"like a WordPress shortcode ([{m.group(1)}]) -- WordPress will "
+                f"replace it on the live page and break the script. Rename it.")
+
+
 def assert_no_line_comments(html, name):
     """Collapsing turns newlines into spaces, so a surviving "//" comment would
     silently swallow the rest of the script. Block comments only. Checked on
@@ -94,6 +116,7 @@ def build(view, data_source, collapse=True):
     body = (src[start:].replace("__VIEW_MODE__", view)
                        .replace("__DATA_SOURCE__", data_source))
     assert_no_line_comments(body, f"{view} embed")
+    assert_no_shortcode_brackets(body, f"{view} embed")
     if collapse:
         body = collapse_script_style_blocks(body)
         # Blank lines anywhere in the pasted block can trigger wpautop right at
@@ -111,6 +134,7 @@ def build_key(collapse=True):
     start = src.index("<!-- F6P_KEY:START -->")
     body = src[start:]
     assert_no_line_comments(body, "stat key embed")
+    assert_no_shortcode_brackets(body, "stat key embed")
     if collapse:
         body = collapse_script_style_blocks(body)
         body = "\n".join(ln for ln in body.splitlines() if ln.strip())
@@ -123,6 +147,7 @@ def build_teaser(weekly_url, season_url, collapse=True):
     body = (src[start:].replace("__TEASER_WEEKLY_URL__", weekly_url)
                        .replace("__TEASER_SEASON_URL__", season_url))
     assert_no_line_comments(body, "teaser embed")
+    assert_no_shortcode_brackets(body, "teaser embed")
     if collapse:
         body = collapse_script_style_blocks(body)
         body = "\n".join(ln for ln in body.splitlines() if ln.strip())

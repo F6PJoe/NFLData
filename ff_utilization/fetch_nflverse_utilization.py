@@ -98,6 +98,17 @@ POSITIONS = ("RB", "WR", "TE")
 # endpoint expects) but renames the output row to LAR to match.
 TEAM_FIX = {"LA": "LAR", "JAX": "JAC"}
 
+# Red zone view: "inside the N" means the snap was at or inside the
+# opponent's N-yard line (yardline_100 <= N). Receiving splits at 20/10,
+# rushing at 20/10/5 -- the layout the user asked for. Counts only; no yards,
+# to match the rest of the usage table.
+RZ_REC_ZONES = (20, 10)
+RZ_RUSH_ZONES = (20, 10, 5)
+RZ_COUNT_COLS = ([f"rz{z}_{s}" for z in RZ_REC_ZONES for s in ("tgt", "rec", "rec_td")]
+                 + [f"rz{z}_{s}" for z in RZ_RUSH_ZONES for s in ("rush", "rush_td")])
+RZ_TEAM_COLS = ([f"team_rz{z}_tgt" for z in RZ_REC_ZONES]
+                + [f"team_rz{z}_rush" for z in RZ_RUSH_ZONES])
+
 csv.field_size_limit(10 ** 7)
 
 
@@ -471,7 +482,16 @@ def build(year, wmin, wmax, use_cache=False, snap_source="auto"):
             team = TEAM_FIX.get(p.get("posteam") or "", p.get("posteam") or "")
             if not team:
                 continue
+            # Two-point tries are not plays from scrimmage: they aren't
+            # official targets, carries or receptions, and an end zone target
+            # on one isn't the same thing as a normal end zone target (user's
+            # call, 2026-10-20). Skipped for EVERY stat here, not just the red
+            # zone splits. Penalty-nullified plays already carry
+            # pass_attempt/rush_attempt = 0, so nothing extra is needed there.
+            if p.get("two_point_attempt") == "1":
+                continue
             y100 = num(p.get("yardline_100"), -1)
+            rz_ok = y100 >= 0
 
             if p.get("pass_attempt") == "1" and p.get("receiver_player_id"):
                 rid = p["receiver_player_id"]
@@ -492,6 +512,14 @@ def build(year, wmin, wmax, use_cache=False, snap_source="auto"):
                     if y100 >= 0 and num(ay) >= y100:
                         stat[k]["ez_tgts"] += 1
                         team_tot[(team, wk)]["ez_tgts"] += 1
+                for zone in RZ_REC_ZONES:
+                    if rz_ok and y100 <= zone:
+                        stat[k][f"rz{zone}_tgt"] += 1
+                        team_tot[(team, wk)][f"rz{zone}_tgt"] += 1
+                        if p.get("complete_pass") == "1":
+                            stat[k][f"rz{zone}_rec"] += 1
+                        if p.get("pass_touchdown") == "1":
+                            stat[k][f"rz{zone}_rec_td"] += 1
 
             if p.get("rush_attempt") == "1" and p.get("rusher_player_id"):
                 rid = p["rusher_player_id"]
@@ -502,6 +530,12 @@ def build(year, wmin, wmax, use_cache=False, snap_source="auto"):
                 if 0 <= y100 <= 5:
                     stat[k]["inside5_rush"] += 1
                     team_tot[(team, wk)]["inside5_rush"] += 1
+                for zone in RZ_RUSH_ZONES:
+                    if rz_ok and y100 <= zone:
+                        stat[k][f"rz{zone}_rush"] += 1
+                        team_tot[(team, wk)][f"rz{zone}_rush"] += 1
+                        if p.get("rush_touchdown") == "1":
+                            stat[k][f"rz{zone}_rush_td"] += 1
 
     # --- team snap totals, for snap share ----------------------------------
     # offense_pct is already per-team, so the denominator is recoverable as
@@ -555,6 +589,13 @@ def build(year, wmin, wmax, use_cache=False, snap_source="auto"):
             "team_ez_tgts": tt["ez_tgts"],
             "team_inside5_rush": tt["inside5_rush"],
         }
+        # Red zone counts only. Shares and catch rate are derived in the
+        # browser from these plus the team_rz* denominators, same as every
+        # season-view rate.
+        for c in RZ_COUNT_COLS:
+            row[c] = s[c]
+        for c in RZ_TEAM_COLS:
+            row[c] = tt[c[len("team_"):]]
         rows.append(row)
 
     rows.sort(key=lambda r: (r["week"], -r["snaps"]))
@@ -565,7 +606,8 @@ COLUMNS = ["player_id", "player", "team", "pos", "season", "week",
            "snaps", "snaps_pct", "rush_att", "rush_att_pct",
            "targets", "targets_pct", "rec", "ez_tgts", "ez_tgts_pct",
            "inside5_rush", "inside5_rush_pct", "adot", "air_yards_total",
-           "team_targets", "team_rush_att", "team_ez_tgts", "team_inside5_rush"]
+           "team_targets", "team_rush_att", "team_ez_tgts", "team_inside5_rush"
+           ] + RZ_COUNT_COLS + RZ_TEAM_COLS
 
 
 def write(outdir, rows, suffix):

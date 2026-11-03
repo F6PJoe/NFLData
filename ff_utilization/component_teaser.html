@@ -53,7 +53,7 @@
 #f6p-teaser *{box-sizing:border-box}
 /* Same heavier treatment as the member table's view switch, for visual
    consistency between the two products -- see component.html. */
-#f6p-teaser .f6pt-viewswitch{margin-bottom:12px}
+#f6p-teaser .f6pt-viewswitch{margin-bottom:12px;display:flex;flex-wrap:wrap;gap:10px 18px}
 #f6p-teaser .f6pt-viewswitch .f6pt-seg button{
   padding:9px 22px;font-size:14px;font-weight:600;border-width:2px
 }
@@ -191,12 +191,52 @@
     {key:"adot",label:"ADOT",locked:true}
   ];
 
+  /* Red zone table: free sample is the inside-20 counts only (the public
+     JSON carries nothing else); Opp 20 is computed here from two of them.
+     Every other column is shown as a header so visitors see what membership
+     adds. Same column order as the member table. */
+  var ID_COLUMNS = COLUMNS.slice(0, 3);
+  var RZ_COLUMNS = ID_COLUMNS.concat([
+    {key:"rz20_opp",label:"Opp 20"},
+    {key:"rz20_rush",label:"Att 20"},
+    {key:"rz20_rush_td",label:"Rush TD 20"},
+    {key:"rz20_rush_pct",label:"%Rush 20",locked:true},
+    {key:"rz10_rush",label:"Att 10",locked:true},
+    {key:"rz10_rush_td",label:"Rush TD 10",locked:true},
+    {key:"rz10_rush_pct",label:"%Rush 10",locked:true},
+    {key:"rz5_rush",label:"Att 5",locked:true},
+    {key:"rz5_rush_td",label:"Rush TD 5",locked:true},
+    {key:"rz5_rush_pct",label:"%Rush 5",locked:true},
+    {key:"rz20_tgt",label:"Tgt 20"},
+    {key:"rz20_rec",label:"Rec 20"},
+    {key:"rz20_ctch",label:"Ctch% 20",locked:true},
+    {key:"rz20_rec_td",label:"Rec TD 20"},
+    {key:"rz20_tgt_pct",label:"%Tgt 20",locked:true},
+    {key:"rz10_tgt",label:"Tgt 10",locked:true},
+    {key:"rz10_rec_td",label:"Rec TD 10",locked:true},
+    {key:"rz10_tgt_pct",label:"%Tgt 10",locked:true},
+    {key:"ez_tgts",label:"EZ Tgts",locked:true}
+  ]);
+  var TABLES = {
+    usage: {label:"Usage", cols:COLUMNS, sort:null,
+      cta:"Snap share, rush share, routes run, route %, target share, end zone " +
+          "target share and ADOT are members-only. Snaps, rush attempts, targets " +
+          "and receptions are shown for every player above."},
+    rz: {label:"Red Zone", cols:RZ_COLUMNS, sort:"rz20_opp",
+      cta:"Inside-the-10 and goal-line work, each player's share of his team's " +
+          "red zone carries and targets, catch rate and end zone targets are " +
+          "members-only. Carries, targets, catches and touchdowns inside the 20 " +
+          "are shown for every player above."}
+  };
+  var curTable = "usage";
+
   var host = document.getElementById("f6p-teaser");
   var viewswitch = host.querySelector(".f6pt-viewswitch");
   var ctl = host.querySelector(".f6pt-controls");
   var meta = host.querySelector(".f6pt-meta");
   var hrow = host.querySelector("thead tr");
   var tbody = host.querySelector("tbody");
+  var ctaText = host.querySelector(".f6pt-cta-text");
 
   function lockIcon() {
     var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -221,6 +261,7 @@
       var rows = data.rows.map(function (row) {
         var o = {};
         for (var i = 0; i < data.cols.length; i++) { o[data.cols[i]] = row[i]; }
+        o.rz20_opp = (o.rz20_rush || 0) + (o.rz20_tgt || 0);
         return o;
       });
       DATASETS[key] = { rows: rows, top: data.top, label: data.label };
@@ -277,6 +318,22 @@
       seg.appendChild(b);
     });
     viewswitch.appendChild(seg);
+
+    var tseg = document.createElement("div");
+    tseg.className = "f6pt-seg";
+    Object.keys(TABLES).forEach(function (k) {
+      var b = el("button", curTable === k ? "on" : null, TABLES[k].label);
+      b.type = "button";
+      b.addEventListener("click", function () {
+        curTable = k;
+        tseg.querySelectorAll("button").forEach(function (x) {
+          x.classList.toggle("on", x === b);
+        });
+        renderCurrent();
+      });
+      tseg.appendChild(b);
+    });
+    viewswitch.appendChild(tseg);
 
     /* Position/Team/Search -- same three filters as the member table, added
        once the player list stopped being a fixed top-10-per-position preview
@@ -351,6 +408,15 @@
       if (query && r.player.toLowerCase().indexOf(query) === -1) { return false; }
       return true;
     });
+    /* Usage keeps the server's snaps-descending order; the red zone tables
+       sort by their main inside-20 count, ties broken by snaps. */
+    var sk = TABLES[curTable].sort;
+    if (sk) {
+      rows = rows.slice().sort(function (a, b) {
+        return ((b[sk] || 0) - (a[sk] || 0)) || ((b.snaps || 0) - (a.snaps || 0));
+      });
+    }
+    ctaText.textContent = TABLES[curTable].cta;
     while (meta.firstChild) { meta.removeChild(meta.firstChild); }
     meta.appendChild(el("b", null, rows.length.toLocaleString() + " players"));
     meta.appendChild(document.createTextNode(" — " + (d.label || "")));
@@ -358,6 +424,7 @@
   }
 
   function render(rows) {
+    var COLUMNS = TABLES[curTable].cols;
     while (hrow.firstChild) { hrow.removeChild(hrow.firstChild); }
     while (tbody.firstChild) { tbody.removeChild(tbody.firstChild); }
     COLUMNS.forEach(function (c) {

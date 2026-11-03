@@ -47,6 +47,12 @@ DATA = HERE / "data"
 
 # Order matters -- teaser column order on the page.
 COLUMNS = ["player", "team", "pos", "snaps", "rush_att", "targets", "rec"]
+# Red zone tables' free sample: the inside-20 counts only. Every inside-10/5
+# split, every share, catch rate and EZ stay members-only -- and are left out
+# of this public file entirely, not just hidden in the page.
+RZ_FREE = ["rz20_tgt", "rz20_rec", "rz20_rec_td", "rz20_rush", "rz20_rush_td"]
+COLUMNS += RZ_FREE
+INT_FIELDS = COLUMNS[3:]
 
 OUT_NAME = {"weekly": "utilization_teaser_weekly.json",
             "season": "utilization_teaser_season.json"}
@@ -62,13 +68,11 @@ def rows_for_season(rows):
     agg = {}
     for r in rows:
         key = (r["player"], r["team"], r["pos"])
-        a = agg.setdefault(key, {"player": r["player"], "team": r["team"],
-                                 "pos": r["pos"], "snaps": 0, "rush_att": 0,
-                                 "targets": 0, "rec": 0})
-        a["snaps"] += int(r["snaps"])
-        a["rush_att"] += int(r["rush_att"])
-        a["targets"] += int(r["targets"])
-        a["rec"] += int(r["rec"])
+        a = agg.setdefault(key, dict({"player": r["player"], "team": r["team"],
+                                      "pos": r["pos"]},
+                                     **{f: 0 for f in INT_FIELDS}))
+        for f in INT_FIELDS:
+            a[f] += int(r.get(f) or 0)
     label = (f"Week {weeks[0]}" if len(weeks) == 1
              else f"Weeks {weeks[0]}-{weeks[-1]}")
     return list(agg.values()), f"Season ({label})"
@@ -101,8 +105,8 @@ def main():
         ranked = sorted(by_pos.get(pos, []), key=lambda r: -int(r["snaps"]))
         out.extend(ranked[:args.top] if args.top else ranked)
 
-    payload_rows = [[r["player"], r["team"], r["pos"], int(r["snaps"]),
-                     int(r["rush_att"]), int(r["targets"]), int(r["rec"])]
+    payload_rows = [[r["player"], r["team"], r["pos"]]
+                    + [int(r.get(f) or 0) for f in INT_FIELDS]
                     for r in out]
 
     payload = {"cols": COLUMNS, "rows": payload_rows, "label": label, "top": args.top}

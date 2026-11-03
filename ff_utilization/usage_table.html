@@ -32,6 +32,27 @@
       <dd>Average depth of target -- how far downfield, in the air, the player's targets traveled on average.</dd>
     </dl>
     <p class="f6pk-note">
+      <b>Red Zone</b> counts only plays snapped at
+      or inside the opponent's 20, 10 or 5-yard line. Two-point tries are not
+      included.
+    </p>
+    <dl>
+      <dt>Opp 20</dt>
+      <dd>Red zone opportunities: rush attempts plus targets inside the 20.</dd>
+      <dt>Tgt / Rec TD (20, 10), Rec 20</dt>
+      <dd>Targets and receiving touchdowns on plays inside the 20 or 10, and receptions inside the 20.</dd>
+      <dt>Ctch% 20</dt>
+      <dd>Receptions divided by the player's own targets inside the 20.</dd>
+      <dt>%Tgt (20, 10)</dt>
+      <dd>Share of the team's targets from that spot.</dd>
+      <dt>EZ Tgts</dt>
+      <dd>Targets thrown into the end zone, from anywhere on the field (same as EZ above).</dd>
+      <dt>Att / Rush TD (20, 10, 5)</dt>
+      <dd>Rush attempts and rushing touchdowns on plays inside the 20, 10 or 5.</dd>
+      <dt>%Rush (20, 10, 5)</dt>
+      <dd>Share of the team's rush attempts from that spot, quarterback runs included.</dd>
+    </dl>
+    <p class="f6pk-note">
       <b>Weekly</b> shows one row per player per selected week. <b>Season</b>
       adds every selected week together for each player, then recalculates
       each percentage from those combined totals (never averages the weekly
@@ -40,8 +61,9 @@
       percentages) by games played.
     </p>
     <p class="f6pk-note">
-      Free previews show Snaps, Rush, Targets and Rec only -- every other
-      column above requires a membership.
+      Free previews show Snaps, Rush, Targets and Rec, plus targets, catches,
+      carries and touchdowns inside the 20 -- every other column above
+      requires a membership.
     </p>
   </details>
 </div>
@@ -118,7 +140,7 @@
    column set (Wk vs G), unlike Team/Position/Search which only narrow within
    whichever dataset is already showing. Same button mechanics as a filter,
    different visual weight so it doesn't read as just another one. */
-#f6p-usage .f6p-viewswitch{margin-bottom:14px}
+#f6p-usage .f6p-viewswitch{margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px 18px}
 #f6p-usage .f6p-viewswitch:empty{margin-bottom:0}
 #f6p-usage .f6p-viewswitch .f6p-seg{gap:6px}
 #f6p-usage .f6p-viewswitch .f6p-seg button{
@@ -248,19 +270,72 @@
          sdd/ldd/2min    need per-play personnel; no official source in-season */
   ];
 
+  /* Red zone table. "20/10/5" = the snap was at or inside the opponent's
+     20/10/5-yard line; two-point tries excluded. Counts only -- no yards, to
+     match the rest of the tool. Shares and catch rate are derived from counts
+     (see RATES), never stored, so a week range re-aggregates exactly.
+     Opp 20 = carries + targets inside the 20, the default sort so every
+     position ranks on one scale. RBs dominate it (that's the real usage);
+     the position filter isolates WR/TE. TD labels say Rush/Rec because both
+     groups sit in one table (and one CSV header row). */
+  var ID_COLUMNS = COLUMNS.slice(0, 5);
+  var RZ_COLUMNS = ID_COLUMNS.concat([
+    {key:"rz20_opp",label:"Opp 20",type:"int",gstart:true},
+    {key:"rz20_rush",label:"Att 20",type:"int",gstart:true},
+    {key:"rz20_rush_td",label:"Rush TD 20",type:"int"},
+    {key:"rz20_rush_pct",label:"%Rush 20",type:"pct"},
+    {key:"rz10_rush",label:"Att 10",type:"int"},
+    {key:"rz10_rush_td",label:"Rush TD 10",type:"int"},
+    {key:"rz10_rush_pct",label:"%Rush 10",type:"pct"},
+    {key:"rz5_rush",label:"Att 5",type:"int"},
+    {key:"rz5_rush_td",label:"Rush TD 5",type:"int"},
+    {key:"rz5_rush_pct",label:"%Rush 5",type:"pct"},
+    {key:"rz20_tgt",label:"Tgt 20",type:"int",gstart:true},
+    {key:"rz20_rec",label:"Rec 20",type:"int"},
+    {key:"rz20_ctch",label:"Ctch% 20",type:"pct"},
+    {key:"rz20_rec_td",label:"Rec TD 20",type:"int"},
+    {key:"rz20_tgt_pct",label:"%Tgt 20",type:"pct"},
+    {key:"rz10_tgt",label:"Tgt 10",type:"int"},
+    {key:"rz10_rec_td",label:"Rec TD 10",type:"int"},
+    {key:"rz10_tgt_pct",label:"%Tgt 10",type:"pct"},
+    {key:"ez_tgts",label:"EZ Tgts",type:"int"}
+  ]);
+  var TABLES = {
+    usage: {label:"Usage", cols:COLUMNS, sort:"snaps"},
+    rz: {label:"Red Zone", cols:RZ_COLUMNS, sort:"rz20_opp"}
+  };
+
   /* Season totals are rebuilt from weekly rows: sum the counts, then recompute
      each rate from summed numerator / summed denominator. Averaging weekly
      percentages would weight a 5-snap week the same as a 60-snap week. */
   var SUM_COLS = ["snaps","routes","rush_att","targets","rec","ez_tgts","inside5_rush",
     "air_yards_total","team_snaps","team_routes","team_targets","team_rush_att",
-    "team_ez_tgts","team_inside5_rush"];
+    "team_ez_tgts","team_inside5_rush",
+    "rz20_tgt","rz20_rec","rz20_rec_td","rz10_tgt","rz10_rec","rz10_rec_td",
+    "rz20_rush","rz20_rush_td","rz10_rush","rz10_rush_td","rz5_rush","rz5_rush_td",
+    "team_rz20_tgt","team_rz10_tgt","team_rz20_rush","team_rz10_rush","team_rz5_rush",
+    "rz20_opp"];
 
   var RATES = {
     snaps_pct:["snaps","team_snaps"], routes_pct:["routes","team_routes"],
     rush_att_pct:["rush_att","team_rush_att"], targets_pct:["targets","team_targets"],
     ez_tgts_pct:["ez_tgts","team_ez_tgts"],
-    inside5_rush_pct:["inside5_rush","team_inside5_rush"]
+    inside5_rush_pct:["inside5_rush","team_inside5_rush"],
+    rz20_tgt_pct:["rz20_tgt","team_rz20_tgt"], rz10_tgt_pct:["rz10_tgt","team_rz10_tgt"],
+    rz20_rush_pct:["rz20_rush","team_rz20_rush"], rz10_rush_pct:["rz10_rush","team_rz10_rush"],
+    rz5_rush_pct:["rz5_rush","team_rz5_rush"],
+    rz20_ctch:["rz20_rec","rz20_tgt"]
   };
+  /* Red zone rates aren't stored in the file -- computed for weekly rows on
+     load, and by aggregate() for season rows. Catch rate is a personal rate
+     (his catches / his own targets), so with zero targets it shows a dash
+     rather than a misleading 0%. */
+  var RZ_RATE_KEYS = Object.keys(RATES).filter(function (k) { return k.indexOf("rz") === 0; });
+  var NULL_IF_NO_DENOM = { rz20_ctch: 1 };
+  function rate(key, n, d) {
+    if (!d) { return NULL_IF_NO_DENOM[key] ? null : 0; }
+    return Math.round(n / d * 1000) / 10;
+  }
 
   /* Ratios that are NOT percentages. RATES multiplies by 100; ADOT is a yard
      figure, so running it through there rendered -3.0 as -300. Same summed-
@@ -278,6 +353,7 @@
 
   var ROWS = [], WEEKS = [], TEAMS = [];
   var view = (VIEW_MODE === "both") ? "weekly" : VIEW_MODE;
+  var curTable = "usage";
   /* Season view only: "total" sums the range, "avg" divides the counting
      stats by games played. Percentages and TPRR are already rates and are
      identical either way, so they are left alone. */
@@ -305,11 +381,15 @@
     td.colSpan = 12; tr.appendChild(td); tbody.appendChild(tr);
   }
 
-  Promise.resolve(fetch("data/utilization_weekly.json", {cache:"no-cache"}).then(function(r){if(!r.ok){throw new Error("HTTP "+r.status);}return r.json();}))
+  Promise.resolve(fetch("data/utilization_weekly_2025_wk1-2.json", {cache:"no-cache"}).then(function(r){if(!r.ok){throw new Error("HTTP "+r.status);}return r.json();}))
     .then(function (data) {
       ROWS = data.rows.map(function (r) {
         var o = {};
         for (var i = 0; i < data.cols.length; i++) { o[data.cols[i]] = r[i]; }
+        o.rz20_opp = (o.rz20_rush || 0) + (o.rz20_tgt || 0);
+        RZ_RATE_KEYS.forEach(function (key) {
+          o[key] = rate(key, o[RATES[key][0]] || 0, o[RATES[key][1]] || 0);
+        });
         return o;
       });
       var w = {}, t = {};
@@ -388,7 +468,7 @@
         b.addEventListener("click", function () {
           view = p[0];
           seg.querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x === b); });
-          sortKey = "snaps"; sortAsc = false;
+          sortKey = TABLES[curTable].sort; sortAsc = false;
           /* Season defaults to the full range (week 1 -> current), not
              whichever single week Weekly happened to be on -- otherwise
              switching to Season silently showed just one week aggregated,
@@ -405,6 +485,22 @@
       });
       viewswitch.appendChild(seg);
     }
+
+    /* Which stat set the table shows. Same rows, filters and week range --
+       only the columns (and the default sort) change. */
+    var tseg = el("div", "f6p-grp f6p-seg");
+    Object.keys(TABLES).forEach(function (k) {
+      var b = el("button", curTable === k ? "on" : null, TABLES[k].label);
+      b.type = "button";
+      b.addEventListener("click", function () {
+        curTable = k;
+        tseg.querySelectorAll("button").forEach(function (x) { x.classList.toggle("on", x === b); });
+        sortKey = TABLES[k].sort; sortAsc = false;
+        render();
+      });
+      tseg.appendChild(b);
+    });
+    viewswitch.appendChild(tseg);
 
     buildWeekControls();
     ctl.appendChild(weekHolder);
@@ -502,8 +598,7 @@
       a.team = Object.keys(a._t).sort(function (x, y) { return a._t[y] - a._t[x]; })[0];
       delete a._t;
       Object.keys(RATES).forEach(function (key) {
-        var n = a[RATES[key][0]], d = a[RATES[key][1]];
-        a[key] = d ? Math.round(n / d * 1000) / 10 : 0;
+        a[key] = rate(key, a[RATES[key][0]], a[RATES[key][1]]);
       });
       Object.keys(RATIOS).forEach(function (key) {
         var n = a[RATIOS[key][0]], d = a[RATIOS[key][1]];
@@ -516,9 +611,13 @@
   /* Divide the counting stats by games played. Only "int" columns are touched
      -- "games" itself is excluded, and every rate column is already a
      per-opportunity figure that means the same thing on either basis. */
-  var COUNT_KEYS = COLUMNS.filter(function (c) {
+  var COUNT_KEYS = COLUMNS.concat(RZ_COLUMNS).filter(function (c) {
     return c.type === "int" && c.key !== "games" && c.key !== "week";
-  }).map(function (c) { return c.key; });
+  }).map(function (c) { return c.key; }).filter(function (k, i, arr) {
+    /* EZ is in both the usage and red zone sets -- dividing it twice
+       would show a per-game figure divided by games again. */
+    return arr.indexOf(k) === i;
+  });
 
   function perGame(row) {
     var out = {}, k;
@@ -531,7 +630,7 @@
   }
 
   function render() {
-    visible = COLUMNS.filter(function (c) {
+    visible = TABLES[curTable].cols.filter(function (c) {
       if (view === "season" && c.weeklyOnly) { return false; }
       if (view === "weekly" && c.seasonOnly) { return false; }
       return true;
@@ -618,7 +717,7 @@
     });
     var a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([out.join("\n")], { type: "text/csv;charset=utf-8" }));
-    a.download = "f6p-usage-" + view +
+    a.download = "f6p-" + (curTable === "usage" ? "usage" : curTable) + "-" + view +
       (view === "season" && basis === "avg" ? "-pergame" : "") +
       "-wk" + wkFrom + (wkFrom === wkTo ? "" : "-" + wkTo) + ".csv";
     document.body.appendChild(a);

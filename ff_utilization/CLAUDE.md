@@ -1157,6 +1157,47 @@ confirmed via `sftp_upload.py --dry-run` that local matched what was already
 live. The live site itself was never touched by the test; only a local file
 briefly held test data, and only between build steps that never reached SFTP.
 
+## Red Zone table (added 2026-10-20)
+A second switch in the view-switch row (Usage | Red Zone), in both
+`component.html` and `component_teaser.html`. Same rows, filters, week range
+and Season/Per Game math -- only the column set and default sort change.
+Layout follows a reader request modelled on PFR/4for4's red zone pages,
+**minus yards** (user's call: the rest of the tool has no yards, and it keeps
+this from being a straight copy of 4for4).
+
+First built as two views (RZ Receiving / RZ Rushing); merged into ONE at the
+user's request -- same reasoning as the one-table-for-all-positions decision.
+Columns: Opp 20 | Att/Rush TD/%Rush at 20, 10, 5 | Tgt 20, Rec 20, Ctch% 20,
+Rec TD 20, %Tgt 20, Tgt 10, Rec TD 10, %Tgt 10, EZ Tgts. Rec 10 / Ctch% 10
+cut as noise (tiny samples); rz10_rec is still in the data, just not shown.
+TD labels carry Rush/Rec because both groups share one header row and CSV.
+
+- **Opp 20** = carries + targets inside the 20, computed client-side, and the
+  default sort. RBs dominate it (2026 wk1-6: top 10 all RBs, first non-RB
+  St. Brown at 15th) -- accepted as the real usage; the position filter
+  isolates WR/TE. Don't add a weighted "score" to rebalance it.
+- "Inside N" = `yardline_100 <= N` at the snap.
+- **Two-point tries are excluded from EVERY pbp stat** (Usage table too, not
+  just red zone) -- user's call 2026-10-20: a 2-pt try isn't an official
+  target/carry, and an EZ target on one isn't a normal EZ target. Changed 39
+  player-weeks through wk6 by exactly 1 (targets, or rush + I5); EZ, rec and
+  ADOT were unaffected (2-pt rows carry no air_yards/completion credit).
+- Only counts + `team_rz*` denominators are stored (`RZ_COUNT_COLS` /
+  `RZ_TEAM_COLS` in fetch_nflverse_utilization.py, mirrored in
+  build_published.py's COLUMNS). Every share and Ctch% is computed in the
+  browser (weekly rows on load, season rows in `aggregate()`), summed-
+  numerator / summed-denominator like every other rate. Ctch% with zero
+  targets shows a dash, not 0%. %Rush denominators include QB runs.
+- Teaser free sample: Opp 20, Att 20, Rush TD 20, Tgt 20, Rec 20, Rec TD 20. Everything else
+  is locked AND absent from the public teaser JSON (`RZ_FREE` in
+  build_teaser.py; Opp 20 is summed in the page). CTA text switches per table.
+- Verified 2026 wk1-6: nesting invariants (5 <= 10 <= 20 <= total, rec <= tgt,
+  td <= att) 0 violations; denominators consistent across every team-week;
+  St. Brown 16 tgt / 11 rec / 4 TD and Henry 32 att / 6 TD inside the 20
+  match a hand count from raw pbp.
+- New JSON columns are additive, so an older pasted `wp_page.html` keeps
+  working against the new data; the switch only appears after re-pasting.
+
 ## Open / next
 1. ~~Point the teaser CTA at the real join URL.~~ Done — `https://fantasysixpack.net/plans` + promo code F6PNFL26 text.
 2. ~~Decide whether the teaser goes on one post or both.~~ Done — one post,

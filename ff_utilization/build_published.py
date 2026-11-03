@@ -67,6 +67,13 @@ COLUMNS = [
     # denominators, so any week range re-aggregates exactly in the browser
     "team_snaps", "team_rush_att", "team_inside5_rush", "team_targets",
     "team_ez_tgts", "team_routes",
+    # Red zone view (counts + team denominators; shares derived in-browser).
+    # Must match fetch_nflverse_utilization.RZ_COUNT_COLS / RZ_TEAM_COLS.
+    "rz20_tgt", "rz20_rec", "rz20_rec_td", "rz10_tgt", "rz10_rec", "rz10_rec_td",
+    "rz20_rush", "rz20_rush_td", "rz10_rush", "rz10_rush_td",
+    "rz5_rush", "rz5_rush_td",
+    "team_rz20_tgt", "team_rz10_tgt",
+    "team_rz20_rush", "team_rz10_rush", "team_rz5_rush",
 ]
 
 
@@ -89,6 +96,7 @@ def load(path):
 INT_COLS = {"season", "week", "snaps", "rush_att", "inside5_rush", "routes",
             "targets", "rec", "ez_tgts", "team_snaps", "team_rush_att",
             "team_inside5_rush", "team_targets", "team_ez_tgts", "team_routes"}
+INT_COLS |= {c for c in COLUMNS if c.startswith(("rz", "team_rz"))}
 FLOAT_COLS = {"snaps_pct", "rush_att_pct", "inside5_rush_pct", "routes_pct",
               "targets_pct", "ez_tgts_pct", "adot", "air_yards_total"}
 
