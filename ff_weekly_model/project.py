@@ -79,6 +79,23 @@ QB_BACKUP_ON_STARTER_WEEKS = True
 # ON 2026-10-10 (Joe: read Minnesota's lean from Kyler's games, not
 # Wentz's). Re-tested on 2024/25/26: dead even (+-0.001), so kept as his rule.
 TEAM_RATE_STARTER_ONLY = True
+# A BACKUP TAKING OVER MID-SEASON (test, 2026-11-04, Joe on Milton / PHI: the
+# Eagles' last few games -- no Smith, Wicks, Saquon limited -- say more about
+# this offense than last year's Hurts team). With TEAM_RATE_STARTER_ONLY a QB
+# with no starts reads the team pass rate / QB-rush share / sack rate from
+# nothing and falls to the anchor (half the team's LAST season). When this
+# week's starter has under NEW_STARTER_GAMES starts and another QB started more
+# of the team's games this season (the regular starter, now out):
+#   NEW_STARTER_GAMES  read them from the games the regular starter did NOT
+#                      start (Milton: McKee's wks 6-8). None = off.
+#   NEW_STARTER_LG     anchor pass rate and QB-rush share to the LEAGUE, not
+#                      the team's last season (another QB's offense). False = off.
+# ADOPTED 2026-11-04 (Joe's tiebreak: a tie that moves us toward consensus / FTN)
+# at 1 -- QBs with no starts before this week only (McCarthy's own 2 starts stay his):
+# ALL .000 / .000 / .000 (QB 2024 -.001); wk9 fires on PHI only (Milton reads McKee's
+# wks 6-8): Goedert 6.70 -> 6.85, Lemon 6.87 -> 7.02, toward consensus and FTN.
+NEW_STARTER_GAMES = 1
+NEW_STARTER_LG = False
 # WHICH GAMES ARE EXITS (EXIT_KEEP_W below decides what happens to them). Joe's
 # call (2026-09-25, twice): a game a back LEFT hurt does not count against
 # him. ON for RBs, confirmed by the injury report (that week or the next) or a
@@ -237,7 +254,107 @@ ROUTE_RECENT_N = 3
 # (chips, decoys). TE 4.061/4.298/4.423 -> 4.054/4.304/4.401 (2025 a hair
 # worse), ALL 5.381/5.290/5.167 -> 5.379/5.291/5.163; live wks 3-5 TE 6.21 -> 6.19.
 ROUTE_MODEL_W_POS = {"RB": 0.75, "TE": 0.2}
+# A SHEET NUMBER SCALES THE ROUTE ESTIMATE TOO (2026-10-31). The route model's
+# estimate ignored Joe's number, so it undid ROUTE_MODEL_W of it: "150" on
+# Chism moved him 4.1 -> 4.6 targets, a "75" on a WR landed near 85%. Only
+# sheet numbers make availability other than 0/1, and backtests have none,
+# so this is live-only: the call means what the sheet says it means.
+ROUTE_MODEL_SHEET = True
+# ROUTE VACANCY (2026-10-31, Joe on Chism wk8: "Efton ran the routes that Brown
+# or Hollins would normally have run"). A receiver's route % is his average
+# over his last ROUTE_RECENT_N games, so with starters out this week the ones
+# left add up to fewer routes than the team will actually run. ROUTE_VAC tops
+# the position back up to its usual team total (sum of route %, last
+# ROUTE_RECENT_N games): "order" = next man up (highest route % first, each
+# up to ROUTE_VAC_CAP), "room" = in proportion to each one's room under it.
+# TESTED, NOT ADOPTED (vs 5.3585/5.2685/5.0766): order +.0054/+.0024/-.0046,
+# room +.0049/+.0029/-.0022, WR+TE +.0077/+.0030/-.0017, cap .9 net +.0043;
+# only receivers at 40%+ routes (chosen after seeing deep backups filled to
+# full time: Ford-Wheaton NYG 2024 wk5 2.5 -> 6.5, actual 0) +.0042/+.0034/
+# -.0038, 30%+ net +.0071. Helps 2026 every way, hurts 2024-25: re-test wk
+# 10-12. Chism wk8 would be 4.1 -> 5.0 targets.
+ROUTE_VAC = None
+ROUTE_VAC_POS = ("WR",)
+ROUTE_VAC_CAP = 0.95
+ROUTE_VAC_MIN = 0.0   # only receivers already at this route % or more are topped up
 SNAP_LEAD_POS = ("RB", "WR", "TE")
+# ROUTE RATES FROM GAMES HE LEFT HURT (2026-10-31, Joe: "we need to figure out
+# why we are so much lower on DJM, Ladd and JJ"). Since EXIT_KEEP_W keeps a
+# receiver's exit game, its tiny route % was read as his role: Jefferson wk3
+# (6% of routes) put him at 67% route participation in the route model (wk8
+# 7.5 targets); McConkey's wk6 (16%) became the ROUTE_LEAD_TGT anchor and
+# halved every earlier week. RM_SKIP_EXIT: the route model's route % skips
+# exit games. LEAD_SKIP_EXIT: the ROUTE_LEAD_TGT anchor is his last game he
+# did not leave hurt.
+# ADOPTED both: ALL 5.3581/5.2690/5.0825 -> 5.3585/5.2692/5.0769 (net -.0050;
+# route model alone -.0001/-.0019/-.0020, net -.0038). Chase wk5 10.5 -> 15.2
+# (actual 16.7), Jefferson wk5 11.5 -> 13.5 (15.8). The anchor also skipping
+# games he PLAYED hurt (_INJ_LIMITED) was worse: TESTED_SETTINGS.md.
+RM_SKIP_EXIT = True
+LEAD_SKIP_EXIT = True
+_EXITS = set()   # (pid, week) exit games this season, set in main()
+# A FULL call counts a game he left hurt as the part he played healthy, which
+# took it off _EXITS -- and back into the route reads above, at route % / share
+# of the game (2026-10-31: Jefferson FULL read wk3 as 46% routes, 11.19 ->
+# 10.95). The route reads still skip it; the target/carry shares keep it.
+_FULL_LEFT = set()   # (pid, week) such games, set in main()
+# ROLES on the review sheet (2026-10-31, Joe: "I choose who is RB1, RB2, RB3,
+# WR1, WR2, WR3, etc and the call ... then the projection model would
+# recalculate"). See role_multipliers. A player the model barely uses counts
+# as ROLE_MIN_USAGE touches, and no role moves anyone more than ROLE_MAX_MULT x.
+ROLE_MIN_USAGE = 0.5
+ROLE_MAX_MULT = 8.0
+# ROLE_NORMAL (2026-10-31, Joe on McConkey WR1 getting only the Chargers' top
+# receiver's 4.4 targets while he was hurt: "I meant for the backup to get that
+# WR1 usage for the team. If ladd or somebody like that takes it back, now that
+# he is healthy, it should go back to his normal usage"). A player given his
+# own slot or a higher one gets the slot's work on his team OR his own normal
+# usage, whichever is more: his share in his healthy games this season and
+# last (not listed going in, not played hurt, at least FULL_FRAC of his best
+# snaps; a game he left hurt counts as the part he played healthy), with his
+# current team -- any team if he has under ROLE_NORMAL_MIN games there -- times
+# his team's volume this week. A backup moved up has a small normal, so he
+# takes the slot's work; a player moved DOWN takes the slot's work. A second
+# run corrects each moved player to his goal after the team's shares re-balance.
+# The players a moved-up player jumps over must have played in those games too:
+# Allen RB1 over Hall (wk8) otherwise read his 4 games WITHOUT Hall as normal.
+ROLE_NORMAL = True
+ROLE_NORMAL_MIN = 3
+# ROLE_NORMAL_DOWN (2026-10-31, Joe: "when the starter comes back and takes
+# their WR1 or RB1 role back and the player who was taking his place moves back
+# to WR2 or RB2, they go back to their workload when the starter was there").
+# A player moved DOWN -- by his own role or by the others' -- gets his share
+# in games where the players placed above him played (never more than the
+# player above him, and never more than the model has him at now: Joe,
+# "QJ being projected higher than McConkey right now is just dead wrong" --
+# Johnston's 2025 games beside McConkey, 22% of the targets, had lifted him
+# from 4.2 to 6.4); under ROLE_NORMAL_MIN such games, the slot's work. For
+# both directions a game counts only if those players were already AHEAD of
+# him going in (their usage in that season's earlier games, last season's for
+# week 1): Dobbins under Coleman has no such game, so it stays a swap.
+ROLE_NORMAL_DOWN = True
+# ROLE_SLOT_CREW (2026-11-01, Joe on Allen RB1 / Hall RB2: "closer to the usual
+# workload Hall would get when he was RB1 when Allen was also active, not just
+# when he was RB1 by himself"). The slots that change hands keep the model's
+# combined work for them, split the way those slots USUALLY split it in games
+# where the same players -- everyone placed at or above the lowest changed
+# slot -- were all active and not hurt, with nobody else at the position ahead
+# of them (each game's order = their usage going in). Under ROLE_NORMAL_MIN
+# such games: the model's number for the player now in each slot, as before
+# (a straight swap: Allen took Hall's workhorse-return 21 touches). Raw slot
+# history instead of a split ran Cleveland's WR1 at 7.8 targets against the
+# model's 5.7 -- the model's regression is kept; only the split comes from
+# the games.
+ROLE_SLOT_CREW = True
+# AUDIT 2026-10-31 (Joe: "I thought we fixed this?"): other places that read
+# his recent games one by one and so took a kept exit game as a full game --
+# "role": ROLE_W's last-3 check; "dud": DUD_REPEAT's count of duds in the
+# last 4; "elite": ELITE_TPRR's last-3 route %. Names listed skip exit games.
+# TESTED vs 5.3585/5.2692/5.0769: role .0000/-.0008/-.0003 (net -.0010, even;
+# ADOPTED as Joe's call 2026-10-31, "turn on the route-role fix"; wk8 McConkey
+# 5.27 -> 5.41); dud no player-week moved; elite .0000/.0000/+.0003 (8
+# player-weeks) -- both off.
+EXIT_SKIP = ("role",)
 # RECEIVING TDs BY POSITION (2026-09-30). A team's receiving TDs were split by
 # target share alone, as if a checkdown to the back scored as often as a fade
 # to the tight end. League TDs per target: RB 0.029-0.034, WR ~0.050, TE
@@ -249,20 +366,123 @@ SNAP_LEAD_POS = ("RB", "WR", "TE")
 # been partly doing this job): RB receiving TDs 124 -> 88 vs 80 actual (2024),
 # 125 -> 83 vs 93 (2025); 2026 wks 2-3 RB 5.740 -> 5.726, TE 6.124 -> 6.014.
 REC_TD_POS_EXP = 1.0
+# HIS OWN RECEIVING-TD RATE (2026-11-05, test; Joe: "are we using the players
+# usual TD rate or the teams or NFL average for everybody?" ... "yes please test
+# it, I would assume we need to test TE TD rate too"). Receivers' TD weight used
+# the position's league TDs per target for everyone, plus his red-zone role
+# (RZ_EXP). With {pos: K} set, his own TDs per target -- last season (x
+# REC_TD_OWN_HIST_W) + this season, weeks before this one -- shrunk toward the
+# position rate by K targets, replaces the league rate for that position.
+# None = off. TESTED 2026-11-05, all fail (ALL / position):
+#   WR 300   +.004/+.002/.000, WR +.008/+.005/-.002     WR 1000 +.001/+.001/.000, WR +.003/+.002/-.001
+#   TE 300   -.002/+.002/+.003, TE -.008/+.010/+.006    TE 1000 -.001/+.001/+.001, TE -.004/+.003/+.002
+# and none moved us toward consensus / FTN (WR 300: WR stars +.06 / +.08 further).
+REC_TD_OWN_K = None
+REC_TD_OWN_HIST_W = 1.0
+# SPREAD OF THE PROJECTIONS (2026-11-05, Joe: "I thought we were pretty bad for
+# TE too ... do any test you think is helpful"). Actual points on our projection
+# have a slope under 1 for TEs every season (.952 / .938 / .906): the top TEs
+# run high (12+: +1.68 / +2.77 / -0.14, TDs .51 vs .31 and .52 vs .33 in
+# 2024-25) and the low ones low (5-7: -0.73 / -1.04 / +0.22). Top WRs (14+)
+# run a bit high too (yds/target 9.18 vs 8.94, 8.90 vs 8.65, 9.80 vs 8.68).
+# POS_SPREAD {pos: s}: each player's points move to the week's position average
+# (players projected 1+) + s x his distance from it. TOP_SHRINK {pos: (L, s)}:
+# only the part above L points is kept at s. Done as a last step by scaling his
+# scoring stats (catches, yards, TDs, fumbles); targets / carries are left as
+# projected. None = off.
+# ADOPTED 2026-11-05 (passes the rule outright) at TE 0.95 + WR 14 / 0.85:
+#   ALL .000 / -.001 / -.002 (net -.003), TE -.002 / -.003 / -.008, WR .000 / -.002 / -.002;
+#   2026 wks 3-8 vs consensus: WR stars .16 closer (FTN .26), relevant TEs |gap| .912 -> .851,
+#   TE 3+ gaps 4 -> 1. Alone: TE .95 -.002/-.003/-.008; WR 14/.85 .000/-.002/-.002.
+#   TE .92 lost the 2024 gain (.000/-.003/-.010) -- kept .95.
+POS_SPREAD = {"TE": 0.95}
+TOP_SHRINK = {"WR": (14.0, 0.85)}
+# ...and the receivers' change in yards / TDs passed to their QB(s), so the
+# team still adds up (2026-11-05, Joe: "go ahead and test the QBs"). None = off.
+# ADOPTED 2026-11-05: ALL .000 / .000 / -.001, QB .000 / -.001 / -.005; 2026 wks 3-8 QBs
+# .04 closer to consensus and FTN, QB 3+ gaps 13 -> 10.
+SPREAD_TO_QB = True
 # DEFENSIVE MATCHUPS (matchups.py): per defense, per position, per stat --
 # actual vs our own projection for the players who faced it, shrunk toward
 # no effect by games / (games + MATCHUP_K). None = off.
-MATCHUP_K = None
+MATCHUP_K = None     # set below (EPA matchups adopted 2026-11-03)
 MATCHUP_STATS = ()   # () = every factor; else a subset, e.g. ypc,ypt
 MATCHUP_POS = ()     # () = every position
 # EPA version (matchups.EpaMatchups): MATCHUP_MODE "epa" uses play-by-play EPA
 # allowed, net of each offense's own average, shrunk by plays (MATCHUP_EPA_K)
 # and scaled into stats by MATCHUP_EPA_BETA; last season seeds it at
 # MATCHUP_EPA_PRIOR of its weight. Needs MATCHUP_K set (any value) to switch on.
-MATCHUP_MODE = "resid"
-MATCHUP_EPA_BETA = 1.0
+# ADOPTED 2026-11-03 at HALF the test version's strength (Joe: "lets go with
+# half, especially if it helps QB, WR and TE"). The "epa" test version (beta
+# .5) beat consensus wk8 and the current model in 4 of 5 live weeks (wks 4-8),
+# but over 3 seasons vs current 5.359/5.268/5.174 (2026 = wks 2-8): beta .5
+# +.0138/-.0025/-.0107 (net +.0006; 2024 worse 14 of 17 wks); prior 1
+# +.0113/-.0021/-.0096; beta .25 +.0058/-.0021/-.0074 (net -.0037, the best
+# total; 2024 just over the .005 line -- Joe's call); beta .15
+# +.0032/-.0015/-.0049 (passes the rule exactly). Beta .25 by position, 2026:
+# QB 6.838 -> 6.814, WR 5.026 -> 5.019, TE 4.392 -> 4.379, RB 5.280 -> 5.285.
+# The full-strength version keeps running beside it as "epa". Re-test wks 10-12.
+MATCHUP_K = 1.0
+MATCHUP_MODE = "epa"
+MATCHUP_EPA_BETA = 0.25
 MATCHUP_EPA_K = 100.0
-MATCHUP_EPA_PRIOR = 0.0
+MATCHUP_EPA_PRIOR = 2.0
+# RECENT GAMES COUNT MORE (2026-11-03, Joe: "what if we did a more recent EPA
+# counts more as the season goes on than the full season EPA, especially for
+# defense played against"). This season's games weighted 0.5 ** (weeks back /
+# MATCHUP_EPA_HL) in a defense's rating; the shrink toward zero still uses the
+# real play count. None = every game equal. TESTED 2026-11-03 vs current
+# (EPA half): half-life 3 +.0003/-.0003/-.0003, 5 +.0001/-.0001/-.0002, 8
+# .0000/-.0001/-.0001 -- noise (the ratings lean on last season early and are
+# shrunk by plays; at half strength they move a player a few tenths). Off.
+MATCHUP_EPA_HL = None
+# per-position strength override, e.g. {"TE": 0.5} (2026-11-04, Joe: "is there
+# something about opposing teams and how well they do against TE"). {} = off.
+# ADOPTED 2026-11-04 (Joe) TE 0.75: ALL +.001 / +.001 / -.003 (net -.001,
+# even band; TE +.004 / +.006 / -.018). 0.5 even, 1.0 fails, TE 0 +.004.
+# A 2026-led signal -- re-test at wks 10-12.
+MATCHUP_EPA_BETA_POS = {"TE": 0.75}
+# QB DEFENSIVE MATCHUP (2026-11-04 test): the dropback-EPA rating each defense
+# already gets (QB_drop) was never applied -- QB passing moved only through his
+# receivers' matchups. Which QB stats it moves: ("yds", "td", "int"). () = off.
+# ADOPTED 2026-11-04 (Joe) "td", with SACK_OWN_K 100: ALL +.002 / -.001 /
+# -.004 (net -.003; QB +.007 / -.001 / -.021). A 2026-led signal like the TE
+# matchup -- re-test at wks 10-12. yds+td+int: QB 2026 -.040 but 2024 +.032.
+MATCHUP_QB_USE = ("td",)
+# IN-SEASON LEAGUE QB EFFICIENCY (test): league yards per attempt / completion
+# % blended from last season toward this season's starts so far, K attempts.
+LG_QB_EFF_K = None
+# TEAM TDs FROM THE OFFENSE TOO (test): the Vegas-implied TDs move W x the gap
+# to the team's own TDs per game this season, shrunk by TEAM_TD_OWN_K games.
+TEAM_TD_OWN_W = None
+TEAM_TD_OWN_K = 4.0
+# OWN SACK RATE (test): dropbacks lost to sacks from the team's starter games,
+# shrunk toward the league rate by SACK_OWN_K dropbacks. None = league rate.
+# ADOPTED 2026-11-04 (Joe) at 100: ALL .000 / -.001 / -.001, QB better every
+# season (-.005 / -.003 / -.004).
+SACK_OWN_K = 100.0
+# QB CARRY TRIM (2026-11-04, Joe: "very surprised the rushing for QBs can't get
+# fixed"). Running QBs (6+ projected carries) got 1-2 fewer than projected --
+# 8.5/7.3, 8.0/6.0, 7.3/5.5 -- at a better yards per carry than the league QB
+# rate we give them (5.2 vs 4.1, 4.7 vs 4.6, 5.3 vs 4.4): two misses that
+# cancel, which is why K_QB_YPC alone kept failing. (keep, above N carries):
+# carries above N keep that fraction, the rest are dropped. None = off.
+# ADOPTED 2026-11-04 (Joe, with the QB rushing set below -- "we've seen some
+# weird cases this year with some of the running QBs playing injured") at
+# 0.7 / 6: with QB_YPC_PROVEN 100/5.0, K_QB_YPC 300, QB_YPC_HEALTHY "status"
+# and NEW_STARTER_GAMES 1: ALL -.001 / -.001 / +.001, QB -.003 / -.005 / +.006;
+# QBs moved toward consensus (0.14 closer) and FTN (0.08) on the changed weeks.
+QB_CARRY_TRIM = (0.7, 6.0)
+# KNEEL-DOWNS OUT (2026-11-04, Joe: "yes I was going to say take out the kneel
+# downs"). The stat line counts a kneel as a QB carry (0.64 a starter game at
+# -1.1 yds; Stafford 1.0 kneels vs 0.8 real runs a game) and kneels are pure
+# game script (odd-vs-even starts r .15). With this on, the model's inputs drop
+# them from QB carries / rushing yards and from team plays and runs
+# (data/qb_kneels_<yr>.csv, build_qb_kneels.py), and the starter gets the
+# league's kneel yards per team game back. Grading still uses the real line.
+# TESTED 2026-11-04: ALL -.002 / .000 / +.004, QB -.021 / -.003 / +.025 -- fails
+# (2026 pocket QBs under-projected on passing; kneel yards were covering it).
+KNEELS_OUT = None
 SAME_LINEUP_MIN = 0.20   # a teammate "has a role" at this share or more
 # Named test versions, run alongside the current model each week and scored
 # against it (--version NAME writes projections_<yr>_wk<NN>_<NAME>.csv).
@@ -280,7 +500,8 @@ SAME_LINEUP_MIN = 0.20   # a teammate "has a role" at this share or more
 # (no 2023 play-by-play). This season's early EPA alone was noise.
 VARIANTS = {
     "current": {},
-    "noqbtd": {"QB_PASS_TD_K": None},   # the main model before 2026-10-06
+    "noqbtd": {"QB_PASS_TD_K": None},   # the main model without the QB passing-TD rate
+    # full-strength EPA matchups (the main model runs them at half since 2026-11-03)
     "epa": {"MATCHUP_K": 1.0, "MATCHUP_MODE": "epa", "MATCHUP_EPA_BETA": 0.5,
             "MATCHUP_EPA_PRIOR": 2.0},
 }
@@ -292,6 +513,24 @@ TEAM_RATE_RETURN_W = 0.0   # ADOPTED 2026-10-24 (with EXIT_RETURN_FRAC: ALL 2024
 RB_MIN_BACKUP = 0.20   # see the no-team-plays-one-back guard
 RB_LONE_MIN = 0.02     # any other back above 2% of the lead back's share = a backup exists; 0.10-0.25 fired on real 2026 workhorses (Cook, Gibbs, Henry: RB 5.011 -> 5.035)
 GS_RUSH = 0.01   # fit: RB 5.819 -> 5.806, QB/WR/TE unchanged; 3%+ worse
+# GAME SCRIPT BY TEAM TYPE (2026-10-31, Joe: "a strong passing team is likely
+# to get their lead by passing, just early on"). pbp 2021-25, 2,718 team-games,
+# dog by 7 -> favored by 7: pass-first teams (66% pass last season) dropbacks
+# 40.4 -> 41.5, runs 22.7 -> 24.3; middle (62%) 39.5 -> 39.0, 23.5 -> 26.5;
+# run-first (57%) 39.7 -> 37.4, 24.5 -> 27.6. Team type = his projected pass
+# rate minus the league's (dev). GS_PASS_ID: dropbacks x (1 + margin x
+# (GS_PASS_BASE + GS_PASS_ID x dev)); the table fits .063 / -.0011. GS_RUSH_ID:
+# the GS_RUSH run boost x (1 - GS_RUSH_ID x dev) for pass-first teams only
+# (run-first and middle teams add runs alike); the table fits ~9. None = off.
+# TESTED 2026-10-31 vs current code 5.359/5.268/5.077: pass side +.001/+.001/
+# +.001, run side .000/+.001/.000, both +.002/+.002/+.001, half .001/.001/.000,
+# x1.5 +.003/+.002/+.001 -- even-to-worse, stronger worse. Half strength moved
+# 9 player-weeks by .3+ pts in 3 seasons (5 closer); weeks 16-12 / 8-9 / 3-4
+# better-worse. The pattern is real but ~1-2 plays a team: the team's own
+# pass rate already carries most of it. Off; TESTED_SETTINGS.md.
+GS_PASS_ID = None
+GS_PASS_BASE = 0.0
+GS_RUSH_ID = None
 # Vacated roles (see project_week): 25% of an absent player's share split
 # evenly among the teammates at his position. Fit 2026-09-24: ALL 5.370 ->
 # 5.357, better at every position; 50%+ hurts TEs (a TE3 is a blocker), and no
@@ -336,9 +575,23 @@ ELITE_EFF_PRIOR_W = 1.0
 # 4.984, 5.231 -> 5.210; RB and TE better every season too, QB unchanged.
 # Rookies at 0.75-1.0 helped 2026, hurt 2024-25. Efficiency at 0.5: ~nothing.
 PRESEASON_W = 0.5
+# MISSED THE START OF THE SEASON (2026-10-29, Joe on Jacobs wk8: "why were our
+# projections so much lower than everybody else's"). Preseason projections
+# are SEASON totals, so a player known to miss the first weeks reads as a
+# smaller role: Jacobs 118 carries (Lloyd 189) -> his prior 47% of GB's
+# carries against his real 67% in 2025. "scale": his preseason line is per
+# game he was expected to play (x 17 / (17 - games missed at the start), at
+# most PRESEASON_ABSENT_MAX). None = off.
+# ADOPTED "scale" 2026-10-29: ALL +.002/-.001/-.002 (2026 better at every
+# position: QB -.001 RB -.003 WR -.001 TE -.003). "skip" (no preseason blend
+# for him) +.007/+.015/+.006 -- removed, TESTED_SETTINGS.md.
+# The live run's second prior pass had ignored it until start_absences().
+PRESEASON_ABSENT = "scale"
+PRESEASON_ABSENT_MAX = 2.0
 VAC_PRIOR_W = 0.5           # vacated offseason roles (apply_vacated). ADOPTED 2026-10-24: ALL +.001/0/-.001 (tie -> 2026; RB 2026 5.014 -> 5.010); 1.0 net worse
 PRESEASON_EFF = 0.25  # ADOPTED 2026-10-22 re-test under Joe's rule (6 together: ALL -.002/-.008/-.001)
 _PRESEASON_RATES = {}
+_PRE_PART = {}      # pid -> (w, stretch, tgt share, carry share), set by apply_preseason
 # DEPTH-CHART DEMOTION (2026-10-13). nflverse's daily ESPN depth charts: a
 # back listed as a BACKUP in the last snapshot before the week, who was the
 # STARTER for most of his last 3 games, kept being projected his old workload
@@ -390,7 +643,12 @@ RETURN_POS = ("RB",)
 # part of the job (Hunt 2024, Vidal 2025, Tracy 2024). ADOPTED .25 after
 # 2 games: RB 5.407 -> 5.404, 5.698 -> 5.697, 5.023 -> 5.022.
 RETURN_MID_DEFLATE = 0.25
-RETURN_MIN_MISSED = 2
+# ONE MISSED GAME COUNTS TOO (2026-10-29, Joe: "reduce the other RB on the team
+# usage too, not carry it over from the weeks the starter wasn't there"):
+# RETURN_MIN_MISSED 2 -> 1, ALL -.001/.000/.000 (RB -.002/.000/-.002). Tested
+# the same night, not adopted: stronger mid strength .5 / .75 (net +.001 /
+# +.002), workhorse strength .8 (even) / 1.0 (+.001).
+RETURN_MIN_MISSED = 1
 # ESTABLISHED WORKHORSES (2026-10-22, Joe: "if somebody like CMC or Jonathan
 # Taylor were to return midseason, they would likely have taken their full
 # share of work again"). 2023-26, 11 returns at 65%+ of carries: 76% before
@@ -401,11 +659,68 @@ RETURN_MIN_MISSED = 2
 # prior check keeps out fill-ins inflated by a star's absence (Jordan Mason
 # 2024 cutting into McCaffrey). Full strength was worse (returners score
 # less per touch at first). ADOPTED .6/.5/.6: RB 5.404 -> 5.401, 5.697 ->
-# 5.696, 2026 flat.
-RETURN_STAR_SHARE = 0.60
+# 5.696, 2026 flat. RAISED to 65% both seasons (2026-10-30, Joe: "60-40 split
+# is not really that big of a difference ... the primary back and starter, but
+# not a workhorse"): ALL .000/-.001/.000 (RB -.001/-.001/.000). 65% this
+# season only or last season only: -.001; 70%: +.001, 70/70: +.003 (and 70
+# would leave out Jacobs, 67% in 2025).
+RETURN_STAR_SHARE = 0.65
 RETURN_STAR_DEFLATE = 0.6
-RETURN_STAR_PRIOR = 0.50
+RETURN_STAR_PRIOR = 0.65
 RETURN_ROUTES = True   # their route participation too: ALL 2024 5.378 -> 5.377 (RB 5.409 -> 5.407), 2025-26 flat
+# PROVEN WORKHORSE BACK, BACKUP DIDN'T TAKE THE JOB (2026-10-30, Joe: Jacobs 21
+# carries wk8, Lloyd 3, Strong 1 -- "he is one of the true workhorse backs").
+# 2021-26 lead-back returns (52): proven (65%+ of RB carries last season) and
+# the top fill-in did NOT outscore him -> 7 of 9 got the role back; the fill-in
+# outscored him (Tracy over Singletary, Hunt over Pacheco) -> 4 of 12. A back
+# with WH_PRIOR+ of his team's RB carries last season (RB vs RB only, WH_MIN_G+
+# games), and WH_SHARE+ this season before the absence when he played 2+ games
+# first, who missed WH_MIN_MISSED+ straight team games -- at the START of the
+# season too -- and whose top fill-in scored no more than WH_MARGIN half-PPR
+# pts/g above him: his teammates' games inside the absence are deflated at
+# WH_RETURN strength x his last-season carry share. WH_SELF_K: his own prior
+# is at least his last-season share and counts as that many games (his eased
+# first game back weighs less). None = off.
+# ADOPTED 1.0 / max 6 missed / self k 2: ALL -.002/.000/.000 (RB -.009/.000/
+# -.001). Uncapped +.002 (RB 2024 +.005): it fired on 5 backs in 2024-26 --
+# Mixon and Taylor 2024 and Jacobs wk7 2026 helped; Pacheco 2024 (broken leg,
+# 9 missed) and McCaffrey 2024 (Achilles, 8) came back light. The 2021-26
+# study agrees (every 7+ game absence came back lighter: Pacheco, Irving,
+# Hampton); Jacobs missed 6, not hurt. The cap was chosen AFTER seeing those
+# two -- only 3 backs carry the gain. Strength .8 uncapped +.001; self k 2
+# alone (uncapped) +.002.
+WH_RETURN = 1.0
+WH_PRIOR = 0.65
+WH_SHARE = 0.65
+WH_MIN_G = 6
+WH_MIN_MISSED = 2
+WH_MAX_MISSED = 6   # latest absence longer than this -> not a workhorse return
+WH_MARGIN = 1.0
+WH_SELF_K = 2
+_WH_WEEK = {}      # pid -> {week: (team, carries, half-PPR pts)} this season, set in main()
+_WH_TEAM_RB = {}   # (team, week) -> RB carries this season
+_WH_PREV = {}      # pid -> (RB-carry share, half-PPR pts/g, games, skill carry share) last season
+_QB_LISTED = {}    # (QB pid, week) -> game status ("" = practice listing only), QB_YPC_HEALTHY
+_QB_RYD = {}       # QB -> {week: [carries, rushing yards]}, week 0 = weighted history (K_QB_YPC)
+_KNEEL_YDS_G = 0.0  # KNEELS_OUT: league kneel yards per team game (last season), back to the QBs
+_QB_YPC_CALL = {}  # pid -> yards per carry, a QB's "ypc 6.5" call on the review sheet
+_QB_RUSH = {}      # pid -> rushing attempts, a QB's "rush 6.5" call on the review sheet
+_WH_FORCE = {}     # pid -> "FULL" (force the workhorse return) / "SPLIT" (no workhorse return), review sheet
+# NON-WORKHORSE RETURNS (2026-10-30, Joe: "now what about the non-workhorse
+# backs?"). Current model 2024-26: a lead back (45%+) whose fill-in OUTSCORED
+# him by WH_MARGIN+ came back to 6.7 carries in game 1 against 8.0 projected
+# (fill-in 10.9 vs 10.2); one whose fill-in did not was 13.6 vs 12.1 by game
+# 2. RETURN_OUT_DEFLATE: teammates' absence games are deflated at this
+# strength (instead of RETURN_MID / STAR / zero-games) when his fill-in
+# outscored him. None = off.
+# ADOPTED OUT .1, unproven backs only (under WH_PRIOR last season): ALL
+# .000/-.001/-.001 (RB .000/-.002/-.003); at 0 -.001/-.001/.000 (tie, 2026
+# decides). For every returner, 0 / .1: +.001 / even -- RB 2024 +.007 / +.006,
+# all Seattle: Charbonnet outscored Walker (72% the year before) in the 2
+# games he missed, kept 10.5 projected carries, got 2. (A stronger cut when the
+# fill-in did NOT outscore him, .5: even -- removed, TESTED_SETTINGS.md.)
+RETURN_OUT_DEFLATE = 0.1
+RETURN_OUT_UNPROVEN = True   # ...only for backs under WH_PRIOR last season (not Walker 2024)
 # TRADED MIDSEASON (Joe, MHJ ARI -> HOU wk6 2026): usage x TRADE_MULT[0] in
 # his first game with the new team, x TRADE_MULT[1] in the second. None = off.
 # ADOPTED (.5, .75): 2024 5.380 -> 5.379, 2025 5.293 -> 5.291 (19 / 25 midseason
@@ -514,6 +829,88 @@ DUD_FLOOR = 0.65
 # of the project -- RB 5.791 -> 5.752, WR 5.016 -> 4.989, TE 4.374 -> 4.357.
 NO_HISTORY_DEEPEST = True
 NO_HISTORY_RB_RANK = 3
+# DEEPER SLOT NEVER ABOVE THE ONE AHEAD (2026-10-30, Joe on Adam Randall BAL
+# wk8, listed RB4, on reserve all year, projected 4.8 carries): last season's
+# RB4 average was 21.7% of the carries (12 backs), above RB3's 16.6% -- last
+# season's shares of the backs listed 4th on THIS year's chart, starters
+# listed low while hurt (Jacobs 68%, Pacheco, Charbonnet). "car" caps carry
+# shares slot by slot, "all" targets too, None = off. First adopted "car" as
+# Joe's call, but that test's --set read "car" as a tuple and ran "all"; true
+# "car" was 5.363 / 5.272 / 5.086 (even). With INLINE_SLOTS backs and
+# receivers no longer use these figures (their in-line ones replace them), so
+# this only reaches tight ends: "all" ADOPTED with INLINE_SLOTS below (ALL
+# 2024 5.360 -> 5.358, 2025 / 2026 equal; "car" and None identical there).
+SLOT_MONOTONIC = "all"
+# IN-LINE SLOTS (2026-10-31, Joe: "shouldn't we be looking at who the RB4 was
+# for a team that game"; "the per game personnel available is different than
+# what season long team stats would show"). The slot figures above are season
+# averages keyed to a preseason chart. Instead, from every game last season:
+# that week's chart order among the players who DRESSED (a snap on offense or
+# special teams), and what the 1st, 2nd, 3rd... in line got in THAT game,
+# zeros included -- 2025 RB3 in line 6.5% of the carries, RB4 2.9%, against
+# 16.6% for both. A no-history player is then placed by where he stands in
+# line THIS week among the teammates projected to play (Adam Randall BAL wk8
+# 2026: 4th, behind Henry, Hill and Ali). The positions listed use it; None = off.
+# ADOPTED ("RB", "WR") with SLOT_MONOTONIC "all", against the code before
+# (2026 wks 2-8, TNF only in wk8): ALL 2024 5.363 -> 5.358, 2025 5.272 ->
+# 5.269, 2026 5.086 -> 5.082 -- every season better. RB only 5.359 / 5.271 /
+# 5.083; adding TE 5.358 / 5.269 / 5.084 (TE 2026 4.440 -> 4.452, worse).
+INLINE_SLOTS = ("RB", "WR")
+# ...and his preseason half, which is a season-long figure too (a backup's
+# projection counts the weeks a starter is hurt): "nostretch" drops the
+# missed-games stretch (PRESEASON_ABSENT) for him, "deep" drops the preseason
+# half at 3rd in line or deeper. None = blend as before. TESTED with RB, WR:
+# nostretch 5.360 / 5.270 / 5.082 (2025 +.001, even -- Joe's call); deep
+# (with RB, TE) 2025 +.002 worse.
+INLINE_PRE = None
+# TEAM SLOTS (2026-10-31, Joe: "should that be more like team usage from their
+# slot, not league-wide slot?"). The in-line figure from this TEAM's own games:
+# "cur" this season's games before the week, "prev" last season's, "both" --
+# shrunk toward the league-wide figure as INLINE_TEAM_K games. None = off.
+# TESTED, not adopted (ALL 2024 / 2025 / 2026 against 5.358 / 5.269 / 5.082):
+# cur k8 5.358 / 5.270 / 5.083, cur k4 5.359 / 5.269 / 5.083, prev k8 5.360 /
+# 5.271 / 5.080, prev k4 the same, both k8 5.360 / 5.270 / 5.080, both k16
+# 5.359 / 5.270 / 5.081 -- last season's team helps 2026 by .002 but costs
+# 2024-25 as much or more. A team's own 3rd / 4th in line is a thin sample.
+INLINE_TEAM = None
+INLINE_TEAM_K = 8.0
+# PRESEASON FADE (2026-10-31, Joe: "we have to be careful with using preseason
+# projections past the first game if a role has changed"). The preseason part
+# of the share prior shrinks as his games this season pile up: weight
+# PRESEASON_W x F / (F + games), 0 = gone after his first game. Applies to
+# PRESEASON_FADE_WHO "all" or "new" (no-history players). None = off.
+# TESTED (vs 5.358 / 5.269 / 5.082): every position, gone after game 1
+# 5.368 / 5.272 / 5.084 (WR 2024 +.017), F 3 5.362 / 5.270 / 5.081; no-history
+# only F 0 5.362 / 5.269 / 5.086, F 3 5.360 / 5.269 / 5.083 -- receivers keep
+# needing it. BACKS ONLY (PRESEASON_FADE_POS RB) is even: F 0 5.358 / 5.270 /
+# 5.082, F 1 5.358 / 5.269 / 5.081 (RB 2026 5.118 -> 5.115), F 3 5.358 / 5.269 /
+# 5.082 -- Joe's call (found after the all-position run).
+PRESEASON_FADE = None
+PRESEASON_FADE_WHO = "all"
+PRESEASON_FADE_POS = None   # positions it applies to (None = all)
+# ROLE CHANGED AGAINST THE PRIOR (2026-10-31, Joe on BTJ, "the clear No. 3 on
+# the team", and Parker Washington the No. 1 -- neither what last season or the
+# preseason said). When ROLE_SHIFT_N of his last ROLE_SHIFT_L games sit on the
+# same side of his PRIOR (last season + preseason) by more than ROLE_SHIFT_M
+# of it (and ROLE_SHIFT_ABS share points), the prior counts ROLE_SHIFT x its
+# usual games: the season's own games take over. Targets only. None = off.
+# TESTED, all worse (vs 5.358 / 5.269 / 5.082): x.33 WR+TE 5.362 / 5.268 /
+# 5.089 (WR 2026 +.014), x0 5.365 / 5.268 / 5.098, x.5 5.360 / 5.269 / 5.087,
+# WR only 5.361 / 5.270 / 5.088, +RB 5.362 / 5.268 / 5.090, margin .25 5.362 /
+# 5.269 / 5.090, .5 5.361 / 5.267 / 5.087, 4 of 4 5.360 / 5.269 / 5.084. BTJ
+# helped a little; more receivers who drifted off their usual share drifted
+# back (Kalif Raymond, Tre Harris, Pitts) -- as ROLE_W found at .5 / .7.
+ROLE_SHIFT = None
+ROLE_SHIFT_POS = ("WR", "TE")
+ROLE_SHIFT_M, ROLE_SHIFT_ABS = 0.35, 0.04
+ROLE_SHIFT_N, ROLE_SHIFT_L = 3, 4
+# LAST FULL SEASON'S EFFICIENCY (2026-10-31, Joe on Ekeler: "maybe use his
+# efficiency, but not usage rate?"). A player with under 4 games last season
+# also takes the efficiency of his most recent season with 4+ (up to 3 back).
+# Usage is untouched. False = off.
+# TESTED: even -- ALL 5.358 / 5.269 / 5.082 unchanged (RB, WR 2025 -.001, QB
+# 2025 +.001); wk8 2026 moves 18 players, Ekeler most (3.30 -> 3.41). Joe's call.
+EFF_LAST_FULL = False
 FB_ZEROS = True
 DUD_REPEAT = 3   # fit: release floor after 3 duds in last 4 (ALL 5.341 -> 5.340, RB 5.801 -> 5.793)
 DUD_MIN_GAMES = 12
@@ -527,6 +924,13 @@ EXIT_RETURN_FRAC = 0.25   # ADOPTED 2026-10-24: ALL 2024 -.001, 2025/26 flat (Do
 # usual snaps is treated as played hurt (2026-10-15: Mike Evans wk2 54% after
 # 75% in wk1 -- he left early -- slipped under the automatic 50% cut).
 FULL_FRAC = 0.8
+# FULL FOR BACKS WHO SPLIT (2026-10-30, Joe on Jeremiyah Love wk8). A back's snap
+# share swings with game script and the rotation, so "under 80% of his best
+# game" threw out Love's normal 40-49% games (wks 1, 2, 4, 5) and kept only his
+# wk3 (91% of the carries): FULL took him 11.5 -> 15.5 carries. At these
+# positions a short game is thrown out only with an injury sign -- listed
+# before kickoff, or a flagged exit. Live only (not backtestable). () = off.
+FULL_SIGN_ONLY = ()
 # Extended to WR/TE 2026-10-08 (Joe: "if we project him as in he needs to be
 # full go"). A snap collapse (under half his usual) confirmed by the injury
 # report drops that game for every skill position -- it catches exits the
@@ -560,6 +964,20 @@ QB1_MIN_WEEK_SHARE = 0.3   # fit: 30% best (QB 6.990 -> 6.986); typical starter 
 # for a long time, because elite QBs are over-projected by almost exactly as
 # much as elite skill players are under-projected, and the two cancelled.
 K_EFF_TGT, K_EFF_CAR = 80.0, 120.0
+# ROOKIES' OWN EFFICIENCY (2026-11-01, Joe: "shouldn't we be weighting rookies
+# early season production more than league average any sooner"). A player with
+# no earlier NFL season (no history in player_eff) at ROOKIE_KEFF_POS has the
+# shrink weight above x ROOKIE_KEFF_MULT: under 1 trusts his own yards per
+# target / catch rate / yards per carry sooner. 2022-25 WRs with 20-60 targets
+# in wks 1-8: rookies kept 26% of a yds/target edge and 41% of a catch-rate edge
+# into wks 9-18 (veterans 13% / 18%); the model already credits 50% at 40
+# targets. None = off. TESTED 2026-11-01 vs 5.3585/5.2685/5.0766 (4 decimals):
+# x.25 +.0001/+.0018/-.0010 (rookies 2025 +.011); x.5 -.0003/+.0006/-.0004
+# (net -.0001, EVEN -- Joe's call; 2025 worse in 11 of 17 weeks, 2026 better
+# 5 of 7); x2 +.0006/-.0001/+.0002; WR only x.5 +.0001/+.0004/-.0003. Re-test
+# x.5 at wks 10-12 (2026-only lean). Off; TESTED_SETTINGS.md.
+ROOKIE_KEFF_MULT = None
+ROOKIE_KEFF_POS = ("WR", "TE", "RB")
 QB_RUSH_TD_DECAY = 0.75   # per season back; fit in research/fit_qb_rush_td.py
 # SUPERSEDED NOTE (kept for the reasoning): giving each QB his own rushing-TD
 # rate off a SINGLE prior season was tested and rejected -- The rate IS
@@ -581,6 +999,125 @@ K_QB_RUSH_TD_DOWN = 40.0
 # season of history behind it. Two seasons is the threshold, as it was for the
 # QB rushing-TD work.
 K_QB_YPA = 100.0
+# QB OWN YARDS PER CARRY (2026-11-03, Joe: "we should not be blending the more
+# mobile QBs back toward league average"). Every QB's rushing yards were his
+# carries x the league QB rate -- Daniels 4.4 a carry, the same as Goff. With
+# K set, his own rate (weighted history + this season) shrunk by K carries
+# toward the league rate. None = the league rate for everyone (the old way).
+# TESTED 2026-11-03: 100 for every QB -> -.005/+.002/+.002, fails (2026 worse).
+# ADOPTED 2026-11-04 (Joe) at 300 for proven runners only (QB_YPC_PROVEN), see
+# QB_CARRY_TRIM for the numbers. TESTED_SETTINGS.md
+K_QB_YPC = 300.0
+# QB PASS-TD RATE, THIS SEASON FIRST (2026-11-03, Joe on Lawrence): the
+# weighted past seasons in a QB's own passing-TD rate (QB_PASS_TD_K) count
+# this much; 1.0 = as much as their attempts say (the old way), 0 = this
+# season only.
+# ...and the backs' way of mixing seasons (2026-11-03, Joe: "a mix of that QB's
+# past yards-per-carry and then this year's"): past seasons count this much in
+# the RATE while the carries behind the shrinkage stay real (backs: last
+# season only, at EFF_PRIOR_WEIGHT_RUSH 0.2), from the last QB_YPC_SEASONS
+QB_YPC_HIST_W = 1.0
+QB_YPC_SEASONS = 4
+# PROVEN RUNNERS ONLY (2026-11-04, Joe: "no sense to give Daniels a 4.6 ypc
+# when he is averaging over 7"): with QB_YPC_PROVEN = (carries, ypc), K_QB_YPC
+# applies only to a QB whose past seasons (QB_YPC_SEASONS, weighted) hold that
+# many carries at that rate or better, and only UPWARD; everyone else keeps the
+# league rate. None = every QB, both ways. ADOPTED 2026-11-04 at 100 carries
+# / 5.0 a carry (see QB_CARRY_TRIM).
+QB_YPC_PROVEN = (100.0, 5.0)
+# ...and not for a QB on that week's injury report (Lamar 2026: 6.8 projected
+# carries vs 3.0 on the ankle; Daniels 2025 on the knee): "any" = listed at
+# all, "status" = with a game status (Questionable / Doubtful). None = off.
+# ADOPTED 2026-11-04 as "status" (see QB_CARRY_TRIM).
+QB_YPC_HEALTHY = "status"
+# QB PASSING, THIS SEASON FIRST (2026-11-03, Joe): past seasons count this much
+# in his yards per attempt / completion % (and INT rate, with K_QB_INT) while
+# the attempts behind the shrinkage stay real -- the receivers' way
+# (EFF_PRIOR_WEIGHT 0.5). 1.0 = the old pooled history.
+QB_YPA_HIST_W = 1.0   # TESTED 2026-11-03: .5/.2 no gain; TESTED_SETTINGS.md
+# QB OWN INTERCEPTION RATE: shrunk by K attempts toward the league rate.
+# None = the league rate for everyone (the old way).
+K_QB_INT = None   # TESTED 2026-11-03: 300/1000 worse in 2026
+# QB CARRIES x this (the rest go to the backs). 1.0 = off.
+QB_RUSH_MULT = 1.0   # TESTED 2026-11-03: .9/.8 fail (backs get worse)
+# QB STYLE AND TEAM PASS VOLUME (2026-11-03, Joe). Split by the starter's carries
+# per pass attempt going in, the most-pocket quarter of team-games threw +1.1 /
+# +0.9 / +2.0 more passes than projected (2024-26) and the most-mobile quarter
+# -0.6 / -1.7 / -0.6 fewer: the team pass rate does not see who is under
+# center. With S set, the pass rate moves S x (this week's starters' average
+# carries per attempt - his team's QBs'), plays unchanged; the runs go the
+# other way. His carries per attempt: history + this season, shrunk toward the
+# starters' average by QB_STYLE_K attempts. None = off.
+# ADOPTED 2026-11-03 (Joe) at 0.2, half the run side to the QB: ALL -.001 /
+# -.001 / -.003 (net -.005; WR -.002/-.005/-.004, TE 2026 -.009, QB -.008/
+# +.006/+.004); weeks better 8-9, 9-8, 5-2. 0.1 -.001 net, 0.3 -.002 (run side
+# all to the backs: RB +.005); all to the QB -.004 net but QB +.017.
+QB_STYLE_PASS = 0.2
+QB_STYLE_K = 300.0
+# where the run side of that shift goes: this fraction to the QBs' own carries
+# (a scramble), the rest to the team's runs in their usual split. 0 = all usual.
+QB_STYLE_QB_RUNS = 0.5
+# QB STYLE AND HIS PASSING (2026-11-04, test; Joe: "sure go ahead and test it").
+# Projected starters 2024-26 (no injury exits): running QBs' passing came out
+# low every season (-0.93 / -0.46 / -0.85 pts) -- too many INTs at the league
+# rate (actual about 80% of it) and a few yards short -- while pocket QBs were
+# even to high. With S set, his INT rate x (1 - S x rel) and yards per attempt
+# x (1 + Y x rel), rel = (his carries per attempt - the starters') / the
+# starters', shrunk by QB_STYLE_K; capped at +/-50% (INT) / 20% (ypa).
+# QB_STYLE_EFF_ONE_SIDED: only runners move (rel below 0 counts as 0).
+# TESTED 2026-11-04, all fail -- 2024 better, 2025-26 worse (QB): INT .3
+# -.020/+.008/+.015, .3 one-sided -.017/+.011/+.007, .15 -.011/+.004/+.007,
+# .15 one-sided -.009/+.005/+.003; YPA .05 one-sided -.005/+.003/+.002. Runners'
+# TOTAL points are only low in 2024 (-1.8); 2025-26 their rushing / injury exits
+# offset the passing gap. TESTED_SETTINGS.md
+QB_STYLE_INT = None
+QB_STYLE_YPA = None
+QB_STYLE_EFF_ONE_SIDED = None
+# QB FORM (2026-11-04, Joe: Purdy slipping, Daniels / Lawrence low, Darnold
+# high). Over 2026 wks 3-8 the QBs playing well were under-projected (Burrow
+# -9.5, Maye -6.5, Daniels -4.9, Lawrence -4.1 a game) and the ones playing
+# badly over (Jones +5.3, Herbert +4.5): the QB's own season barely enters a
+# projection built from the team. With W set, his projection moves W x his
+# average miss this season (actual - model, games he started), shrunk by
+# QB_FORM_K games. BACKTEST ONLY. TESTED 2026-11-04, every version worse:
+# W .25 K4 -.001/.000/+.001 (QB 2026 +.008); W .5 K4 +.001/+.002/+.004;
+# W .5 K8 -.001/+.001/+.002; W .75 K4 +.006/+.008/+.009. A QB's miss before
+# midseason vs after correlates only +.12 / +.10 / +.08 (2024-26) -- Purdy
+# beat us by 4.3 a game in wks 2-5, then missed by 5.9 in wks 6-8. Off.
+QB_FORM_W = None
+QB_FORM_K = 4.0
+# LEAD-BACK CARRY TRIM (2026-11-04, Joe: "all these RB are projected a lot
+# higher"). Backs projected 20+ carries got 2-3 fewer (2024 21.3 vs 19.1,
+# 2025 21.3 vs 18.5, 2026 22.2 vs 19.5) while backs under 14 got slightly
+# more; the 2026 top-8 backs ran 19.7 projected vs 18.0 actual (sites 18.1).
+# With K set, a back's carries above CARRY_TRIM_AT keep this fraction of the
+# excess; the rest go to his team's other backs in proportion to their
+# carries, each at his own yards per carry and TD rate. None = off.
+# ADOPTED 2026-11-04 (Joe) at 0.85 above 15, 30% to the other backs:
+# ALL +.001 / -.002 / -.002 (net -.003; RB +.004/-.007/-.005). Harder trims
+# fail (.5 above 15: +.009/-.002/+.006); all to the backups scores the same
+# but puts carries where they didn't go.
+CARRY_TRIM_K = 0.85
+CARRY_TRIM_AT = 15.0
+# where the trimmed carries go (Joe: "should we turn those carries into pass
+# attempts?"). In 20+ carry games the lead back's -2.3/-2.8/-2.8 went: other
+# backs +0.6/+0.4/+1.1, team runs -2.2/-3.5/-1.7, passes -1.0/+0.3/-0.7 -- the
+# team just ran fewer plays. This fraction goes to the other backs, the rest
+# is dropped (never passes). CARRY_TRIM_TD: his TDs shrink with his carries
+# (True) or stay (False -- top-8 backs' TDs were right: 0.89 vs 0.94).
+CARRY_TRIM_BACKUPS = 0.3
+CARRY_TRIM_TD = True
+# TARGET TRIM, same idea for pass-catchers (2026-11-04 test). WRs projected 9+
+# targets: 9.9 vs 9.7 / 9.9 vs 9.3 / 10.3 vs 9.7 (pts 15.2/15.6, 14.9/14.2,
+# 16.5/15.4); TEs 5.5-7 targets 6.2/5.9, 6.2/5.4, 6.1/5.8. Per position:
+# {pos: (keep fraction, above N targets)}; trimmed targets go to the team's
+# other WR/TE/RB in proportion (TGT_TRIM_REST), the rest are dropped. None = off.
+# ADOPTED 2026-11-04 (Joe): WRs keep 60% of targets above 9, the rest dropped
+# (a WR1's team threw -1.3/-0.7/-1.5 fewer passes, teammates not up): ALL
+# +.001 / -.001 / -.006 (net -.006; WR +.003/-.003/-.015). TE trims fail.
+TGT_TRIM = {"WR": (0.6, 9.0)}
+TGT_TRIM_REST = 0.0
+QB_PASS_TD_HIST_W = 1.0   # TESTED 2026-11-03: 0.5/0.25/0 all worse in 2026; TESTED_SETTINGS.md
 K_RB_RUSH_TD = 150.0   # carries; fit 150-300 flat, 150 best calibrated
 QB_RUSH_TD_MIN_SEASONS = 2   # qualifying SEASONS, not weeks -- picks out Allen and Hurts
 K_TGT = {"same team": 3.0, "changed team": 1.0, "no history": 2.0}
@@ -652,6 +1189,24 @@ def blend(observed, n, prior, k):
 
 # ---------------------------------------------------------------- loading
 
+def load_team_moves(year, week):
+    """Trades the depth chart has not picked up yet, from data/team_moves_<year>.csv
+    (player_id, player, from_team, to_team, from_week, note): the moves in
+    effect for `week`, the latest per player. Live projections only."""
+    path = os.path.join(DATA, f"team_moves_{year}.csv")
+    if not os.path.exists(path):
+        return []
+    with open(path, newline="", encoding="utf-8-sig") as fh:
+        rows = [r for r in csv.DictReader(fh)
+                if (r.get("player_id") or "").strip() and (r.get("to_team") or "").strip()
+                and int(r.get("from_week") or 0) <= week]
+    latest = {}
+    for r in sorted(rows, key=lambda r: int(r["from_week"])):
+        latest[r["player_id"].strip()] = {**r, "player_id": r["player_id"].strip(),
+                                          "to_team": r["to_team"].strip().upper()}
+    return list(latest.values())
+
+
 def load_players(year):
     path = os.path.join(DATA, f"stats_player_week_{year}.csv")
     with open(path, newline="", encoding="utf-8") as fh:
@@ -662,6 +1217,49 @@ def load_teams(year):
     path = os.path.join(DATA, f"team_weekly_{year}.csv")
     with open(path, newline="", encoding="utf-8") as fh:
         return {(r["team"], int(r["week"])): r for r in csv.DictReader(fh)}
+
+
+def strip_kneels(rows, year):
+    """KNEELS_OUT: copies of the stat rows with each QB's kneel-downs taken out
+    of his carries and rushing yards -> (rows, {(team, week): [kneels, yds]}).
+    Rows without a kneel are the same objects; no file -> rows unchanged."""
+    path = os.path.join(DATA, f"qb_kneels_{year}.csv")
+    team_k = collections.defaultdict(lambda: [0, 0.0])
+    if not os.path.exists(path):
+        return rows, team_k
+    with open(path, newline="", encoding="utf-8") as fh:
+        kn = {(r["player_id"], int(r["week"])): (int(r["kneels"]), float(r["kneel_yds"]))
+              for r in csv.DictReader(fh)}
+    out = []
+    for r in rows:
+        k = kn.get((r["player_id"], int(r["week"]))) if r.get("position") == "QB" else None
+        if k:
+            n_ = min(k[0], num(r["carries"]))
+            r = dict(r)
+            r["carries"] = str(num(r["carries"]) - n_)
+            r["rushing_yards"] = str(num(r["rushing_yards"]) - k[1])
+            team_k[(r["team"], int(r["week"]))][0] += n_
+            team_k[(r["team"], int(r["week"]))][1] += k[1]
+        out.append(r)
+    return out, team_k
+
+
+def strip_team_kneels(teams, team_k):
+    """KNEELS_OUT: the same kneels out of the team-week runs, QB runs and plays
+    (pass rate and QB rush share recomputed). In place."""
+    for key, (n_, y_) in team_k.items():
+        r = teams.get(key)
+        if not r or not n_:
+            continue
+        r = dict(r)
+        rush = max(int(float(r["rush_att"])) - n_, 0)
+        qb = max(int(float(r["qb_rush_att"])) - n_, 0)
+        plays = max(int(float(r["plays"])) - n_, 1)
+        r.update(rush_att=str(rush), qb_rush_att=str(qb), plays=str(plays),
+                 qb_rush_share=str(round(qb / rush, 4) if rush else 0),
+                 pass_rate=str(round(int(float(r["dropbacks"])) / plays, 4)),
+                 rush_yds=str(int(float(r["rush_yds"]) - y_)))
+        teams[key] = r
 
 
 def load_games(year):
@@ -972,7 +1570,297 @@ def load_depth_chart(year=2025, cutoff=None):
     return chart
 
 
+_CHART_SNAPS = {}
+
+
+def chart_before(year, day):
+    """{gsis_id: (pos, rank)} from the last depth-chart snapshot dated before
+    `day` (YYYY-MM-DD; "9999" = the newest). Skill positions only."""
+    if year not in _CHART_SNAPS:
+        path = os.path.join(DATA, f"depth_charts_{year}.csv")
+        if not os.path.exists(path):
+            path = os.path.join(os.path.dirname(HERE), "ff_projections", "cached",
+                                "nflverse", f"depth_charts_{year}.csv")
+        snaps = collections.defaultdict(dict)
+        if os.path.exists(path):
+            with open(path, newline="", encoding="utf-8") as fh:
+                for r in csv.DictReader(fh):
+                    if r["pos_abb"] in POSITIONS and r["gsis_id"]:
+                        snaps[r["dt"]][r["gsis_id"]] = (r["pos_abb"], int(r["pos_rank"]))
+        dts = sorted(snaps)
+        _CHART_SNAPS[year] = (dts, [snaps[d] for d in dts])
+    import bisect
+    dts, charts = _CHART_SNAPS[year]
+    i = bisect.bisect_left(dts, day)
+    return charts[i - 1] if i else {}
+
+
+def dressed_by_game(year):
+    """(team, week) -> {gsis_id: position} for everyone with a snap on offense
+    or special teams -- the players who dressed."""
+    xwalk = {}
+    px = os.path.join(os.path.dirname(HERE), "ff_utilization", "cached", "nflverse", "players.csv")
+    if os.path.exists(px):
+        with open(px, newline="", encoding="utf-8") as fh:
+            for r in csv.DictReader(fh):
+                if r.get("pfr_id") and r.get("gsis_id"):
+                    xwalk[r["pfr_id"]] = r["gsis_id"]
+    out = collections.defaultdict(dict)
+    for path in (os.path.join(os.path.dirname(HERE), "ff_utilization", "cached", "nflverse",
+                              f"snaps_{year}.csv"),
+                 os.path.join(os.path.dirname(HERE), "ff_projections", "cached", "nflverse",
+                              f"snap_counts_{year}.csv")):
+        if not os.path.exists(path):
+            continue
+        with open(path, newline="", encoding="utf-8") as fh:
+            for r in csv.DictReader(fh):
+                g = xwalk.get(r.get("pfr_player_id"))
+                if g and r.get("game_type") == "REG" and \
+                        num(r.get("offense_snaps")) + num(r.get("st_snaps")) > 0:
+                    out[(r["team"], int(r["week"]))][g] = r.get("position", "")
+        break
+    return out
+
+
+def inline_games(year, rows, positions):
+    """INLINE_SLOTS: [(team, week, pos, k, target share, carry share)], the k-th
+    player in line (k capped at 5) in every team-game of `year`. In line =
+    that week's depth chart order among the players who dressed; dressed
+    players the chart did not list go last, by their usage in earlier weeks.
+    Shares are of the team's skill targets / carries, as shares_by_week."""
+    day = {}
+    path = os.path.join(DATA, "games.csv")
+    with open(path, newline="", encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            if r["season"] == str(year) and r.get("game_type") == "REG" and r.get("gameday"):
+                for t in (r["home_team"], r["away_team"]):
+                    day[(t, int(r["week"]))] = r["gameday"]
+    tot = collections.defaultdict(lambda: [0.0, 0.0])
+    stat = collections.defaultdict(dict)
+    for r in rows:
+        if r["position"] not in POSITIONS:
+            continue
+        k = (r["team"], int(r["week"]))
+        t, c = num(r["targets"]), num(r["carries"])
+        tot[k][0] += t; tot[k][1] += c
+        stat[k][r["player_id"]] = (t, c, r["position"])
+    dressed = dressed_by_game(year)
+    used = collections.defaultdict(float)          # pid -> share so far (unlisted order)
+    out = []
+    for (tm, wk) in sorted(tot, key=lambda k: k[1]):
+        T = tot[(tm, wk)]
+        st = stat[(tm, wk)]
+        if (tm, wk) not in day or not (T[0] and T[1]):
+            continue
+        chart = chart_before(year, day[(tm, wk)])
+        who = dict(dressed.get((tm, wk), {}))
+        for pid, (_, _, p) in st.items():
+            who.setdefault(pid, p)
+        for p in positions:
+            line = []
+            for pid, p_snap in who.items():
+                c = chart.get(pid)
+                if c and c[0] == p:
+                    line.append(((0, c[1], 0.0), pid))
+                elif not c and (st.get(pid, (0, 0, p_snap))[2] == p):
+                    line.append(((1, 0, -used[pid]), pid))
+            for i, (_, pid) in enumerate(sorted(line), 1):
+                t, c, _ = st.get(pid, (0.0, 0.0, p))
+                out.append((tm, wk, p, min(i, 5), t / T[0], c / T[1]))
+        for pid, (t, c, _) in st.items():
+            used[pid] += t / T[0] + c / T[1]
+    return out
+
+
+def inline_table(games, positions):
+    """INLINE_SLOTS: (pos, k) -> (target share, carry share), the mean over
+    every team-game in `games` (inline_games)."""
+    acc = collections.defaultdict(list)
+    for _, _, p, k, a, b in games:
+        acc[(p, k)].append((a, b))
+    out = {k: (sum(a for a, _ in v) / len(v), sum(b for _, b in v) / len(v))
+           for k, v in acc.items()}
+    for p in positions:                   # a slot no game reached: the one above
+        for k in range(2, 6):
+            if (p, k) not in out and (p, k - 1) in out:
+                out[(p, k)] = out[(p, k - 1)]
+    return out
+
+
+_INLINE = None      # {"table", "year", "day": week -> chart day}, set in main()
+
+
+def inline_priors(priors, week, active, avail, pos, tgt_cur, car_cur):
+    """INLINE_SLOTS: each no-history player's share prior from where he stands
+    in line this week -- that week's chart order among the teammates at his
+    position projected to play (unlisted ones last, by usage so far)."""
+    chart = chart_before(_INLINE["year"], _INLINE["day"].get(week, "9999"))
+    pre = globals().get("_PRE_PART", {})
+    flags = INLINE_PRE or ()
+    groups = collections.defaultdict(list)
+    for pid, tm in active.items():
+        p = pos.get(pid)
+        if p not in INLINE_SLOTS or (avail is not None and avail.get(pid, 1.0) <= 0):
+            continue
+        c = chart.get(pid)
+        if c and c[0] == p:
+            key = (0, c[1], 0.0)
+        else:
+            key = (1, 0, -sum(v for w, v in tgt_cur.get(pid, {}).items() if w < week)
+                   - sum(v for w, v in car_cur.get(pid, {}).items() if w < week))
+        groups[(tm, p)].append((key, pid))
+    table = _INLINE["table"]
+    out = dict(priors)
+    for (tm, p), line in groups.items():
+        for i, (_, pid) in enumerate(sorted(line), 1):
+            if pid not in priors or priors[pid][0] != "no history" or (p, min(i, 5)) not in table:
+                continue
+            g, _, _, nt, nc = priors[pid]
+            st, sc = table[(p, min(i, 5))]
+            if INLINE_TEAM:
+                own = [(a, b) for w, a, b in _INLINE["team"].get((tm, p, min(i, 5)), ())
+                       if w < week]
+                if own:
+                    n_, k_ = len(own), INLINE_TEAM_K
+                    st = (sum(a for a, _ in own) + k_ * st) / (n_ + k_)
+                    sc = (sum(b for _, b in own) + k_ * sc) / (n_ + k_)
+            part = pre.get(pid)
+            if part and not ("deep" in flags and i >= 3):
+                w, f, pt_, pc_ = part
+                f = 1.0 if "nostretch" in flags else f
+                if pt_ is not None:
+                    st = (1 - w) * st + w * f * pt_
+                if pc_ is not None:
+                    sc = (1 - w) * sc + w * f * pc_
+            out[pid] = (g, st, sc, nt, nc)
+    return out
+
+
 # ------------------------------------------------------- derived constants
+
+def role_multipliers(usage, roles, own=None, slot=None):
+    """One team's position group. usage: {pid: carries + targets (backs) or
+    targets}; roles: {pid: slot} from the sheet (1 = top). Those players take
+    their slots, everyone else fills the open slots in the model's order, and
+    each player's usage multiplier = that slot's usage / his own. own
+    (ROLE_NORMAL): {pid: his normal usage when healthy}; slot (ROLE_SLOT_CREW):
+    {slot index: that slot's usual usage with these players}. See role_work."""
+    work = role_work(usage, roles, own, slot)
+    return {p: 1.0 if w == usage[p] else min(w / max(usage[p], ROLE_MIN_USAGE), ROLE_MAX_MULT)
+            for p, w in work.items()}
+
+
+def even_goals(usage, evens):
+    """EVEN (review sheet, 2026-11-03): usage {pid: carries + targets (backs)
+    or targets}; evens: the players marked EVEN in one team's position group.
+    -> {pid: usage he is given}: their combined usage, shared equally."""
+    ps = [p for p in evens if usage.get(p, 0.0) > 0]
+    if len(ps) < 2:
+        return {}
+    each = sum(usage[p] for p in ps) / len(ps)
+    return {p: each for p in ps}
+
+
+def role_work(usage, roles, own=None, slot=None):
+    """role_multipliers: {pid: the usage he is given}. A slot that changes
+    hands carries slot[i] (ROLE_SLOT_CREW) when given, else the model's usage
+    for the player now there. A player moved UP gets his own normal (own) when
+    that is more; one moved DOWN gets it instead of the slot's work -- never
+    more than he has now or than the player placed above him."""
+    placed, order = role_slots(usage, roles)
+    work = {}
+    for i, p in enumerate(placed):
+        j = order.index(p)
+        w = slot[i] if slot and i != j and i in slot else usage[order[i]]
+        if i < j and p in roles and own and p in own:
+            w = max(w, min(own[p], work[placed[i - 1]]) if i else own[p])
+        elif i > j:          # moving down never raises him (Johnston under McConkey)
+            w = min(own[p] if own and p in own else w, usage[p], work[placed[i - 1]])
+        work[p] = w
+    return work
+
+
+def role_slots(usage, roles):
+    """role_multipliers: (players in slot order, the model's order)."""
+    order = sorted(usage, key=lambda p: -usage[p])
+    n = len(order)
+    placed = [None] * n
+    for p, k in sorted(roles.items(), key=lambda kv: kv[1]):
+        if p not in usage:
+            continue
+        k = min(max(k, 1), n)
+        while k <= n and placed[k - 1] is not None:   # two players named for one slot
+            k += 1
+        if k <= n:
+            placed[k - 1] = p
+    rest = [p for p in order if p not in placed]
+    return [p if p is not None else rest.pop(0) for p in placed], order
+
+
+def own_normal(games, team, min_games=ROLE_NORMAL_MIN):
+    """ROLE_NORMAL: (target share, carry share) in his healthy games, or None
+    under min_games of them. games: [(team, weight, target share, carry
+    share)]; those with `team` count, or all of them when he has fewer than
+    min_games there."""
+    mine = [g for g in games if g[0] == team]
+    use = mine if sum(g[1] for g in mine) >= min_games else games
+    wt = sum(g[1] for g in use)
+    if wt < min_games:
+        return None
+    return sum(g[1] * g[2] for g in use) / wt, sum(g[1] * g[3] for g in use) / wt
+
+
+def route_vacancy(rp_of, team_of_pid, pos, route_full, week):
+    """ROUTE_VAC: raise this week's route % (rp_of, in place) where the
+    receivers we project add up to less than the team's usual total."""
+    tot = collections.defaultdict(lambda: collections.defaultdict(float))
+    for pid, wks in route_full.items():
+        po = pos.get(pid)
+        if pid == "_lg" or po not in ROUTE_VAC_POS:
+            continue
+        for w, v in wks.items():
+            if 0 < w < week and v.get("team"):
+                tot[(v["team"], po)][w] += v["route_pct"]
+    groups = collections.defaultdict(list)
+    for pid in rp_of:
+        if pos.get(pid) in ROUTE_VAC_POS:
+            groups[(team_of_pid[pid], pos.get(pid))].append(pid)
+    for key, pids in groups.items():
+        wk_ = sorted(tot.get(key, {}))[-int(ROUTE_RECENT_N):]
+        if not wk_:
+            continue
+        gap = sum(tot[key][w] for w in wk_) / len(wk_) - sum(rp_of[p] for p in pids)
+        if gap <= 0:
+            continue
+        room = {p: max(ROUTE_VAC_CAP - rp_of[p], 0.0) if rp_of[p] >= ROUTE_VAC_MIN else 0.0
+                for p in pids}
+        if ROUTE_VAC == "room":
+            tr = sum(room.values())
+            for p in pids:
+                rp_of[p] += room[p] * min(gap, tr) / tr if tr else 0.0
+        else:
+            for p in sorted(pids, key=lambda p: -rp_of[p]):
+                add = min(room[p], gap)
+                rp_of[p] += add
+                gap -= add
+                if gap <= 0:
+                    break
+
+
+def route_lead_weeks(pid, weeks, rp, week):
+    """ROUTE_LEAD_TGT: his games whose route % can anchor his current role --
+    before `week`, with routes run, and (LEAD_SKIP_EXIT) not left hurt."""
+    return [w for w in weeks if w < week and rp.get(w, 0) > 0
+            and not (LEAD_SKIP_EXIT and ((pid, w) in _EXITS or (pid, w) in _FULL_LEFT))]
+
+
+def route_model_weeks(pid, cur):
+    """ROUTE_MODEL_W: his games whose route % reads as his role -- not played
+    hurt (_INJ_LIMITED) and (RM_SKIP_EXIT) not left hurt; all of them if none."""
+    healthy = [w for w in cur if (pid, w) not in _INJ_LIMITED
+               and not (RM_SKIP_EXIT and ((pid, w) in _EXITS or (pid, w) in _FULL_LEFT))]
+    return healthy or cur
+
 
 def shares_by_week(rows):
     """player -> {week: (tgt_share, carry_share)} over SKILL-position denominators."""
@@ -1160,17 +2048,22 @@ def prev_team_map(prev_rows):
     return out
 
 
-def listed_pregame(year):
+def listed_pregame(year, rest_ok=False):
     """{(gsis_id, week)}: listed BEFORE that week's game as Questionable /
-    Doubtful, or limited / did not practice -- a known limitation going in."""
+    Doubtful, or limited / did not practice -- a known limitation going in.
+    rest_ok: a practice day off marked "Not injury related" is not a listing
+    (Higbee's veteran rest days, 2026)."""
     path = os.path.join(DATA, f"injuries_{year}.csv")
     out = set()
     if not os.path.exists(path):
         return out
     with open(path, newline="", encoding="utf-8") as fh:
         for r in csv.DictReader(fh):
+            rest = rest_ok and "not injury related" in " ".join(
+                (r.get(k) or "") for k in ("report_primary_injury", "practice_primary_injury")).lower()
             if r.get("gsis_id") and (r.get("report_status") in ("Questionable", "Doubtful")
-                                     or (r.get("practice_status") or "").startswith(("Limited", "Did Not"))):
+                                     or ((r.get("practice_status") or "").startswith(("Limited", "Did Not"))
+                                         and not rest)):
                 out.add((r["gsis_id"], int(r["week"])))
     return out
 
@@ -1249,6 +2142,27 @@ def drop_pbp_exits(tgt, car, year, min_secs=None, collect=None):
     return n
 
 
+def full_dropped_weeks(snaps, week):
+    """FULL on the review sheet: his games before `week` under FULL_FRAC of
+    his best game this season -- the ones he played hurt."""
+    sp = {w: v for w, v in snaps.items() if w < week}
+    best = max(sp.values(), default=0.0)
+    return [w for w in sorted(sp) if sp[w] < FULL_FRAC * best]
+
+
+def full_plan(pid, snaps, week, exits, pregame, p=None):
+    """FULL: his short games (full_dropped_weeks) -> (dropped, left_hurt).
+    A short game he was listed for BEFORE kickoff was played hurt: dropped. One
+    he left hurt (a flagged exit) is counted as the part he played healthy.
+    Any other short game: dropped -- except at a FULL_SIGN_ONLY position, where
+    a short game with no injury sign is just his normal role and stays."""
+    short = full_dropped_weeks(snaps, week)
+    left = [w for w in short if (pid, w) in exits and (pid, w) not in pregame]
+    if p in FULL_SIGN_ONLY:
+        short = [w for w in short if w in left or (pid, w) in pregame]
+    return [w for w in short if w not in left], left
+
+
 def keep_exit_games(tgt, car, exits, pos):
     """EXIT_KEEP_W: an exit game stays at the share he actually had, counted
     as EXIT_KEEP_W[position] of a game; a position with no weight is dropped.
@@ -1324,7 +2238,7 @@ def qb_efficiency_means(rows):
             "ptd_rate": a["ptd"] / att}
 
 
-def player_eff_by_week(rows, prior_rows=()):
+def player_eff_by_week(rows, prior_rows=(), older=()):
     """pid -> {week: Counter of raw efficiency inputs}, week 0 = prior season.
 
     Efficiency is noise for MOST players, which is why the position mean is
@@ -1350,6 +2264,23 @@ def player_eff_by_week(rows, prior_rows=()):
                              ("rush_yds", "rushing_yards"), ("rec_td", "receiving_tds"),
                              ("rush_td", "rushing_tds")):
                 c[key] += num(r[col]) * wt
+    # EFF_LAST_FULL: under 4 games last season -> add his most recent season
+    # with 4+ (`older`, newest first). Efficiency only, never usage.
+    for src in older:
+        seen = collections.defaultdict(collections.Counter)
+        for r in src:
+            if r["position"] not in POSITIONS:
+                continue
+            c = seen[r["player_id"]]
+            c["g"] += 1
+            for key, col in (("tgt", "targets"), ("rec", "receptions"),
+                             ("rec_yds", "receiving_yards"), ("car", "carries"),
+                             ("rush_yds", "rushing_yards"), ("rec_td", "receiving_tds"),
+                             ("rush_td", "rushing_tds")):
+                c[key] += num(r[col])
+        for pid, c in seen.items():
+            if c["g"] >= 4 and (pid not in out or out[pid][0]["g"] < 4):
+                out[pid][0].update(c)
     for src, wk_of in (((), None), (rows, lambda r: int(r["week"]))):
         for r in src:
             if r["position"] not in POSITIONS:
@@ -1443,6 +2374,24 @@ def carry_games(rows, prior_seasons=()):
     for r in rows:
         if r["position"] == "RB" and num(r["carries"]) > 0:
             out[r["player_id"]][int(r["week"])] = num(r["carries"])
+    return out
+
+
+def qb_rush_yds_hist(rows, prior_seasons=(), decay=QB_RUSH_TD_DECAY):
+    """QB -> {week: [carries, rushing yards]}; week 0 is weighted history
+    (same decay as the rushing-TD history). For K_QB_YPC."""
+    out = collections.defaultdict(lambda: collections.defaultdict(lambda: [0.0, 0.0]))
+    for back, src in enumerate(reversed(prior_seasons)):
+        w = decay ** back
+        for r in src:
+            if r["position"] == "QB":
+                c = out[r["player_id"]][0]
+                c[0] += num(r["carries"]) * w
+                c[1] += num(r["rushing_yards"]) * w
+    for r in rows:
+        if r["position"] == "QB":
+            c = out[r["player_id"]][int(r["week"])]
+            c[0] += num(r["carries"]); c[1] += num(r["rushing_yards"])
     return out
 
 
@@ -1609,22 +2558,52 @@ def fit_implied_to_td(teams, games):
 # ------------------------------------------------------------- projection
 
 
-def apply_preseason(priors, pre, team_of, pos):
-    """Blend preseason target / carry shares into the share priors (PRESEASON_W)."""
+def apply_preseason(priors, pre, team_of, pos, absent=None):
+    """Blend preseason target / carry shares into the share priors (PRESEASON_W).
+    absent: pid -> team games he missed at the start of the season (PRESEASON_ABSENT)."""
+    absent = absent or {}
     tt, tc = collections.defaultdict(float), collections.defaultdict(float)
     for pid, v in pre.items():
         tm = team_of.get(pid)
         if tm and pos.get(pid) in POSITIONS:
             tt[tm] += v["tgt"]; tc[tm] += v["car"]
     out = dict(priors)
+    parts = {}          # pid -> (w, stretch, tgt share, carry share), for inline_priors
     for pid, (g, pt, pc, nt, nc) in priors.items():
         v, tm = pre.get(pid), team_of.get(pid)
         if not v or not tm or pos.get(pid) not in POSITIONS:
             continue
         w = PRESEASON_W
-        st = v["tgt"] / tt[tm] if tt[tm] else pt
-        sc = v["car"] / tc[tm] if tc[tm] else pc
+        f = 1.0
+        if PRESEASON_ABSENT and absent.get(pid):
+            f = min(17.0 / max(17 - absent[pid], 1), PRESEASON_ABSENT_MAX)
+        st = f * v["tgt"] / tt[tm] if tt[tm] else pt
+        sc = f * v["car"] / tc[tm] if tc[tm] else pc
         out[pid] = (g, (1 - w) * pt + w * st, (1 - w) * pc + w * sc, nt, nc)
+        parts[pid] = (w, f, v["tgt"] / tt[tm] if tt[tm] else None,
+                      v["car"] / tc[tm] if tc[tm] else None)
+    globals()["_PRE_PART"] = parts
+    return out
+
+
+def start_absences(pre, team_of, tgt_cur, car_cur, games, week=None):
+    """PRESEASON_ABSENT: pid -> team games he missed at the START of the season
+    (2+), before his first game -- or, with no game yet, before `week`."""
+    if not PRESEASON_ABSENT:
+        return {}
+    tw = collections.defaultdict(list)
+    for (t_, w_) in games:
+        tw[t_].append(w_)
+    out = {}
+    for pid in pre:
+        tm = team_of.get(pid)
+        seen = set(tgt_cur.get(pid, {})) | set(car_cur.get(pid, {}))
+        if not tm or (not seen and not week):
+            continue
+        first = min(seen) if seen else week
+        n = sum(1 for w_ in tw.get(tm, ()) if w_ < first)
+        if n >= 2:
+            out[pid] = n
     return out
 
 
@@ -1690,6 +2669,12 @@ def build_priors(tgt_cur, car_cur, tgt_prev, car_prev, pos, team_cur,
             rank_car[chart[pid]].append(sum(wks.values()) / len(wks))
     rt = {k: sum(v) / len(v) for k, v in rank_tgt.items()}
     rc = {k: sum(v) / len(v) for k, v in rank_car.items()}
+    if SLOT_MONOTONIC:
+        for d in ((rc,) if SLOT_MONOTONIC == "car" else (rt, rc)):
+            for p in {k[0] for k in d}:
+                ks = sorted(k for k in d if k[0] == p)
+                for a, b in zip(ks, ks[1:]):
+                    d[b] = min(d[b], d[a])
 
     pmean_t, pmean_c = collections.defaultdict(list), collections.defaultdict(list)
     for pid, wks in tgt_prev.items():
@@ -1745,6 +2730,69 @@ def build_priors(tgt_cur, car_cur, tgt_prev, car_prev, pos, team_cur,
     return out
 
 
+def workhorse_return(q, tm, played, tw):
+    """WH_RETURN: a proven workhorse back whose fill-in did not take the job ->
+    (team weeks he missed, his last-season carry share or None), else None.
+    Joe's sheet decides first: FULL forces it for any back returning from 2+
+    missed games, SPLIT turns it off."""
+    force = _WH_FORCE.get(q)
+    if force == "SPLIT":
+        return None
+    prev = _WH_PREV.get(q)
+    if force != "FULL" and (not prev or prev[2] < WH_MIN_G or prev[0] < WH_PRIOR):
+        return None
+    runs, run = [], []
+    for w in tw + [None]:
+        if w is not None and w not in played:
+            run.append(w)
+            continue
+        if len(run) >= WH_MIN_MISSED:
+            runs.append(run)
+        run = []
+    if not runs:
+        return None
+    if force == "FULL":
+        return {w for r_ in runs for w in r_}, (prev[3] if prev else None)
+    if WH_MAX_MISSED and len(runs[-1]) > WH_MAX_MISSED:
+        return None
+    gs = {w for r_ in runs for w in r_}
+    ref, before = _returner_ref(q, played, runs[-1][0])
+    if len(before) >= 2:
+        wk = _WH_WEEK.get(q, {})
+        rb_ = sum(_WH_TEAM_RB.get((wk[w][0], w), 0.0) for w in before)
+        if WH_SHARE and rb_ and sum(wk[w][1] for w in before) / rb_ < WH_SHARE:
+            return None
+    fp = _fill_in_pts(q, tm, gs)
+    if fp is not None and fp > ref + WH_MARGIN:
+        return None
+    return gs, prev[3]
+
+
+def _returner_ref(q, played, start):
+    """His half-PPR pts/g before the absence that began in week `start`: his
+    last 4 games this season when he played 2+, else last season's."""
+    wk = _WH_WEEK.get(q, {})
+    before = [w for w in sorted(played) if w < start and w in wk][-4:]
+    if len(before) >= 2:
+        return sum(wk[w][2] for w in before) / len(before), before
+    prev = _WH_PREV.get(q)
+    return (prev[1] if prev else None), before
+
+
+def _fill_in_pts(q, tm, gone):
+    """Half-PPR pts/g of his top fill-in -- the teammate back with the most
+    carries in the weeks he missed -- or None."""
+    best = None
+    for pid, d in _WH_WEEK.items():
+        if pid == q:
+            continue
+        g_ = [w for w in gone if w in d and d[w][0] == tm]
+        c_ = sum(d[w][1] for w in g_)
+        if g_ and c_ > 0 and (best is None or c_ > best[0]):
+            best = (c_, sum(d[w][2] for w in g_) / len(g_))
+    return best[1] if best else None
+
+
 def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                  eff, lg, imp_to_td, tgt_per_att, active, avail=None,
                  qb_patt=None, qb_ratt=None, qb_eff=None,
@@ -1756,6 +2804,8 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
     """Projections for every active skill player in `week`. No week-`week` data used."""
     if half_life is None:            # read at call time, so --set HALF_LIFE works
         half_life = HALF_LIFE
+    if INLINE_SLOTS and _INLINE:
+        priors = inline_priors(priors, week, active, avail, pos, tgt_cur, car_cur)
     # --- team volume from weeks strictly before `week`
     tv = {}
     # every team playing this week gets an entry, even with NO history -- in
@@ -1796,6 +2846,26 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         for tm, (_, pid) in best.items():
             starter_wks[tm] = {w for w, v in qb_patt.get(pid, {}).items()
                                if v >= QB1_MIN_WEEK_SHARE}
+    # a backup taking over (NEW_STARTER_GAMES / NEW_STARTER_LG): the team's
+    # games NOT started by its regular starter this season
+    backup_era = {}
+    if (NEW_STARTER_GAMES or NEW_STARTER_LG) and starter_wks:
+        team_wks = collections.defaultdict(set)
+        for (tm_, wk_) in teams_cur:
+            if wk_ < week:
+                team_wks[tm_].add(wk_)
+        for tm, (_, pid) in best.items():
+            # starts BEFORE this week (a backtest's qb_patt already holds this
+            # week's actual starter -- live it does not)
+            prior_ = {w for w in starter_wks[tm] if w < week}
+            if len(prior_) >= (NEW_STARTER_GAMES or 3):
+                continue
+            starts = {q: {w for w, v in qb_patt.get(q, {}).items()
+                          if v >= QB1_MIN_WEEK_SHARE and w in team_wks[tm]}
+                      for q, t_ in active.items() if t_ == tm and pos.get(q) == "QB"}
+            reg = max(starts, key=lambda q: len(starts[q]), default=None)
+            if reg and reg != pid and len(starts[reg]) > len(prior_):
+                backup_era[tm] = team_wks[tm] - starts[reg]
     # BACKUP QB STARTING (2026-10-24, Joe: "Huntley at 17.1 seems quite high"):
     # receivers' yards per target and catch rate were earned with the regular
     # starter. A team whose starter this week started under BACKUP_START_FRAC
@@ -1869,6 +2939,8 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         n = len(hist)
         qhist = ([h for h in hist if int(h["week"]) in starter_wks[tm]]
                  if tm in starter_wks else hist)
+        if NEW_STARTER_GAMES and backup_era.get(tm):   # a backup took over: the games since
+            qhist = [h for h in hist if int(h["week"]) in backup_era[tm]]
         nq = len(qhist)
         # The anchor was the LEAGUE mean for every team, so with two games
         # played Dallas and Cincinnati (36.7 and 37.6 attempts a game in 2025)
@@ -1876,6 +2948,8 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         # receiver on a pass-heavy team came out low. TEAM_PRIOR_W pulls the
         # anchor toward the team's own last season.
         tpri = (team_prior or {}).get(tm)
+        if NEW_STARTER_LG and tm in backup_era:        # last season was another QB's offense
+            tpri = None
         pl_anchor = lg["plays"]
         pr_anchor = lg["pass_rate"] if not tpri else (
             TEAM_PRIOR_W_RATE * tpri[1] + (1 - TEAM_PRIOR_W_RATE) * lg["pass_rate"])
@@ -1896,6 +2970,8 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         # poor prior: it drags Washington and Philadelphia down toward pocket
         # passers. Use the team's own prior season where we have it.
         qb_prior = (team_qbr_prev or {}).get(tm, lg["qb_rush_share"])
+        if NEW_STARTER_LG and tm in backup_era:        # last season's QB runs were another QB's
+            qb_prior = lg["qb_rush_share"]
         qh = qhist if TEAM_RATE_STARTER_ONLY else hist
         qbr = blend(sum(float(h["qb_rush_share"]) for h in qh) / len(qh) if qh else 0, len(qh),
                     qb_prior, K_QB_RUSH)
@@ -1909,17 +2985,30 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 prate = (sum(w_ * float(h["pass_rate"]) for w_, h in zip(ww_, hw)) + WOWY_K_TEAM * prate) / (n_ + WOWY_K_TEAM)
                 qbr = (n_ * sum(float(h["qb_rush_share"]) for h in hw) / n_ + WOWY_K_TEAM * qbr) / (n_ + WOWY_K_TEAM)
         g = games.get((tm, week))
+        dev_ = prate - lg["pass_rate"]          # GS_PASS_ID / GS_RUSH_ID team type
         if g and g["wind"] >= WIND_THRESHOLD:
             prate -= WIND_PASS_PENALTY
         dropbacks = plays * prate
-        pass_att = dropbacks * (1 - lg["sack_rate"])
+        if GS_PASS_ID is not None and g and "margin" in g:
+            dropbacks *= min(max(1 + g["margin"] * (GS_PASS_BASE + GS_PASS_ID * dev_), 0.8), 1.2)
+        sack_ = lg["sack_rate"]
+        if SACK_OWN_K and qhist:
+            sk_ = sum(num(h["sacks"]) for h in qhist)
+            db_ = sum(num(h["dropbacks"]) for h in qhist)
+            if db_:
+                sack_ = blend(sk_ / db_, db_, lg["sack_rate"], SACK_OWN_K)
+        pass_att = dropbacks * (1 - sack_)
         rush_att = plays * (1 - prate)
         # GAME SCRIPT on the RUN side only: a team expected to trail runs less
         # (and one expected to lead, more), without inventing extra pass
         # attempts (a run<->pass shift was tested: worse -- TESTED_SETTINGS.md).
         if GS_RUSH and g and "margin" in g:
-            rush_att *= max(0.6, 1 + GS_RUSH * g["margin"])
+            gs_ = GS_RUSH * (max(0.0, 1 - GS_RUSH_ID * max(dev_, 0.0)) if GS_RUSH_ID is not None else 1.0)
+            rush_att *= max(0.6, 1 + gs_ * g["margin"])
         tds = imp_to_td(g["implied"]) if g else lg["plays"] * 0 + 2.4
+        if TEAM_TD_OWN_W and n:
+            own_td = sum(num(h["total_td"]) for h in hist) / n
+            tds += TEAM_TD_OWN_W * n / (n + TEAM_TD_OWN_K) * (own_td - tds)
         # The docstring always said touchdowns split pass/rush by the projected
         # PASS RATE; the code used one league ratio for every team, so Dallas
         # and a run-first team got the same passing-TD share -- and game script
@@ -1931,8 +3020,8 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             "plays": plays,
             "targets": pass_att * tgt_per_att,
             "pass_att": pass_att,
-            "nonqb_rush": rush_att * (1 - qbr),
-            "qb_rush": rush_att * qbr,
+            "nonqb_rush": rush_att * (1 - qbr * QB_RUSH_MULT),
+            "qb_rush": rush_att * qbr * QB_RUSH_MULT,
             "pass_td": tds * ptf,
             "rush_td": tds * (1 - ptf) * (1 - lg["qb_rush_td_frac"]),
             # the 21% of rushing TDs taken OUT of the backfield belongs to QBs
@@ -1999,6 +3088,7 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
     # RETURN_MIN_MISSED, also a MID-season absence of that many straight team
     # games after he had played: only the weeks inside the absence.
     ret_fac = {}   # pid -> {week: factor}, for the route model too
+    wh_ret = {}    # WH_RETURN workhorses back -> last-season carry share
     if RETURN_DEFLATE:
         team_wks = collections.defaultdict(list)
         if isinstance(games, dict):
@@ -2016,7 +3106,11 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             played = {w for w in set(tgt_cur.get(q, {})) | set(car_cur.get(q, {})) if w < week}
             g_, p_t, p_c, _, _ = priors.get(q, ("no history", 0.0, 0.0, 0, 0))
             pri = p_c if po == "RB" else p_t
-            if not played:
+            wh = workhorse_return(q, tm, played, tw) if (WH_RETURN and po == "RB") else None
+            if wh:
+                gone, role_q = wh[0], wh[1] or pri
+                wh_ret[q] = role_q
+            elif not played:
                 if len(tw) < RETURN_MIN_TEAM_GAMES or g_ == "no history":
                     continue
                 gone, role_q = set(tw), pri
@@ -2037,10 +3131,28 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 role_q = blend(sum(own) / len(own), len(own), pri, 2.0) if own else pri
             if role_q < RETURN_MIN_SHARE:
                 continue
-            str_ = RETURN_DEFLATE if not played else (
+            str_ = WH_RETURN if wh else RETURN_DEFLATE if not played else (
                 RETURN_STAR_DEFLATE if RETURN_STAR_SHARE and role_q >= RETURN_STAR_SHARE and pri >= RETURN_STAR_PRIOR
                 else RETURN_MID_DEFLATE)
-            f_q = max(1.0 - str_ * role_q, 0.2)
+            if not wh and po == "RB" and RETURN_OUT_DEFLATE is not None:
+                # did his top fill-in outscore him? (latest absence's start)
+                tw_g = [w for w in tw if w <= max(gone)]
+                k_ = len(tw_g) - 1
+                while k_ > 0 and tw_g[k_ - 1] in gone:
+                    k_ -= 1
+                ref_, _ = _returner_ref(q, played, tw_g[k_])
+                fp_ = _fill_in_pts(q, tm, gone)
+                pv_ = _WH_PREV.get(q)
+                proven_ = bool(pv_) and pv_[2] >= WH_MIN_G and pv_[0] >= WH_PRIOR
+                if (ref_ is not None and fp_ is not None and fp_ > ref_ + WH_MARGIN
+                        and not (RETURN_OUT_UNPROVEN and proven_)):
+                    str_ = RETURN_OUT_DEFLATE
+            # a returner with a workload number on the review sheet gives back
+            # only that part of his old role (2026-10-29, Charbonnet wk8 at 50%:
+            # Wilson's games were still cut as if he took all 42% back). "N only"
+            # is applied after this, so it keeps teammates as they are.
+            m_q = 1.0 if avail is None else avail.get(q, 1.0)
+            f_q = max(1.0 - str_ * role_q * m_q, 0.2)
             for pid, t2 in active.items():
                 if pid == q or t2 != tm or pos.get(pid) != po:
                     continue
@@ -2091,7 +3203,7 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         st_, sc_ = tgt_cur.get(pid, {}), car_cur.get(pid, {})
         if route_pct is not None and ROUTE_LEAD_TGT and pos.get(pid) in SNAP_LEAD_POS:
             rp = route_pct.get(pid) or {}
-            seen = [w for w in st_ if w < week and rp.get(w, 0) > 0]
+            seen = route_lead_weeks(pid, st_, rp, week)
             if seen:
                 last_r = rp[max(seen)]
                 st_ = {w: (v * min(max((last_r / rp[w]) ** ROUTE_LEAD_TGT, 0.5), 2.0)
@@ -2113,7 +3225,8 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             # more of his last 4 games sit below the floor, it is a real role
             # change -- a new alpha, a QB change -- not a bad week.
             def floored(series, pri):
-                recent = [v for w, v in sorted(series.items()) if w < week][-4:]
+                recent = [v for w, v in sorted(series.items()) if w < week
+                          and not ("dud" in EXIT_SKIP and (pid, w) in _EXITS)][-4:]
                 if DUD_REPEAT and sum(1 for v in recent if v < DUD_FLOOR * pri) >= DUD_REPEAT:
                     return series
                 return {w: max(v, DUD_FLOOR * pri) for w, v in series.items()}
@@ -2121,8 +3234,31 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 st_ = floored(st_, pri_t)
             if n_pc >= DUD_MIN_GAMES and pri_c >= DUD_MIN_SHARE_CAR:
                 sc_ = floored(sc_, pri_c)
-        ot, nt = recent_mean(st_, week, half_life, _EXIT_W.get(pid))
-        oc, nc = recent_mean(sc_, week, half_life, _EXIT_W.get(pid))
+        gw_ = _EXIT_W.get(pid)
+        ot, nt = recent_mean(st_, week, half_life, gw_)
+        oc, nc = recent_mean(sc_, week, half_life, gw_)
+        part_ = _PRE_PART.get(pid) if PRESEASON_FADE is not None else None
+        if part_ and (PRESEASON_FADE_WHO == "all" or group == "no history") and (
+                not PRESEASON_FADE_POS or pos.get(pid) in PRESEASON_FADE_POS):
+            # the prior is (1 - w) x rest + w x preseason; give the preseason
+            # part a weight that shrinks with his games this season
+            w_, f_, ps_t, ps_c = part_
+            if ps_t is not None and nt > 0:
+                wn = w_ * PRESEASON_FADE / (PRESEASON_FADE + nt)
+                rest = (pri_t - w_ * f_ * ps_t) / (1 - w_)
+                pri_t = (1 - wn) * rest + wn * f_ * ps_t
+            if ps_c is not None and nc > 0:
+                wn = w_ * PRESEASON_FADE / (PRESEASON_FADE + nc)
+                rest = (pri_c - w_ * f_ * ps_c) / (1 - w_)
+                pri_c = (1 - wn) * rest + wn * f_ * ps_c
+        if ROLE_SHIFT is not None and pos.get(pid) in ROLE_SHIFT_POS and pri_t > 0:
+            last_ = [v for w, v in sorted(st_.items()) if w < week][-int(ROLE_SHIFT_L):]
+            gap_ = max(ROLE_SHIFT_M * pri_t, ROLE_SHIFT_ABS)
+            if max(sum(v < pri_t - gap_ for v in last_),
+                   sum(v > pri_t + gap_ for v in last_)) >= ROLE_SHIFT_N:
+                kt *= ROLE_SHIFT
+        if WH_SELF_K and pid in wh_ret:
+            pri_c, kc = max(pri_c, wh_ret[pid]), max(kc, WH_SELF_K)
         raw[pid] = (tm,
                     m * blend(ot, nt, pri_t, kt),
                     m * blend(oc, nc, pri_c, kc))
@@ -2133,7 +3269,8 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             print(f"     weekly tgt shares {dict((w, round(v, 3)) for w, v in sorted(st_.items()) if w < week)}")
             print(f"     weekly car shares {dict((w, round(v, 3)) for w, v in sorted(sc_.items()) if w < week)}")
         if ROLE_W and pos.get(pid) in ROLE_POS:
-            last_ = [st_[w_] for w_ in sorted(w_ for w_ in st_ if w_ < week)][-ROLE_N:]
+            last_ = [st_[w_] for w_ in sorted(w_ for w_ in st_ if w_ < week
+                     and not ("role" in EXIT_SKIP and (pid, w_) in _EXITS))][-ROLE_N:]
             if len(last_) == ROLE_N:
                 role_last[pid] = (m, sum(last_) / ROLE_N, min(last_), max(last_))
 
@@ -2141,6 +3278,7 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
     est = {}
     if ROUTE_MODEL_W and route_full is not None:
         lg_tprr = route_full.get("_lg", {})
+        rp_of, tprr_of = {}, {}
         for pid, (tm, ts, cs) in raw.items():
             po = pos.get(pid)
             r_ = route_full.get(pid)
@@ -2153,8 +3291,7 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             cur = sorted(w for w in r_ if 0 < w < week and w in kept)
             if not cur:
                 continue
-            healthy = [w for w in cur if (pid, w) not in _INJ_LIMITED]
-            cur_rp = healthy or cur
+            cur_rp = route_model_weeks(pid, cur)
             nr = int(ROUTE_RECENT_N)
             rp = sum(r_[w]["route_pct"] for w in cur_rp[-nr:]) / len(cur_rp[-nr:])
             # a returning teammate takes his routes back too (Lloyd ran GB's
@@ -2166,7 +3303,11 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 rt += ROUTE_HIST_W * r_[0]["routes"]; tg += ROUTE_HIST_W * r_[0]["tgt"]
             m_ = lg_tprr.get(po, 0.2)
             tprr = (tg + m_ * K_TPRR) / (rt + K_TPRR)
-            est[pid] = rp * tprr
+            rp_of[pid], tprr_of[pid] = rp, tprr
+        if ROUTE_VAC:
+            route_vacancy(rp_of, {p: raw[p][0] for p in rp_of}, pos, route_full, week)
+        for pid in rp_of:
+            est[pid] = rp_of[pid] * tprr_of[pid] * (m_of.get(pid, 1.0) if ROUTE_MODEL_SHEET else 1.0)
         by_tm = collections.defaultdict(list)
         for pid in est:
             by_tm[raw[pid][0]].append(pid)
@@ -2282,7 +3423,8 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             cw = sorted(w for w in r_ if 0 < w < week)
             rt = sum(r_[w]["routes"] for w in cw) + (r_[0]["routes"] if 0 in r_ else 0)
             tg = sum(r_[w]["tgt"] for w in cw) + (r_[0]["tgt"] if 0 in r_ else 0)
-            rps = [r_[w]["route_pct"] for w in cw[-3:]]
+            cw_rp = [w for w in cw if not ("elite" in EXIT_SKIP and (pid, w) in _EXITS)]
+            rps = [r_[w]["route_pct"] for w in cw_rp[-3:]]
             if (rt >= ELITE_MIN_ROUTES and tg / rt >= ELITE_TPRR
                     and (not rps or sum(rps) / len(rps) >= ELITE_MIN_RP)):
                 elite_now.add(pid)
@@ -2352,7 +3494,74 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         for tm, ps, rs in qraw.values():
             qt[tm] += ps; qr[tm] += rs
 
+        own_, lg_cpa = {}, 0.0
+        if QB_STYLE_PASS or QB_STYLE_INT or QB_STYLE_YPA:
+            def cpa_(pid):
+                a_ = sum(v[0] for wk, v in (qb_pass.get(pid) or {}).items() if wk < week)
+                c_ = sum(v[0] for wk, v in (qb_rush.get(pid) or {}).items() if wk < week)
+                return a_, c_
+            own_ = {pid: cpa_(pid) for pid in qraw}
+            st_ = [v for pid, v in own_.items() if v[0] >= 100]
+            lg_cpa = sum(c for _, c in st_) / sum(a for a, _ in st_) if st_ else 0.0
+        if QB_STYLE_PASS:
+            for tm_ in qt:
+                if not qt[tm_] or not lg_cpa:
+                    continue
+                cpa_t = sum(ps_ / qt[tm_] * blend(own_[q_][1] / own_[q_][0] if own_[q_][0] else lg_cpa,
+                                                   own_[q_][0], lg_cpa, QB_STYLE_K)
+                            for q_, (t_, ps_, _) in qraw.items() if t_ == tm_)
+                tp = team_proj[tm_]
+                d_ = tp["plays"] * QB_STYLE_PASS * (lg_cpa - cpa_t)     # dropbacks
+                run_ = tp["nonqb_rush"] + tp["qb_rush"]
+                d_ = max(min(d_, 0.5 * run_), -0.5 * tp["pass_att"])
+                new_att = tp["pass_att"] + d_ * (1 - lg["sack_rate"])
+                tp["targets"] *= new_att / tp["pass_att"] if tp["pass_att"] else 1.0
+                tp["pass_att"] = new_att
+                if run_:
+                    q_d = min(QB_STYLE_QB_RUNS * d_, tp["qb_rush"])    # scrambles
+                    f_ = (run_ - (d_ - q_d)) / run_
+                    tp["nonqb_rush"] *= f_
+                    tp["qb_rush"] = tp["qb_rush"] * f_ - q_d
+
+        # "RUSH 6.5" on a QB (review sheet, 2026-11-03): his rushing attempts
+        # are set; the difference comes out of (or goes back to) the team's
+        # backs, so total plays are unchanged. His TD rate and ypc stay his.
+        for pid, n_ in _QB_RUSH.items():
+            tm_ = qraw[pid][0] if pid in qraw else None
+            if tm_ and qr[tm_]:
+                tp = team_proj[tm_]
+                # every QB on the team in carries, then his set to the call
+                car_ = {q_: rs_ / qr[tm_] * tp["qb_rush"] for q_, (t_, _, rs_) in qraw.items() if t_ == tm_}
+                d_ = min(n_ - car_[pid], tp["nonqb_rush"])
+                car_[pid] += d_
+                tp["qb_rush"] += d_
+                tp["nonqb_rush"] -= d_
+                for q_, c_ in car_.items():
+                    qraw[q_] = (tm_, qraw[q_][1], c_)
+                qr[tm_] = sum(car_.values())
+
     lg_qb_td_rate = qb_eff.get("rush_td_rate", 0.0) if qb_eff else 0.0
+
+    def qb_ypc(pid, week):
+        """K_QB_YPC: his own yards per carry, shrunk toward the league QB rate."""
+        if pid in _QB_YPC_CALL:              # Joe's "ypc 6.5" wins
+            return _QB_YPC_CALL[pid]
+        if not K_QB_YPC:
+            return qb_eff["ypc"]
+        if QB_YPC_HEALTHY and (pid, week) in _QB_LISTED and (
+                QB_YPC_HEALTHY == "any" or _QB_LISTED[(pid, week)]):
+            return qb_eff["ypc"]
+        if QB_YPC_PROVEN:
+            h_ = (_QB_RYD.get(pid) or {}).get(0)
+            if not h_ or h_[0] < QB_YPC_PROVEN[0] or h_[1] / h_[0] < QB_YPC_PROVEN[1]:
+                return qb_eff["ypc"]
+        c_ = n_ = y_ = 0.0
+        for wk, (c, y) in (_QB_RYD.get(pid) or {}).items():
+            if wk < week:
+                h_ = QB_YPC_HIST_W if wk == 0 else 1.0
+                c_ += c * h_; y_ += y * h_; n_ += c
+        r_ = blend(y_ / c_, n_, qb_eff["ypc"], K_QB_YPC) if c_ else qb_eff["ypc"]
+        return max(r_, qb_eff["ypc"]) if QB_YPC_PROVEN else r_
 
     def qb_rtd(pid, week, rs, carries, tp):
         """His own goal-line role where we have the carries to justify it."""
@@ -2413,7 +3622,8 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             aa = tt = 0.0
             for wk, v in (qb_pass.get(pid) or {}).items():
                 if wk < week:
-                    aa += v[0]; tt += v[4]
+                    h_ = QB_PASS_TD_HIST_W if wk == 0 else 1.0
+                    aa += v[0] * h_; tt += v[4] * h_
             m_ = blend(tt / aa, aa, lg_ptd, QB_PASS_TD_K) / lg_ptd if aa and lg_ptd else 1.0
             mult[tm] += ps * m_; wsum[tm] += ps
         for tm, x in mult.items():
@@ -2447,6 +3657,15 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         tdw_t[pid] = (ts / tot_t[tm] if tot_t[tm] else 0.0) * mt
         if REC_TD_POS_EXP:
             tdw_t[pid] *= eff[pos[pid]].get("tdpt", 0.0) ** REC_TD_POS_EXP
+        if REC_TD_OWN_K and pos[pid] in REC_TD_OWN_K:
+            lg_t = eff[pos[pid]].get("tdpt", 0.0)
+            t_ = d_ = 0.0
+            for wk, c in (player_eff.get(pid) or {}).items():
+                if wk < week:                  # week 0 = last season
+                    w_ = REC_TD_OWN_HIST_W if wk == 0 else 1.0
+                    t_ += c["tgt"] * w_; d_ += c["rec_td"] * w_
+            if t_ and lg_t:
+                tdw_t[pid] *= blend(d_ / t_, t_, lg_t, REC_TD_OWN_K[pos[pid]]) / lg_t
         if tier_r and TIER_CAL_TD and pid in tier1:
             tdw_t[pid] *= tier_r["tdpt"]
         tdw_c[pid] = (cs / tot_c[tm] if tot_c[tm] else 0.0) * mc
@@ -2496,6 +3715,8 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 t_ypc = (ry_ + TEAM_YPC_K * e["ypc"]) / (rc_ + TEAM_YPC_K)
                 e = dict(e)
                 e["ypc"] = (1 - TEAM_YPC_W) * e["ypc"] + TEAM_YPC_W * t_ypc
+        if ROOKIE_KEFF_MULT is not None and pos[pid] in ROOKIE_KEFF_POS and 0 not in (player_eff.get(pid) or {}):
+            km *= ROOKIE_KEFF_MULT
         e = blended_rates(player_eff.get(pid), week, e, K_EFF_TGT * km, K_EFF_CAR * km,
                           prior_w=ELITE_EFF_PRIOR_W if pid in elite_now else None)
         if tm in backup_teams:
@@ -2517,7 +3738,69 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             "targets": targets, "rush_att": carries,
         }
 
+    if CARRY_TRIM_K is not None:
+        rbs_ = collections.defaultdict(list)
+        for pid, v in out.items():
+            if pos.get(pid) == "RB" and pid in raw:
+                rbs_[raw[pid][0]].append(pid)
+
+        def _rush_scale(pid, f, td=True):
+            v = out[pid]
+            n_ = v["rush_att"] * f
+            fum_c = v["rush_att"] * lg.get("fum_skill", 0.0) * (f - 1) if PROJECT_FUMBLES else 0.0
+            out[pid] = dict(v, rush_att=n_, rush_yds=v["rush_yds"] * f,
+                            rush_td=v["rush_td"] * f if td else v["rush_td"], fum=v["fum"] + fum_c)
+        for tm, ps_ in rbs_.items():
+            for pid in ps_:
+                c_ = out[pid]["rush_att"]
+                if c_ <= CARRY_TRIM_AT:
+                    continue
+                cut = (c_ - CARRY_TRIM_AT) * (1 - CARRY_TRIM_K)
+                rest = [q for q in ps_ if q != pid and out[q]["rush_att"] > 0]
+                pool = sum(out[q]["rush_att"] for q in rest)
+                if not pool:
+                    continue
+                _rush_scale(pid, (c_ - cut) / c_, CARRY_TRIM_TD)
+                for q in rest:
+                    _rush_scale(q, 1 + CARRY_TRIM_BACKUPS * cut / pool, CARRY_TRIM_TD)
+
+    if TGT_TRIM:
+        pc_ = collections.defaultdict(list)
+        for pid, v in out.items():
+            if pos.get(pid) in ("WR", "TE", "RB") and pid in raw:
+                pc_[raw[pid][0]].append(pid)
+
+        def _rec_scale(pid, f):
+            v = out[pid]
+            fum_c = v["rec"] * lg.get("fum_skill", 0.0) * (f - 1) if PROJECT_FUMBLES else 0.0
+            out[pid] = dict(v, targets=v["targets"] * f, rec=v["rec"] * f, rec_yds=v["rec_yds"] * f,
+                            rec_td=v["rec_td"] * f, fum=v["fum"] + fum_c)
+        for tm, ps_ in pc_.items():
+            for pid in ps_:
+                k_at = TGT_TRIM.get(pos.get(pid)) if isinstance(TGT_TRIM, dict) else None
+                t_ = out[pid]["targets"]
+                if not k_at or t_ <= k_at[1]:
+                    continue
+                cut = (t_ - k_at[1]) * (1 - k_at[0])
+                rest = [q for q in ps_ if q != pid and out[q]["targets"] > 0]
+                pool = sum(out[q]["targets"] for q in rest)
+                if not pool:
+                    continue
+                _rec_scale(pid, (t_ - cut) / t_)
+                for q in rest:
+                    _rec_scale(q, 1 + TGT_TRIM_REST * cut / pool)
+
     if qb_patt is not None:
+        lg_qb_ypa, lg_qb_cmp = qb_eff["ypa"], qb_eff["comp_pct"]
+        if LG_QB_EFF_K and qb_pass:
+            sa_ = sc_ = sy_ = 0.0
+            for wks_ in qb_pass.values():
+                for wk_, (x_, c_, y_, _i, _t) in wks_.items():
+                    if 0 < wk_ < week and x_ >= 15:
+                        sa_ += x_; sc_ += c_; sy_ += y_
+            if sa_:
+                lg_qb_ypa = blend(sy_ / sa_, sa_, lg_qb_ypa, LG_QB_EFF_K)
+                lg_qb_cmp = blend(sc_ / sa_, sa_, lg_qb_cmp, LG_QB_EFF_K)
         for pid, (tm, ps, rs) in qraw.items():
             tp = team_proj[tm]
             # a team throws exactly 100% of its attempts, however many QBs play
@@ -2525,21 +3808,37 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             rs = rs / qr[tm] if qr[tm] else 0.0
             att = ps * tp["pass_att"]
             carries = rs * tp["qb_rush"]
-            ypa, cmp_pct = qb_eff["ypa"], qb_eff["comp_pct"]
+            # (Joe's "QB carries" call is his number -- never trimmed)
+            if QB_CARRY_TRIM and pid not in _QB_RUSH and carries > QB_CARRY_TRIM[1]:
+                carries = QB_CARRY_TRIM[1] + (carries - QB_CARRY_TRIM[1]) * QB_CARRY_TRIM[0]
+            ypa, cmp_pct = lg_qb_ypa, lg_qb_cmp
             int_rate = qb_eff["int_rate"]
-            aa = ac = ay = ai = 0.0
+            aa = na = ac = ay = ai = 0.0
             for wk, (x, c_, y, i_, _t) in (qb_pass.get(pid) or {}).items():
                 if wk < week:
-                    aa += x; ac += c_; ay += y; ai += i_
+                    h_ = QB_YPA_HIST_W if wk == 0 else 1.0
+                    aa += x * h_; ac += c_ * h_; ay += y * h_; ai += i_ * h_; na += x
             if aa:
-                ypa = blend(ay / aa, aa, qb_eff["ypa"], K_QB_YPA)
-                cmp_pct = blend(ac / aa, aa, qb_eff["comp_pct"], K_QB_YPA)
+                ypa = blend(ay / aa, na, lg_qb_ypa, K_QB_YPA)
+                cmp_pct = blend(ac / aa, na, lg_qb_cmp, K_QB_YPA)
+                if K_QB_INT:
+                    int_rate = blend(ai / aa, na, qb_eff["int_rate"], K_QB_INT)
+            if (QB_STYLE_INT or QB_STYLE_YPA) and lg_cpa:
+                a_, c_ = own_.get(pid, (0.0, 0.0))
+                rel_ = (blend(c_ / a_ if a_ else lg_cpa, a_, lg_cpa, QB_STYLE_K) - lg_cpa) / lg_cpa
+                if QB_STYLE_EFF_ONE_SIDED:
+                    rel_ = max(rel_, 0.0)
+                if QB_STYLE_INT:
+                    int_rate *= max(0.5, min(1.5, 1 - QB_STYLE_INT * rel_))
+                if QB_STYLE_YPA:
+                    ypa *= max(0.8, min(1.2, 1 + QB_STYLE_YPA * rel_))
             out[pid] = {
                 "pass_att": att, "pass_cmp": att * cmp_pct,
                 "pass_yds": att * ypa * (1 - MISS_YPT * miss_wr.get(tm, 0.0)),
                 "pass_td": ps * tp["pass_td"],
                 "pass_int": att * int_rate,
-                "rush_att": carries, "rush_yds": carries * qb_eff["ypc"],
+                "rush_att": carries,
+                "rush_yds": carries * qb_ypc(pid, week) + (ps * _KNEEL_YDS_G if KNEELS_OUT else 0.0),
                 "rush_td": qb_rtd(pid, week, rs, carries, tp),
                 "rec": 0.0, "rec_yds": 0.0, "rec_td": 0.0,
                 "fum": (att + carries) * lg.get("fum_qb", 0.0) if PROJECT_FUMBLES else 0.0,
@@ -2583,6 +3882,47 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                     out[p][qk] = out[p].get(qk, 0.0) * t_ / q_
                 for p in rec:
                     out[p][rk] = out[p].get(rk, 0.0) * t_ / r_
+    if POS_SPREAD or TOP_SHRINK:
+        scale_ = ("rec", "rec_yds", "rec_td", "rush_yds", "rush_td", "fum")
+        spread_d = collections.defaultdict(float)      # (team, stat) -> receivers' change
+        for p_ in set(POS_SPREAD or {}) | set(TOP_SHRINK or {}):
+            ids_ = [pid for pid in out if pos.get(pid) == p_]
+            pts_ = {pid: points(out[pid], p_) for pid in ids_}
+            new_ = dict(pts_)
+            if POS_SPREAD and p_ in POS_SPREAD:
+                on_ = [v for v in pts_.values() if v >= 1]
+                if on_:
+                    m_ = sum(on_) / len(on_)
+                    for pid, v in pts_.items():
+                        if v >= 1:
+                            new_[pid] = m_ + POS_SPREAD[p_] * (v - m_)
+            if TOP_SHRINK and p_ in TOP_SHRINK:
+                lv_, s_ = TOP_SHRINK[p_]
+                for pid, v in new_.items():
+                    if v > lv_:
+                        new_[pid] = lv_ + s_ * (v - lv_)
+            for pid in ids_:
+                if pts_[pid] > 0 and abs(new_[pid] - pts_[pid]) > 1e-9:
+                    f_ = new_[pid] / pts_[pid]
+                    old_ = out[pid]
+                    out[pid] = {k: (v * f_ if k in scale_ and isinstance(v, (int, float)) else v)
+                                for k, v in old_.items()}
+                    tm_ = raw[pid][0] if pid in raw else None
+                    if SPREAD_TO_QB and tm_:
+                        for k in ("rec_yds", "rec_td"):
+                            spread_d[(tm_, k)] += out[pid].get(k, 0.0) - old_.get(k, 0.0)
+        # SPREAD_TO_QB: the receivers' change goes to their QB(s), so the team still adds up
+        if SPREAD_TO_QB and qb_patt is not None:
+            q_by_t = collections.defaultdict(list)
+            for pid in qraw:
+                if pid in out:
+                    q_by_t[qraw[pid][0]].append(pid)
+            for (tm_, k), d_ in spread_d.items():
+                qk_ = "pass_yds" if k == "rec_yds" else "pass_td"
+                tot_ = sum(out[q].get(qk_, 0.0) for q in q_by_t.get(tm_, ()))
+                for q in q_by_t.get(tm_, ()):
+                    if tot_ > 0:
+                        out[q][qk_] = max(out[q][qk_] + d_ * out[q][qk_] / tot_, 0.0)
     globals()["_LAST_TEAM"] = team_proj   # read by --team-dump (diagnostics)
     return out
 
@@ -2626,6 +3966,8 @@ def main():
     ap.add_argument("--version", default="current", choices=sorted(VARIANTS),
                     help="a named test version (see VARIANTS); output files get its name")
     ap.add_argument("--out", help="live: write the projections here instead of data/")
+    ap.add_argument("--ignore-sheet", action="store_true",
+                    help="live: the model on its own -- no review-sheet calls, roles or team sheet")
     ap.add_argument("--set", action="append", default=[], metavar="NAME=VALUE",
                     help="override one model constant (testing)")
     args = ap.parse_args()
@@ -2634,22 +3976,61 @@ def main():
     for kv in args.set:
         k, v = kv.split("=", 1)
         assert k in globals() and k.isupper(), f"unknown constant {k}"
-        if k in ("POS_KT_MULT", "POS_KEFF_MULT", "ROUTE_MODEL_W_POS", "DEPTH_DEMOTE", "EXIT_KEEP_W"):
+        if k == "QB_YPC_PROVEN":     # 100/5.0
+            globals()[k] = None if v == "None" else tuple(float(x) for x in v.split("/"))
+            continue
+        if k == "MATCHUP_QB_USE":    # yds/td/int
+            globals()[k] = tuple(x for x in v.split("/") if x and x != "None")
+            continue
+        if k == "QB_CARRY_TRIM":     # 0.5/4
+            globals()[k] = None if v == "None" else tuple(float(x) for x in v.split("/"))
+            continue
+        if k == "MATCHUP_EPA_BETA_POS":   # TE:0.5,WR:0.3
+            globals()[k] = {a.split(":")[0]: float(a.split(":")[1]) for a in v.split(",") if a}
+            continue
+        if k in ("TGT_TRIM", "TOP_SHRINK"):           # WR:0.85/8,TE:0.85/5.5 | WR:14/0.85
+            globals()[k] = None if v == "None" else {
+                a.split(":")[0]: tuple(float(x) for x in a.split(":")[1].split("/")) for a in v.split(",") if a}
+            continue
+        if k in ("POS_KT_MULT", "POS_KEFF_MULT", "ROUTE_MODEL_W_POS", "DEPTH_DEMOTE", "EXIT_KEEP_W",
+                 "REC_TD_OWN_K", "POS_SPREAD"):
             globals()[k] = None if v == "None" else {
                 a.split(":")[0]: float(a.split(":")[1]) for a in v.split(",") if a}
             continue
         try:
             globals()[k] = float(v)
         except ValueError:
-            globals()[k] = (None if v == "None" else v if k in ("MATCHUP_MODE",)
+            globals()[k] = (None if v == "None" else v if k in ("MATCHUP_MODE", "PRESEASON_ABSENT", "SLOT_MONOTONIC",
+                                                                "INLINE_TEAM", "PRESEASON_FADE_WHO",
+                                                                "ROUTE_VAC")
                             else tuple(float(x) if x.replace(".", "", 1).isdigit() else x
                                        for x in v.split(",") if x))
     prev_year = args.year - 1
 
     cur_rows, prev_rows = load_players(args.year), load_players(prev_year)
     teams_cur, teams_prev = load_teams(args.year), load_teams(prev_year)
+    cur_rows_real = cur_rows            # the real stat lines -- what the backtest grades
+    if KNEELS_OUT:
+        cur_rows, k_cur = strip_kneels(cur_rows, args.year)
+        prev_rows, k_prev = strip_kneels(prev_rows, prev_year)
+        strip_team_kneels(teams_cur, k_cur)
+        strip_team_kneels(teams_prev, k_prev)
+        globals()["_KNEEL_YDS_G"] = sum(y for _, y in k_prev.values()) / max(len(teams_prev), 1)
     games_cur, games_prev = load_games(args.year), load_games(prev_year)
     chart = load_depth_chart(args.year)
+    if INLINE_SLOTS:
+        # backtest: the chart before each week's first game; live: the newest
+        g_prev = inline_games(prev_year, prev_rows, INLINE_SLOTS)
+        team_ = collections.defaultdict(list)       # (team, pos, k) -> [(week, tgt, car)]
+        if INLINE_TEAM in ("prev", "both"):
+            for tm, _, p, k, a, b in g_prev:
+                team_[(tm, p, k)].append((0, a, b))  # week 0: before every week
+        if INLINE_TEAM in ("cur", "both"):
+            for tm, wk, p, k, a, b in inline_games(args.year, cur_rows, INLINE_SLOTS):
+                team_[(tm, p, k)].append((wk, a, b))
+        globals()["_INLINE"] = {"table": inline_table(g_prev, INLINE_SLOTS),
+                                "team": dict(team_), "year": args.year,
+                                "day": {} if args.live else week_cutoffs(args.year)}
 
     tgt_cur, car_cur, pos, team_cur = shares_by_week(cur_rows)
     tgt_prev, car_prev, pos_prev, team_prev = shares_by_week(prev_rows)
@@ -2680,6 +4061,7 @@ def main():
         drop_pbp_exits(tgt_prev, car_prev, args.year - 1)   # last season's: still dropped
     if exits:
         globals()["_EXIT_W"] = keep_exit_games(tgt_cur, car_cur, exits, pos)
+        globals()["_EXITS"] = set(exits)
     # shares_by_week only walks skill positions (they define the denominators),
     # so quarterbacks are absent from `pos` until we add them explicitly.
     for r in cur_rows:
@@ -2722,6 +4104,28 @@ def main():
         globals()["_INJ_LIMITED"] = injury_limited(args.year, INJ_SNAP_FRAC)
     if TIER_CAL_K:
         globals()["_TIER_RATIO"] = tier_ratios(cur_rows, prev_rows)
+    if WH_RETURN or RETURN_OUT_DEFLATE is not None:
+        def _rb_weeks(rows):
+            d, trb = collections.defaultdict(dict), collections.defaultdict(float)
+            for r in rows:
+                if r["position"] != "RB":
+                    continue
+                c_, t_ = num(r.get("carries")), num(r.get("targets"))
+                trb[(r["team"], int(r["week"]))] += c_
+                if c_ + t_ > 0:
+                    d[r["player_id"]][int(r["week"])] = (
+                        r["team"], c_, (num(r.get("fantasy_points")) + num(r.get("fantasy_points_ppr"))) / 2)
+            return d, trb
+        wk_cur, trb_cur = _rb_weeks(cur_rows)
+        wk_prev, trb_prev = _rb_weeks(prev_rows)
+        prev_ = {}
+        for pid, d in wk_prev.items():
+            rb_ = sum(trb_prev[(t_, w)] for w, (t_, _, _) in d.items())
+            sk_ = car_prev.get(pid, {})
+            prev_[pid] = (sum(c_ for _, c_, _ in d.values()) / rb_ if rb_ else 0.0,
+                          sum(p_ for _, _, p_ in d.values()) / len(d), len(d),
+                          sum(sk_.values()) / len(sk_) if sk_ else 0.0)
+        globals().update(_WH_WEEK=dict(wk_cur), _WH_TEAM_RB=dict(trb_cur), _WH_PREV=prev_)
     pre_now = {}
     if PRESEASON_W or PRESEASON_EFF:
         import preseason
@@ -2730,10 +4134,20 @@ def main():
             names_[r["player_id"]] = r.get("player_display_name") or r.get("player_name", "")
         for pid, nm in depth_names(args.year).items():
             names_.setdefault(pid, nm)
-        pre_now = preseason.load(args.year, names_, pos)
+        # live: a player with no stat line yet (un-debuted rookie, season-long
+        # reserve) only gets a position from the chart further down, so his
+        # preseason line never matched (Adam Randall BAL wk8 2026: 30 carries
+        # ignored). The backtest has every player's position from his games.
+        pos_pre = dict(pos)
+        if args.live:
+            for pid, p in chart_positions(args.year).items():
+                pos_pre.setdefault(pid, p)
+        pre_now = preseason.load(args.year, names_, pos_pre)
         globals()["_PRESEASON_RATES"] = preseason_rates(pre_now, pos)
         if PRESEASON_W:
-            priors = apply_preseason(priors, pre_now, team_cur, pos)
+            priors = apply_preseason(priors, pre_now, team_cur, pos,
+                                     start_absences(pre_now, team_cur, tgt_cur, car_cur, games_cur,
+                                                    args.week if args.live else None))
 
     # --- quarterback layer
     qb_patt, qb_ratt = qb_shares_by_week(cur_rows, teams_cur)
@@ -2776,15 +4190,28 @@ def main():
                 if r["position"] in POSITIONS:
                     played[yr][r["player_id"]][int(r["week"])] = r["team"]
         rz_now = redzone.usage(args.year, played)
-    bt_eff = player_eff_by_week(cur_rows, prev_rows)
     hist_seasons = []
     for yr in range(args.year - 4, args.year):
         try:
-            hist_seasons.append(load_players(yr))
+            rows_ = load_players(yr)
         except FileNotFoundError:
-            pass
+            continue
+        hist_seasons.append(strip_kneels(rows_, yr)[0] if KNEELS_OUT else rows_)
+    bt_eff = player_eff_by_week(cur_rows, prev_rows,
+                                older=hist_seasons[-2::-1] if EFF_LAST_FULL else ())
     bt_qbr = qb_rush_hist(cur_rows, hist_seasons)
     bt_qbp = qb_pass_hist(cur_rows, hist_seasons)
+    if QB_YPC_HEALTHY:
+        ip_ = os.path.join(DATA, f"injuries_{args.year}.csv")
+        if os.path.exists(ip_):
+            with open(ip_, newline="", encoding="utf-8-sig") as fh:
+                globals()["_QB_LISTED"] = {
+                    (r["gsis_id"], int(r["week"])): (r.get("report_status") or "").strip()
+                    for r in csv.DictReader(fh)
+                    if r.get("position") == "QB" and r.get("game_type", "REG") == "REG"
+                    and (r.get("practice_primary_injury") or r.get("report_primary_injury"))
+                    and (r.get("report_status") or "").strip() != "Out"}
+    globals()["_QB_RYD"] = qb_rush_yds_hist(cur_rows, hist_seasons[-int(QB_YPC_SEASONS):] if QB_YPC_SEASONS else [])
     bt_prov = qb_rush_td_proven(hist_seasons, min_seasons=QB_RUSH_TD_MIN_SEASONS)
     bt_rbp = rb_rush_td_proven(hist_seasons)
     tp_acc = collections.defaultdict(list)
@@ -2807,7 +4234,10 @@ def main():
             priors = apply_vacated(priors, tgt_prev, car_prev, team_prev,
                                    {**roster, **team_cur}, chart, pos, pos_prev)
         if pre_now and PRESEASON_W:
-            priors = apply_preseason(priors, pre_now, {**roster, **team_cur}, pos)
+            tm_all = {**roster, **team_cur}
+            priors = apply_preseason(priors, pre_now, tm_all, pos,
+                                     start_absences(pre_now, tm_all, tgt_cur, car_cur, games_cur,
+                                                    args.week))
         played = {r["player_id"]: r["team"] for r in cur_rows
                   if r["position"] in ALL_POSITIONS and int(r["week"]) < args.week}
         active = {**roster, **played}          # season usage wins on team
@@ -2819,6 +4249,15 @@ def main():
             if pid_ in played and played[pid_] != tm_new:
                 print(f"  team change: {pid_} {played[pid_]} -> {tm_new} (newest depth chart)")
                 active[pid_] = tm_new
+        # ...and a trade the depth chart has not caught up with yet: the
+        # team-moves file (Joe, 2026-11-04: Brissett ARI -> BAL two days before
+        # BAL plays). Same effect as above -- the new team wins. A fact, not a
+        # call, so it applies to the model-only run too.
+        for mv in load_team_moves(args.year, args.week):
+            if active.get(mv["player_id"]) != mv["to_team"]:
+                print(f"  team change: {mv['player']} {active.get(mv['player_id'], '-')} -> "
+                      f"{mv['to_team']} (team-moves file)")
+            active[mv["player_id"]] = mv["to_team"]
         # BYE WEEKS: only teams with a game this week. Without this the bye teams
         # were projected anyway (wk5 2026 CAR, KC; wk6 CIN, DET, MIA, MIN).
         playing = {tm for (tm, wk_) in games_cur if wk_ == args.week}
@@ -2834,37 +4273,103 @@ def main():
         # know who is listed where right now.
         rank_now = {pid: rk for pid, (p_, rk) in
                     load_depth_chart(args.year, cutoff="9999-01-01").items()}
-        review, problems = read_review.load(args.year, args.week)
-        flags = read_review.load_flags(args.year, args.week)
+        if args.ignore_sheet:
+            review, problems, flags, roles, sheet_only, sheet_chances = {}, [], {}, {}, {}, {}
+        else:
+            import review_book
+            review_book.sync(args.year, args.week)   # calls made in the workbook
+            review, problems = read_review.load(args.year, args.week)
+            flags = read_review.load_flags(args.year, args.week)
+            roles = read_review.load_roles(args.year, args.week)
+            sheet_only = read_review.load_only(args.year, args.week)
+            sheet_chances = read_review.load_chances(args.year, args.week)
         # FULL: games he LEFT hurt (snaps under SKILL_EXIT_FRAC of his usual)
         # come out of his history -- Joe's call that he is back at 100%. The
         # blanket version (every confirmed WR/TE exit) tested slightly worse,
         # so it is per player, on the review sheet.
+        # "Usual" = his best game THIS season (2026-10-29, Joe on McConkey: "the
+        # only full game he played was week 3" -- his 49% wk1 and 46% wk2 had
+        # nothing earlier to compare against). Not last season: a role that
+        # shrank this season would lose every real game; rookies have none.
+        # A short game he LEFT hurt (and was not listed for going in) counts as
+        # the part he played healthy (2026-10-29, Joe on McConkey wk1: "he got
+        # hurt essentially at half time, his usage before that was really
+        # good"); a short game he was already listed for is dropped.
         if flags:
             sp_all = load_snap_pct(args.year)
-            for pid, fl in flags.items():
-                if fl != "FULL":
-                    continue
+            full_ids = [pid for pid, fl in flags.items() if fl == "FULL"]
+            pre_ = listed_pregame(args.year) if full_ids else set()
+            for pid in full_ids:
                 sp = sp_all.get(pid, {})
-                for w in sorted(sp):
-                    before = [sp[x] for x in sp if x < w]
-                    if before and sp[w] < FULL_FRAC * max(before):
+                drop_, left_ = full_plan(pid, sp, args.week, exits or set(), pre_, pos.get(pid))
+                for w in drop_:
+                    for d_ in (tgt_cur, car_cur):
+                        d_.get(pid, {}).pop(w, None)
+                    print(f"  FULL: dropped wk{w} for {pid} ({sp[w]:.0%} of snaps"
+                          + (", listed before the game)" if (pid, w) in pre_ else ")"))
+                if not left_:
+                    continue
+                import partial_games
+                tm_wk = {(r["player_id"], int(r["week"])): r["team"] for r in cur_rows
+                         if r["player_id"] == pid}
+                for w in left_:
+                    tm_wk.setdefault((pid, w), team_cur.get(pid))
+                info = partial_games.estimate({(pid, w) for w in left_}, tm_wk,
+                                              partial_games.team_plays(args.year, pos), sp_all,
+                                              None, partial_games.pbp_exit_secs(args.year))
+                for w in left_:
+                    f_, rt_, rc_ = info.get((pid, w), (0.0, 0.0, 0.0))
+                    if f_ <= 0 or (rt_ <= 0 and rc_ <= 0):
                         for d_ in (tgt_cur, car_cur):
                             d_.get(pid, {}).pop(w, None)
-                        print(f"  FULL: dropped wk{w} for {pid} ({sp[w]:.0%} of snaps)")
+                        print(f"  FULL: dropped wk{w} for {pid} (left before any targets or carries)")
+                        continue
+                    for d_, r_ in ((tgt_cur, rt_), (car_cur, rc_)):
+                        if r_ > 0 and w in d_.get(pid, {}):
+                            d_[pid][w] = min(d_[pid][w] / r_, 1.0)
+                    _EXIT_W.setdefault(pid, {})[w] = f_
+                    _EXITS.discard((pid, w))
+                    _FULL_LEFT.add((pid, w))
+                    if route_now and w in route_now.get(pid, {}):
+                        route_now[pid][w] = min(route_now[pid][w] / f_, 1.0)
+                    if route_full_now and w in route_full_now.get(pid, {}):
+                        v_ = dict(route_full_now[pid][w])
+                        v_["route_pct"] = min(v_["route_pct"] / f_, 1.0)
+                        route_full_now[pid][w] = v_
+                    print(f"  FULL: wk{w} for {pid} counted as the part he played healthy"
+                          f" ({f_:.0%} of the game; target share {tgt_cur.get(pid, {}).get(w, 0):.0%})")
+        # FULL / SPLIT on a returning back: Joe overrules the workhorse-return
+        # call either way (2026-10-30)
+        # (EVEN is a SPLIT too: an even share is not a workhorse return)
+        globals()["_QB_RUSH"] = {} if args.ignore_sheet else read_review.load_rush(args.year, args.week)
+        for pid, n_ in _QB_RUSH.items():
+            print(f"  RUSH: {pid} -- {n_:g} QB rushing attempts (sheet)")
+        globals()["_QB_YPC_CALL"] = {} if args.ignore_sheet else read_review.load_rush(
+            args.year, args.week, read_review.parse_ypc)
+        for pid, y_ in _QB_YPC_CALL.items():
+            print(f"  YPC: {pid} -- {y_:g} yards per carry (sheet)")
+        globals()["_WH_FORCE"] = {pid: ("SPLIT" if fl == "EVEN" else fl) for pid, fl in flags.items()
+                                  if fl in ("FULL", "SPLIT", "EVEN")}
+        for pid, fl in flags.items():
+            if fl == "SPLIT":
+                print(f"  SPLIT: {pid} -- no workhorse return, his backups keep their share")
         # START: this QB is his team's starter (rank 0 beats every depth rank)
         qrank_live = dict(qb_ranks_as_of(args.year, "9999"))
         for pid, fl in flags.items():
             if fl == "START":
                 qrank_live[pid] = 0
                 print(f"  START: {pid} set as his team's starting QB")
+        for pid, (grp_, k_) in roles.items():
+            if grp_ == "QB" and k_ == 1 and qrank_live.get(pid) != 0:
+                qrank_live[pid] = 0
+                print(f"  ROLE QB1: {pid} set as his team's starting QB")
         for who, what in problems:
             print(f"  !! review sheet: could not read {what!r} for {who} "
                   f"-- treated as PLAY")
         avail, reason = availability.build(args.year, args.week, candidates=active,
                                            depth_rank=rank_now, review=review,
                                            positions=pos)
-        globals()["_TEAM_ADJ"] = load_team_adjust(args.year, args.week)
+        globals()["_TEAM_ADJ"] = {} if args.ignore_sheet else load_team_adjust(args.year, args.week)
         for tm_, a_ in _TEAM_ADJ.items():
             print(f"  team sheet: {tm_} " + ", ".join(f"{k} {v:g}" for k, v in a_.items()))
         if args.pool:
@@ -2913,19 +4418,216 @@ def main():
         # 6.75); the whole gap was three all-or-nothing starter calls (Keenum,
         # Bagent, Mariota). A plain usage cut could not hedge: Lamar at 60% went
         # 18.3 -> 17.8, Huntley 1.2 -> 1.9.
+        # ROLES (role_multipliers): one run with everyone who plays at full
+        # usage gives each slot's work; the sheet's players take their slots,
+        # and the role multiplier rides on top of any number in the call column
+        grp_roles = {p_: ro_ for p_, ro_ in roles.items() if ro_[0] != "QB"}
+        goal_ = {}                                       # pid -> usage he is given
+        if grp_roles:
+            pre_ = _run({p_: (1.0 if m_ > 0 else 0.0) for p_, m_ in avail.items()})
+            groups_ = collections.defaultdict(dict)
+            for p_, v_ in pre_.items():
+                po_ = pos.get(p_)
+                if po_ in ("RB", "WR", "TE"):
+                    groups_[(active[p_], po_)][p_] = v_.get("targets", 0.0) + (
+                        v_.get("rush_att", 0.0) if po_ == "RB" else 0.0)
+            for p_, (grp_, k_) in grp_roles.items():
+                if p_ not in pre_:
+                    print(f"  !! role {grp_}{k_} for {name.get(p_, p_)}: not projected to play -- ignored")
+                elif pos.get(p_) != grp_:
+                    print(f"  !! role {grp_}{k_} for {name.get(p_, p_)}: he is a {pos.get(p_)} -- ignored")
+            if ROLE_NORMAL:
+                vol_ = collections.defaultdict(lambda: [0.0, 0.0])   # team -> skill targets, carries
+                for p_, v_ in pre_.items():
+                    if pos.get(p_) in POSITIONS:
+                        vol_[active[p_]][0] += v_.get("targets", 0.0)
+                        vol_[active[p_]][1] += v_.get("rush_att", 0.0)
+                import partial_games
+                sp_c, sp_p = load_snap_pct(args.year), load_snap_pct(prev_year)
+                pre_c, pre_p = listed_pregame(args.year, True), listed_pregame(prev_year, True)
+                dr_c, dr_p = dressed_by_game(args.year), dressed_by_game(prev_year)
+                tm_c = {(r["player_id"], int(r["week"])): r["team"] for r in cur_rows}
+                tm_p = {(r["player_id"], int(r["week"])): r["team"] for r in prev_rows}
+                ex_ = {(p_, w_) for p_, w_ in (exits or set()) if p_ in grp_roles and (p_, w_) not in _FULL_LEFT}
+                part_ = partial_games.estimate(ex_, tm_c, partial_games.team_plays(args.year, pos), sp_c,
+                                               None, partial_games.pbp_exit_secs(args.year)) if ex_ else {}
+
+                def ahead_(q_, w, tg_, ca_, old_, rb_):
+                    """his usage share going into week w: that season's earlier
+                    games, else the season before (old_), else None"""
+                    for t_, c_, before_ in ((tg_, ca_, w),) + (((old_[0], old_[1], 99),) if old_ else ()):
+                        ws_ = [x for x in set(t_.get(q_, {})) | set(c_.get(q_, {})) if x < before_]
+                        if ws_:
+                            return sum(t_.get(q_, {}).get(x, 0.0) + (c_.get(q_, {}).get(x, 0.0) if rb_ else 0.0)
+                                       for x in ws_) / len(ws_)
+                    return None
+
+                def normal_games(p_, above_, with_=()):
+                    """his healthy games in which every player placed above him
+                    dressed and was already ahead of him going in, and every
+                    player in with_ (the ones he jumps over) dressed"""
+                    rb_ = pos.get(p_) == "RB"
+                    games_ = []
+                    for cur_, tg_, ca_, sp_, pl_, tw_, dr_, old_ in (
+                            (True, tgt_cur, car_cur, sp_c, pre_c, tm_c, dr_c, (tgt_prev, car_prev)),
+                            (False, tgt_prev, car_prev, sp_p, pre_p, tm_p, dr_p, None)):
+                        wks_ = sorted(w for w in set(tg_.get(p_, {})) | set(ca_.get(p_, {}))
+                                      if not cur_ or w < args.week)
+                        best_ = max((sp_.get(p_, {}).get(w, 0.0) for w in wks_), default=0.0)
+                        for w in wks_:
+                            t_, c_, wt_ = tg_.get(p_, {}).get(w, 0.0), ca_.get(p_, {}).get(w, 0.0), 1.0
+                            if (p_, w) in pl_ or (cur_ and (p_, w) in _INJ_LIMITED):
+                                continue                      # listed going in / played hurt
+                            if any(a_ not in dr_.get((tw_.get((p_, w)), w), {}) for a_ in (*above_, *with_)):
+                                continue                      # someone ahead of / beside him was out
+                            mine_ = ahead_(p_, w, tg_, ca_, old_, rb_) or 0.0
+                            them_ = [ahead_(a_, w, tg_, ca_, old_, rb_) for a_ in above_]
+                            if any(x_ is None or x_ <= mine_ for x_ in them_):
+                                continue                      # the order was different then
+                            if cur_ and (p_, w) in _FULL_LEFT:  # FULL already made it his healthy part
+                                wt_ = _EXIT_W.get(p_, {}).get(w, 1.0)
+                            elif cur_ and (p_, w) in ex_:     # left hurt: the part he played healthy
+                                f_, rt_, rc_ = part_.get((p_, w), (0.0, 0.0, 0.0))
+                                if f_ <= 0:
+                                    continue
+                                t_ = min(t_ / rt_, 1.0) if rt_ > 0 else t_
+                                c_ = min(c_ / rc_, 1.0) if rc_ > 0 else c_
+                                wt_ = f_
+                            elif sp_.get(p_, {}).get(w, 0.0) < FULL_FRAC * best_:
+                                continue                      # a short game
+                            games_.append((tw_.get((p_, w)), wt_, t_, c_))
+                    return games_
+
+                ex_p = set()
+                drop_pbp_exits(tgt_prev, car_prev, prev_year, collect=ex_p)
+
+                def crew_slots(crew_, tm_, po_):
+                    """ROLE_SLOT_CREW: {slot index: (target share, carry share)}
+                    the k-th of crew_ (by usage going in) had, over games for
+                    tm_ in which all of them were active and none was hurt
+                    (listed going in, played hurt, left hurt -- low snaps alone
+                    are a backup's normal game) and nobody else at the position
+                    was ahead of them going in (per-game personnel)"""
+                    rb_ = po_ == "RB"
+                    acc_ = collections.defaultdict(list)
+                    for cur_, tg_, ca_, pl_, dr_, old_, hurt_ in (
+                            (True, tgt_cur, car_cur, pre_c, dr_c, (tgt_prev, car_prev),
+                             set(exits or ()) | _FULL_LEFT | set(_INJ_LIMITED)),
+                            (False, tgt_prev, car_prev, pre_p, dr_p, None, ex_p)):
+                        for (t_, w), who_ in dr_.items():
+                            if t_ != tm_ or (cur_ and w >= args.week) or any(q_ not in who_ for q_ in crew_):
+                                continue
+                            if any((q_, w) in pl_ or (q_, w) in hurt_ for q_ in crew_):
+                                continue                      # someone was hurt
+                            go_ = {q_: ahead_(q_, w, tg_, ca_, old_, rb_) for q_ in crew_}
+                            if any(v is None for v in go_.values()):
+                                continue
+                            lo_ = min(go_.values())
+                            if any(ps_ == po_ and q_ not in crew_ and (ahead_(q_, w, tg_, ca_, old_, rb_) or 0.0) > lo_
+                                   for q_, ps_ in who_.items()):
+                                continue                      # someone else was ahead of them then
+                            for k_, q_ in enumerate(sorted(crew_, key=lambda q: -go_[q])):
+                                acc_[k_].append((tg_.get(q_, {}).get(w, 0.0), ca_.get(q_, {}).get(w, 0.0)))
+                    return {k_: (sum(a for a, _ in v) / len(v), sum(b for _, b in v) / len(v))
+                            for k_, v in acc_.items() if len(v) >= ROLE_NORMAL_MIN}
+            for (tm_, po_), usage_ in groups_.items():
+                want_ = {p_: k_ for p_, (grp_, k_) in grp_roles.items() if p_ in usage_ and grp_ == po_}
+                if not want_:
+                    continue
+                own_ = {}
+                placed_, order_ = role_slots(usage_, want_)
+                slot_ = {p_: usage_[order_[i_]] for i_, p_ in enumerate(placed_)}
+                if ROLE_NORMAL:
+                    for i_, p_ in enumerate(placed_):
+                        if (p_ in want_ and i_ < order_.index(p_)) or \
+                                (ROLE_NORMAL_DOWN and i_ > order_.index(p_)):   # moved up / down
+                            # moved up: the players he jumps over must have
+                            # played too -- not his fill-in games (Allen RB1
+                            # over Hall wk8: 19.2 touches from Hall's 4 missed)
+                            jumped_ = [q_ for q_ in order_[:order_.index(p_)] if q_ in placed_[i_ + 1:]]
+                            on_ = own_normal(normal_games(p_, placed_[:i_], jumped_), tm_)
+                            if on_:
+                                own_[p_] = on_[0] * vol_[tm_][0] + (on_[1] * vol_[tm_][1] if po_ == "RB" else 0.0)
+                slotw_ = {}
+                changed_ = [i_ for i_, p_ in enumerate(placed_) if order_[i_] != p_]
+                if ROLE_NORMAL and ROLE_SLOT_CREW and changed_:
+                    # the model's combined work for the changed slots, split the
+                    # way those slots usually split it with these players active
+                    sh_ = crew_slots(placed_[:max(changed_) + 1], tm_, po_)
+                    if all(k_ in sh_ for k_ in changed_):
+                        u_ = {k_: sh_[k_][0] * vol_[tm_][0] + (sh_[k_][1] * vol_[tm_][1] if po_ == "RB" else 0.0)
+                              for k_ in changed_}
+                        tot_ = sum(usage_[placed_[k_]] for k_ in changed_)
+                        if sum(u_.values()) > 0:
+                            for k_ in changed_:
+                                slotw_[k_] = tot_ * u_[k_] / sum(u_.values())
+                                slot_[placed_[k_]] = slotw_[k_]
+                work_ = role_work(usage_, want_, own_, slotw_)
+                for p_, mm_ in role_multipliers(usage_, want_, own_, slotw_).items():
+                    if abs(mm_ - 1.0) > 1e-6:
+                        goal_[p_] = work_[p_] * avail.get(p_, 1.0)
+                        avail[p_] = avail.get(p_, 1.0) * mm_
+                        note_ = ""
+                        if placed_.index(p_) in slotw_:
+                            note_ = f", the slot's usual split with these players active {slotw_[placed_.index(p_)]:.1f}"
+                        if p_ in own_ and abs(work_[p_] - slot_[p_]) > 1e-9:
+                            note_ = (f", his normal when healthy {own_[p_]:.1f}"
+                                     if placed_.index(p_) < order_.index(p_) else
+                                     f", his workload with the players above him playing {own_[p_]:.1f}")
+                            if work_[p_] < own_[p_] - 1e-9:
+                                note_ += f" (capped at the player above him, {work_[p_]:.1f})"
+                        print(f"  ROLE: {name.get(p_, p_)} ({tm_} {po_}"
+                              + (f"{want_[p_]}" if p_ in want_ else ", moved by the others")
+                              + f") usage x{mm_:.2f}" + note_)
+        # EVEN (2026-11-03, Joe: Hall / Allen "split" meant 50/50): the players
+        # marked EVEN at one position on a team share their combined work
+        # equally, after any roles -- each keeps his own efficiency, and the
+        # rest of the team is untouched
+        evens_ = collections.defaultdict(list)
+        for p_, fl_ in flags.items():
+            if fl_ == "EVEN" and p_ in active and avail.get(p_, 1.0) > 0 and pos.get(p_) in ("RB", "WR", "TE"):
+                evens_[(active[p_], pos[p_])].append(p_)
+        evens_ = {k_: v_ for k_, v_ in evens_.items() if len(v_) >= 2}
+        if evens_:
+            now_ = _run(avail)
+            for (tm_, po_), ps_ in evens_.items():
+                use_ = {p_: (goal_[p_] if p_ in goal_ else
+                             now_.get(p_, {}).get("targets", 0.0)
+                             + (now_.get(p_, {}).get("rush_att", 0.0) if po_ == "RB" else 0.0))
+                        for p_ in ps_}
+                eg_ = even_goals(use_, ps_)
+                for p_, g_ in eg_.items():
+                    avail[p_] = avail.get(p_, 1.0) * g_ / use_[p_]
+                    goal_[p_] = g_
+                print(f"  EVEN: {tm_} {po_} " + ", ".join(f"{name.get(p_, p_)} {use_[p_]:.1f}" for p_ in ps_)
+                      + (f" -> {next(iter(eg_.values())):.1f} each" if eg_ else " (fewer than two playing -- ignored)"))
+        # the team's shares re-balance around the moved players: re-run and
+        # correct every moved player toward his goal until all are within
+        # 2% (up to 4 runs). Two fixed passes see-sawed on a swapped pair --
+        # cutting Hall handed Allen 2 more touches (goal 18.9, got 21.0)
+        for _ in range(4 if goal_ else 0):
+            mid_ = _run(avail)
+            got_ = {p_: (mid_[p_].get("targets", 0.0) + (mid_[p_].get("rush_att", 0.0)
+                                                          if pos.get(p_) == "RB" else 0.0))
+                    if p_ in mid_ else 0.0 for p_ in goal_}
+            if all(abs(got_[p_] - g_) <= 0.02 * g_ for p_, g_ in goal_.items() if got_[p_] > 0):
+                break
+            for p_, g_ in goal_.items():
+                if got_[p_] > 0:
+                    avail[p_] *= min(max(g_ / got_[p_], 1 / ROLE_MAX_MULT), ROLE_MAX_MULT)
         hedge = {pid_: m for pid_, m in review.items()
                  if pos.get(pid_) == "QB" and 0 < m < 1 and pid_ in active}
         # CHANCE TO PLAY, any position ("chance 25" on the sheet, 2026-10-16):
         # teammates blended by the chance; his OWN line stays "if he plays",
         # since only players who play are graded.
-        chances = {pid_: c_ for pid_, c_ in read_review.load_chances(args.year, args.week).items()
+        chances = {pid_: c_ for pid_, c_ in sheet_chances.items()
                    if pid_ in active and 0 < c_ < 1}
         hedge.update(chances)
         # "N ONLY" PASS-CATCHERS, QB SIDE (2026-10-25, Joe: "we have Puka lower at
         # like 70%, shouldn't that affect Stafford as well"): the receivers keep
         # their numbers (no guessing who replaces him), but his QB is blended
         # N% "he plays" / rest "he sits" -- Stafford 18.9 with Puka, 17.0 without
-        only_qb = {pid_: f_ for pid_, f_ in read_review.load_only(args.year, args.week).items()
+        only_qb = {pid_: f_ for pid_, f_ in sheet_only.items()
                    if pid_ in active and 0 < f_ < 1 and pos.get(pid_) in ("WR", "TE", "RB")
                    and pid_ not in hedge}
         hedge.update(only_qb)
@@ -2969,13 +4671,15 @@ def main():
         # residual version needs every past week's projection: backtest only)
         if MATCHUP_K and MATCHUP_MODE == "epa":
             import matchups
+            matchups.BETA_POS = dict(MATCHUP_EPA_BETA_POS or {})
+            matchups.QB_USE = tuple(MATCHUP_QB_USE or ())
             mu = matchups.EpaMatchups(args.year, MATCHUP_EPA_BETA, MATCHUP_EPA_K,
                                       MATCHUP_EPA_PRIOR, stats=MATCHUP_STATS or None,
-                                      positions=MATCHUP_POS or None)
+                                      positions=MATCHUP_POS or None, half_life=MATCHUP_EPA_HL)
             opp = {k: g["opp"] for k, g in games_cur.items() if "opp" in g}
             proj = mu.apply(proj, args.week, active, pos, opp)
         # "85 only" on the sheet: his own line scaled, teammates untouched
-        for pid_, f_ in read_review.load_only(args.year, args.week).items():
+        for pid_, f_ in sheet_only.items():
             if pid_ in proj:
                 proj[pid_] = {k: v * f_ for k, v in proj[pid_].items()}
                 print(f"  his line only: {pid_} x{f_:.2f} (teammates unchanged)")
@@ -3080,7 +4784,7 @@ def main():
         return
 
     by_week = collections.defaultdict(list)
-    for r in cur_rows:
+    for r in cur_rows_real:
         if r["position"] in ALL_POSITIONS:
             by_week[int(r["week"])].append(r)
 
@@ -3099,10 +4803,12 @@ def main():
     mu = None
     if MATCHUP_K:
         import matchups
+        matchups.BETA_POS = dict(MATCHUP_EPA_BETA_POS or {})
+        matchups.QB_USE = tuple(MATCHUP_QB_USE or ())
         if MATCHUP_MODE == "epa":
             mu = matchups.EpaMatchups(args.year, MATCHUP_EPA_BETA, MATCHUP_EPA_K,
                                       MATCHUP_EPA_PRIOR, stats=MATCHUP_STATS or None,
-                                      positions=MATCHUP_POS or None)
+                                      positions=MATCHUP_POS or None, half_life=MATCHUP_EPA_HL)
         else:
             mu = matchups.Matchups(MATCHUP_K, MATCHUP_STATS or None, MATCHUP_POS or None)
         opp = {k: g["opp"] for k, g in games_cur.items() if "opp" in g}
@@ -3118,6 +4824,7 @@ def main():
                               qb_td_proven=bt_prov, rb_td_proven=bt_rbp,
                               **qb_kw)
             mu.update(1, p1, by_week[1])
+    qb_form = collections.defaultdict(list)   # QB_FORM: pid -> his misses so far
     for w in weeks:
         active = {r["player_id"]: r["team"] for r in by_week[w]}
         proj = project_week(w, teams_cur=teams_cur, games=games_cur, tgt_cur=tgt_cur,
@@ -3144,11 +4851,23 @@ def main():
             raw_proj = proj
             proj = mu.apply(raw_proj, w, active, pos, opp)
             mu.update(w, raw_proj, by_week[w])
+        raw_q = {pid: points(v, "QB") for pid, v in proj.items() if pos.get(pid) == "QB"}
+        if QB_FORM_W:
+            proj = dict(proj)
+            for pid, base in raw_q.items():
+                res = qb_form.get(pid)
+                if res and base > 1:
+                    adj = QB_FORM_W * sum(res) / len(res) * len(res) / (len(res) + QB_FORM_K)
+                    f_ = max(0.5, (base + adj) / base)
+                    proj[pid] = {k: v * f_ if isinstance(v, (int, float)) else v
+                                 for k, v in proj[pid].items()}
         for r in by_week[w]:
             pid = r["player_id"]
             if pid not in proj:
                 continue
             a = actual_points(r)
+            if pid in raw_q and num(r["attempts"]) >= 15:
+                qb_form[pid].append(a - raw_q[pid])
             p = points(proj[pid], r["position"])
             v_ = proj[pid]
             dump_rows.append((w, pid, r.get("player_display_name") or r.get("player_name", ""),

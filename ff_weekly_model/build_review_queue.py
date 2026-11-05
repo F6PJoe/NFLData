@@ -112,6 +112,14 @@ def main():
     for e in entries:
         if e["practice"] in ("-", "") and practice.get(e["pid"]):
             e["practice"] = practice[e["pid"]]
+    # ...and every day of it from the club pages (team_reports.py), so a
+    # Thursday rest day followed by a full Friday reads as just that (Joe,
+    # 2026-10-30: Bucky Irving still showing "DNP")
+    days = {}
+    tp = os.path.join(DATA, f"team_reports_{args.year}_wk{args.week:02d}.csv")
+    if os.path.exists(tp):
+        with open(tp, newline="", encoding="utf-8") as fh:
+            days = {r["gsis_id"]: r["days"] for r in csv.DictReader(fh)}
     listed = {e["pid"] for e in entries}
     for r in rows:
         p_ = practice.get(r["gsis_id"])
@@ -150,15 +158,20 @@ def main():
     q = sorted(entries, key=lambda e: -proj.get(e["pid"], 0))
 
     dest = os.path.join(DATA, f"review_{args.year}_wk{args.week:02d}.csv")
+    # calls made in the review workbook first, so a rebuild never loses them
+    import review_book
+    review_book.sync(args.year, args.week)
     existing, kept = {}, []
     if os.path.exists(dest):          # never clobber calls already made
         # utf-8-sig: Excel's "CSV UTF-8" save adds a byte-order mark, which
         # would rename the player_id column and silently drop every call
         with open(dest, newline="", encoding="utf-8-sig") as fh:
             for r in csv.DictReader(fh):
-                if r.get("decision") or r.get("note"):
+                if any(r.get(k) for k in ("decision", "note", "role", "rush", "ypc")):
                     key = r.get("player_id") or f"~{norm(r.get('player'))}"
-                    existing[key] = (r.get("decision", ""), r.get("note", ""))
+                    # rush / ypc: the review workbook's QB rushes / QB ypc (2026-11-04)
+                    existing[key] = (r.get("decision", ""), r.get("note", ""), r.get("role", ""),
+                                     r.get("rush", "") or "", r.get("ypc", "") or "")
                     kept.append(r)
     # A row YOU added by hand must survive the rebuild, or the sheet would
     # quietly undo your work every time it is regenerated.
@@ -179,20 +192,23 @@ def main():
     with open(tmp, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(["player_id", "player", "pos", "team", "injury", "practice",
-                    "source", "proj", "decision", "note"])
+                    "source", "proj", "decision", "role", "rush", "ypc", "note"])
         for e in q:
-            d, n = existing.get(e["pid"] or f"~{norm(e['name'])}", ("", ""))
+            d, n, ro, ru, yp = existing.get(e["pid"] or f"~{norm(e['name'])}", ("",) * 5)
+            pr = (e["practice"] or "-").split(" (")[0]
+            if days.get(e["pid"]):
+                pr = f"{pr} ({days[e['pid']]})"
             w.writerow([e["pid"], e["name"], e["pos"], e["team"], e["injury"],
-                        e["practice"], e["source"],
-                        round(proj.get(e["pid"], 0), 1), d, n])
+                        pr, e["source"],
+                        round(proj.get(e["pid"], 0), 1), d, ro, ru, yp, n])
     try:
         os.replace(tmp, dest)
     except PermissionError:
         os.remove(tmp)
         sys.exit(f"  SHEET NOT REBUILT -- {os.path.basename(dest)} is open (Excel?). "
                  f"Close it and run again; your calls are untouched.")
-    kept_calls = sum(1 for e in q if existing.get(e["pid"] or f"~{norm(e['name'])}", ("", ""))[0])
-    made = sum(1 for d, _ in existing.values() if d)
+    kept_calls = sum(1 for e in q if existing.get(e["pid"] or f"~{norm(e['name'])}", ("",) * 5)[0])
+    made = sum(1 for v in existing.values() if v[0])
     if kept_calls != made:
         print(f"  WARNING: {made} calls on the old sheet, {kept_calls} on the new one")
 

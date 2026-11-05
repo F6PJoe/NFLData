@@ -22,6 +22,9 @@ USAGE_TOOL = os.path.join(os.path.dirname(HERE), "ff_utilization", "data")
 PLAYERS = os.path.join(os.path.dirname(HERE), "ff_utilization", "cached", "nflverse", "players.csv")
 
 
+FL_TEAM = {"JAC": "JAX", "LAR": "LA"}   # FL's codes -> nflverse's
+
+
 def _ids(year):
     by_nt, by_n = {}, collections.defaultdict(set)
     for y in (year - 1, year, year + 1):
@@ -76,6 +79,7 @@ def load(year):
                 "snap_pct": f("snaps_pct") / 100, "tgt": f("targets"),
                 "tprr": f("tprr") / 100,
                 "ez_tgts": f("ez_tgts"), "i5": f("inside5_rush"),
-                "team_routes": f("team_routes"), "team_targets": f("team_targets")}
+                "team_routes": f("team_routes"), "team_targets": f("team_targets"),
+                "team": FL_TEAM.get(r["team"], r["team"])}
     load.unmatched = unmatched
     return out

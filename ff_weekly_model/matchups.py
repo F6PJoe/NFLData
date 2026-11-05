@@ -30,6 +30,12 @@ directly, and a QB's passing yards follow his receivers' adjusted yards.
 import collections
 
 SKILL = ("RB", "WR", "TE")
+# per-position EPA strength, set by project.py (MATCHUP_EPA_BETA_POS); a
+# position not listed uses the matchup's own beta
+BETA_POS = {}
+# which QB stats the EPA dropback rating ("ypa" factor) moves -- any of
+# "yds" (on top of his receivers'), "td", "int" (inverse); () = none (old way)
+QB_USE = ()
 KEYS = ("tgt", "rec", "rec_yds", "rec_td", "car", "rush_yds", "rush_td",
         "patt", "pyds", "pint", "qcar", "qryd")
 
@@ -178,6 +184,14 @@ class Matchups:
                     v["pass_yds"] = v.get("pass_yds", 0.0) * yds_new / old["rec_yds"]
                 v["pass_int"] = v.get("pass_int", 0.0) * g.get("int", 1.0)
                 v["rush_yds"] = v.get("rush_yds", 0.0) * g.get("qbypc", 1.0)
+                q_ = g.get("ypa")
+                if q_ and QB_USE:
+                    if "yds" in QB_USE:
+                        v["pass_yds"] = v.get("pass_yds", 0.0) * q_
+                    if "td" in QB_USE:
+                        v["pass_td"] = v.get("pass_td", 0.0) * q_
+                    if "int" in QB_USE:
+                        v["pass_int"] = v.get("pass_int", 0.0) * min(max(2.0 - q_, 0.5), 2.0)
         return out
 
 
@@ -263,9 +277,10 @@ class EpaMatchups(Matchups):
            "QB": {"QB_drop": ("ypa",)}}
 
     def __init__(self, year, beta, k_plays, prior_w=0.0, k_off=200.0,
-                 stats=None, positions=None):
+                 stats=None, positions=None, half_life=None):
         super().__init__(1.0, stats, positions)
         self.beta, self.k_plays, self.k_off = beta, k_plays, k_off
+        self.half_life = half_life      # recent weeks count more (project.MATCHUP_EPA_HL)
         self.cur = epa_aggregate(year)
         self.prev = epa_aggregate(year - 1) if prior_w else {}
         self.prior_w = prior_w
@@ -291,11 +306,18 @@ class EpaMatchups(Matchups):
         omean = {k: (e + lgm.get(k[1], 0.0) * self.k_off) / (n + self.k_off)
                  for k, (e, n) in o_sum.items()}
         res = collections.defaultdict(lambda: [0.0, 0.0])
+        wres = collections.defaultdict(lambda: [0.0, 0.0])     # recency-weighted
         for (wk, o, d, c), (e, n) in self.cur.items():
             if wk < week:
                 m = omean.get((o, c), lgm.get(c, 0.0))
                 res[(d, c)][0] += e - n * m
                 res[(d, c)][1] += n
+                w = 0.5 ** ((week - 1 - wk) / self.half_life) if self.half_life else 1.0
+                wres[(d, c)][0] += w * (e - n * m)
+                wres[(d, c)][1] += w * n
+        if self.half_life:   # the weighted per-play rate, at the real play count
+            for k, (s_, n_) in wres.items():
+                res[k][0] = (s_ / n_) * res[k][1] if n_ else 0.0
         if self.prev:
             po = collections.defaultdict(lambda: [0.0, 0])
             for (wk, o, d, c), (e, n) in self.prev.items():
@@ -321,7 +343,7 @@ class EpaMatchups(Matchups):
             for s in stats:
                 if self.stats is not None and s not in self.stats:
                     continue
-                out[s] = min(max(1.0 + self.beta * x, 0.5), 2.0)
+                out[s] = min(max(1.0 + BETA_POS.get(po, self.beta) * x, 0.5), 2.0)
         return out
 
     def apply(self, proj, week, team_of, pos, opp):

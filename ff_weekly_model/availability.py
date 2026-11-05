@@ -66,6 +66,23 @@ def _roster_status(year, week=None):
     return {p: s for p, (s, _) in out.items()}
 
 
+def _designated_return(year, week):
+    """Players whose latest roster row at or before `week` is reserve,
+    designated for return (status_description_abbr R48)."""
+    path = os.path.join(DATA, f"roster_{year}.csv")
+    if not os.path.exists(path):
+        return set()
+    out = {}
+    with open(path, newline="", encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            pid, wk = r.get("gsis_id"), int(r.get("week") or 0)
+            if not pid or wk > week:
+                continue
+            if pid not in out or wk >= out[pid][1]:
+                out[pid] = (r.get("status_description_abbr", ""), wk)
+    return {p for p, (a, _) in out.items() if a == "R48"}
+
+
 def _injury_report(year, week):
     path = os.path.join(DATA, f"injuries_{year}.csv")
     if not os.path.exists(path):
@@ -228,6 +245,17 @@ def build(year, week, *, candidates, depth_rank=None, review=None, positions=Non
     """
     status = _roster_status(year, week)
     report = _injury_report(year, week)
+    dtr = _designated_return(year, week)
+
+    # THIS WEEK'S official game designation outranks a roster status: a
+    # player listed Questionable has been designated to return / activated
+    # (Jordan Mason MIN wk7 2026: Questionable, roster still "RES"). So does
+    # NO designation for a player designated to return who is on this week's
+    # practice report (Jadarian Price SEA wk8 2026, Joe: "doesn't carry an
+    # injury designation ... sounds like he will play").
+    def off_reserve(pid):
+        rep_ = report.get(pid)
+        return rep_ == "Questionable" or (rep_ == "" and pid in dtr)
     tags, _tag_date = sleeper_tags(year)
     snaps, snap_week = _last_week_snaps(year, week)
     depth_rank = depth_rank or {}
@@ -240,8 +268,10 @@ def build(year, week, *, candidates, depth_rank=None, review=None, positions=Non
         st = status.get(pid)
         rep = report.get(pid, "")
         tag = "" if rep else tags.get(pid, ("", ""))[0]
-        if st and st not in PLAYABLE_STATUS and rep == "Questionable":
+        if st and st not in PLAYABLE_STATUS and off_reserve(pid):
             st = None
+            if tag == "IR":   # Sleeper's IR tag is the same roster status
+                tag = ""
         if ((st and st not in PLAYABLE_STATUS) or rep in BLOCKING_REPORT
                 or tag in BLOCKING_REPORT or tag in SLEEPER_BLOCKING
                 or review.get(pid) == 0.0):
@@ -261,22 +291,26 @@ def build(year, week, *, candidates, depth_rank=None, review=None, positions=Non
     # Questionable now (designated to return), or ruled out / on reserve last
     # week. Only these skip the rotation check -- a practice-report listing
     # alone does not (Hollywood Brown, Sills: healthy depth, rightly removed).
-    prev_report = _injury_report(year, week - 1) if week and week > 1 else {}
-    prev_status = _roster_status(year, week - 1) if week and week > 1 else {}
+    # "Last week" is his TEAM's last game, the one the snaps come from -- off a
+    # bye, week-1 has no report (Tre Harris LAC wk8 2026: Out wk6, bye wk7,
+    # limited and undesignated wk8, removed as "no snaps in wk6").
+    prev = {}
 
     def returning(pid):
-        return (report.get(pid) == "Questionable"
-                or prev_report.get(pid) in BLOCKING_REPORT
-                or prev_status.get(pid) in ("RES", "PUP", "EXE"))
+        if report.get(pid) == "Questionable":
+            return True
+        lw = snap_week.get(candidates[pid], week - 1)
+        if lw not in prev:
+            prev[lw] = (_injury_report(year, lw), _roster_status(year, lw)) if lw and lw >= 1 else ({}, {})
+        return (prev[lw][0].get(pid) in BLOCKING_REPORT
+                or prev[lw][1].get(pid) in ("RES", "PUP", "EXE"))
 
     mult, reason = {}, {}
     for pid in candidates:
         st = status.get(pid)
-        # THIS WEEK'S official game designation outranks a roster status: a
-        # player listed Questionable has been designated to return / activated
-        # (Jordan Mason MIN wk7 2026: Questionable, roster still "RES").
-        # Out / Doubtful are handled just below either way.
-        if st and st not in PLAYABLE_STATUS and report.get(pid) == "Questionable":
+        # off reserve (see off_reserve above); Out / Doubtful are handled just
+        # below either way
+        if st and st not in PLAYABLE_STATUS and off_reserve(pid):
             st = None
         if st and st not in PLAYABLE_STATUS:
             mult[pid] = 0.0
@@ -291,6 +325,8 @@ def build(year, week, *, candidates, depth_rank=None, review=None, positions=Non
         # official designation always outranks an aggregated one.
         if not rep:
             tag, part = tags.get(pid, ("", ""))
+            if tag == "IR" and off_reserve(pid):
+                tag = ""
             if tag in BLOCKING_REPORT or tag in SLEEPER_BLOCKING:
                 mult[pid] = 0.0
                 reason[pid] = f"sleeper: {tag}" + (f" ({part})" if part else "")

@@ -139,6 +139,65 @@ def regression_tests(year=2026):
     res.append((2 in car2[SAQ] and SAQ not in ew, "a back's exit game counts in full (Saquon wk2)", ""))
     res.append((3 in tgt2[JJ] and ew.get(JJ, {}).get(3) == 0.5,
                 "a receiver's exit game counts as half a game (Jefferson wk3)", ""))
+    # ...and its route % is not his role (2026-10-31): Jefferson wk3 (6% of routes)
+    # is skipped in the route model and as the route anchor; wk5 (played hurt)
+    # is skipped in the route model only
+    saved_ = (P._EXITS, P._INJ_LIMITED)
+    P._EXITS, P._INJ_LIMITED = {(JJ, 3)}, {(JJ, 5)}
+    rm_ = P.route_model_weeks(JJ, [1, 2, 3, 5, 7])
+    lead_ = P.route_lead_weeks(JJ, {1: .4, 2: .3, 3: .08}, {1: 1.0, 2: 1.0, 3: .06}, 5)
+    # ...nor once a FULL call has taken it off the exit list (Jefferson wk8 FULL)
+    P._EXITS, P._FULL_LEFT = set(), {(JJ, 3)}
+    rm2_ = P.route_model_weeks(JJ, [1, 2, 3, 5, 7])
+    lead2_ = P.route_lead_weeks(JJ, {1: .4, 2: .3, 3: .08}, {1: 1.0, 2: 1.0, 3: .06}, 5)
+    P._EXITS, P._INJ_LIMITED = saved_
+    P._FULL_LEFT = set()
+    res.append((rm_ == [1, 2, 7] and lead_ == [1, 2],
+                "a game he left hurt is not his route rate (Jefferson wk3)", f"{rm_} {lead_}"))
+    res.append((rm2_ == [1, 2, 7] and lead2_ == [1, 2],
+                "...nor after a FULL call counts its healthy part (Jefferson wk8)", f"{rm2_} {lead2_}"))
+    # FULL measures "usual" by his best game THIS season (2026-10-29): McConkey's
+    # short wk1/wk2 count as hurt even with no earlier game to compare against
+    ladd = {1: .49, 2: .46, 3: .88, 4: .34, 6: .12}
+    got = P.full_dropped_weeks(ladd, 8)
+    res.append((got == [1, 2, 4, 6], "FULL finds McConkey's short games (wks 1, 2, 4, 6)", str(got)))
+    # ...and splits them (2026-10-29): left hurt -> counted as his healthy part
+    # (wk1, wk6); listed Questionable going in -> dropped (wk2, wk4)
+    L = "00-0039915"
+    drop_, left_ = P.full_plan(L, ladd, 8, {(L, 1), (L, 6)}, {(L, 2), (L, 4)})
+    res.append((drop_ == [2, 4] and left_ == [1, 6],
+                "FULL: McConkey wks 1, 6 count as healthy part; 2, 4 dropped", f"{drop_} {left_}"))
+    # WH_RETURN (2026-10-30): a proven workhorse gets his role back unless his
+    # fill-in outscored him (Tracy over Singletary) or he was out 7+ games
+    JAC, LLO = "00-0035700", "00-0039811"
+    saved = (P._WH_PREV, P._WH_WEEK, P._WH_TEAM_RB)
+    P._WH_PREV = {JAC: (0.73, 14.6, 15, 0.67)}
+    P._WH_TEAM_RB = {("GB", w): 20.0 for w in range(1, 8)}
+    P._WH_WEEK = {JAC: {7: ("GB", 11.0, 17.6)},
+                  LLO: {w: ("GB", 9.0, 6.2) for w in range(1, 8)}}
+    got = P.workhorse_return(JAC, "GB", {7}, list(range(1, 8)))
+    res.append((bool(got) and got[0] == set(range(1, 7)),
+                "Jacobs wk8: a workhorse back, his backup did not take the job", str(got)))
+    P._WH_WEEK[LLO] = {w: ("GB", 15.0, 16.6) for w in range(1, 8)}
+    got = P.workhorse_return(JAC, "GB", {7}, list(range(1, 8)))
+    res.append((got is None, "...not when the backup outscored him (Tracy over Singletary)", str(got)))
+    # ...unless Joe says FULL on the sheet; SPLIT turns a workhorse return off
+    P._WH_FORCE = {JAC: "FULL"}
+    got = P.workhorse_return(JAC, "GB", {7}, list(range(1, 8)))
+    res.append((bool(got), "...FULL on the sheet forces it anyway", str(got)))
+    P._WH_WEEK[LLO] = {w: ("GB", 9.0, 6.2) for w in range(1, 8)}
+    P._WH_FORCE = {JAC: "SPLIT"}
+    got = P.workhorse_return(JAC, "GB", {7}, list(range(1, 8)))
+    import read_review
+    res.append((got is None and read_review.parse_decision("split")[1].startswith("SPLIT"),
+                "...and SPLIT on the sheet turns it off", str(got)))
+    P._WH_FORCE = {}
+    P._WH_WEEK[LLO] = {w: ("GB", 9.0, 6.2) for w in range(1, 11)}
+    P._WH_TEAM_RB.update({("GB", w): 20.0 for w in range(8, 11)})
+    P._WH_WEEK[JAC] = {10: ("GB", 11.0, 17.6)}
+    got = P.workhorse_return(JAC, "GB", {10}, list(range(1, 11)))
+    res.append((got is None, "...nor after a 7+ game absence (Pacheco 2024, broken leg)", str(got)))
+    P._WH_PREV, P._WH_WEEK, P._WH_TEAM_RB = saved
 
     # Mason wk7: official Questionable + roster RES + listed 4th + no wk6 snaps
     MASON, JONES, DALLAS, CLAIB = "00-0037525", "00-0033293", "00-0036425", "00-0041104"
@@ -163,6 +222,23 @@ def regression_tests(year=2026):
     res.append((m.get(KCJ) == 1.0, "a team off a bye keeps its depth players (Kevin Coleman Jr. MIA wk7)",
                 why.get(KCJ, "")))
 
+    # ...and an injury returner off a bye: Out on his team's LAST report, not
+    # week-1's (Tre Harris LAC wk8: Out wk6, bye wk7, no snaps in wk6)
+    HARRIS = "00-0040727"
+    LADD, QJ = ids_.get("Ladd McConkey", "x3"), ids_.get("Quentin Johnston", "x4")
+    cands = {HARRIS: "LAC", LADD: "LAC", QJ: "LAC"}
+    m, why = availability.build(year, 8, candidates=cands, depth_rank={LADD: 1, QJ: 2, HARRIS: 3},
+                                positions={p: "WR" for p in cands})
+    res.append((m.get(HARRIS) == 1.0, "an injury returner off a bye is available (Tre Harris LAC wk8)",
+                why.get(HARRIS, "")))
+
+    # ...and a player designated to return from IR with NO game designation
+    # plays, even with Sleeper still tagging IR (Jadarian Price SEA wk8)
+    PRICE = "00-0041512"
+    m, why = availability.build(year, 8, candidates={PRICE: "SEA"}, positions={PRICE: "RB"})
+    res.append((m.get(PRICE) == 1.0, "an undesignated IR returner plays (Jadarian Price SEA wk8)",
+                why.get(PRICE, "")))
+
     # the stale roster file is caught
     rpath = os.path.join(DATA, f"roster_{year}.csv")
     bak = rpath + ".bak_check"
@@ -185,6 +261,102 @@ def regression_tests(year=2026):
     SILLS, JACOBS = "00-0035359", "00-0035700"
     res.append((P.new_team_no_games(SILLS, "TB", False, 6), "new-team cut applies to Sills (ATL -> TB)", ""))
     res.append((not P.new_team_no_games(JACOBS, "GB", False, 6), "new-team cut does NOT apply to Jacobs (GB)", ""))
+
+    # ROLES from the review workbook (2026-10-31): Price RB2 / Wilson RB3 swap
+    # their slots' work, everyone else stays put
+    rm_ = P.role_multipliers({"Ch": 12.9, "Wi": 9.1, "Pr": 5.6, "Ho": 4.1, "Ru": 0.2},
+                             {"Pr": 2, "Wi": 3})
+    res.append((abs(rm_["Pr"] - 9.1 / 5.6) < 1e-9 and abs(rm_["Wi"] - 5.6 / 9.1) < 1e-9
+                and rm_["Ch"] == rm_["Ho"] == rm_["Ru"] == 1.0
+                and read_review.parse_role("rb 2") == ("RB", 2),
+                "a role takes that slot's work; the rest of the group shifts (Price RB2)", str(rm_)))
+    # ROLE_NORMAL (2026-10-31): a starter taking his job back gets his own
+    # normal usage (McConkey WR1, 6.3 when healthy, over the Chargers' 4.5); a
+    # backup moved up takes the slot's work (Boston); a player moved down takes
+    # the slot's work, not his old normal (Dobbins RB2)
+    lac_ = {"Jo": 4.5, "Ha": 4.4, "Mc": 3.9, "La": 3.1}
+    rw_ = P.role_work(lac_, {"Mc": 1}, {"Mc": 6.3})
+    cle_ = P.role_work({"Co": 5.7, "Bo": 5.3}, {"Bo": 1}, {"Bo": 3.0})
+    # (Dobbins has no game with Coleman ahead of him, so no workload of his own)
+    den_ = P.role_work({"Do": 12.9, "Cl": 9.1}, {"Cl": 1, "Do": 2}, {"Cl": 6.0})
+    # ...never more than the player placed above him (Price RB2 under Charbonnet);
+    # a player left in his own slot is unchanged (Shakir WR2)
+    sea_ = P.role_work({"Ch": 12.9, "Wi": 9.1, "Pr": 5.6}, {"Pr": 2}, {"Pr": 16.3})
+    # ROLE_NORMAL_DOWN: the fill-in moved back down gets his workload from games
+    # with the starter ahead of him, not the slot's -- and moving down never
+    # raises him (Johnston under McConkey wk8: 2025 games said 7.0, he is at 4.5)
+    dn_ = P.role_work({"Fi": 7.0, "Ot": 4.0, "St": 3.0}, {"St": 1, "Fi": 2}, {"St": 6.5, "Fi": 5.0})
+    dn2_ = P.role_work(lac_, {"Mc": 1, "Jo": 2}, {"Mc": 6.3, "Jo": 7.0})
+    res.append((dn_ == {"St": 7.0, "Fi": 5.0, "Ot": 3.0} and dn2_["Jo"] == 4.5 and dn2_["Mc"] == 6.3,
+                "...the fill-in moved back down gets his workload from games with the starter, never more",
+                f"{dn_} {dn2_}"))
+    buf_ = P.role_work({"Mo": 5.7, "Sh": 5.5}, {"Mo": 1, "Sh": 2}, {"Sh": 6.5})
+    # ROLE_SLOT_CREW (2026-11-01): the changed slots carry the usual split with
+    # these players active (Allen RB1 / Hall RB2: 18.9 / 5.9 of the pair's 24.8)
+    cr_ = P.role_work({"Ha": 19.0, "Al": 5.8, "Da": 1.4}, {"Al": 1, "Ha": 2}, None, {0: 18.9, 1: 5.9})
+    res.append((cr_ == {"Al": 18.9, "Ha": 5.9, "Da": 1.4},
+                "a swapped pair splits their work the way it did with both active (Allen RB1 / Hall RB2)", str(cr_)))
+    hn_ = P.own_normal([("LAC", 1.0, .15, 0.0), ("LAC", .69, .47, 0.0), ("CHI", 1.0, .30, 0.0)], "LAC", 1)
+    res.append((rw_["Mc"] == 6.3 and rw_["Jo"] == 4.4 and rw_["Ha"] == 3.9 and cle_["Bo"] == 5.7
+                and den_ == {"Cl": 12.9, "Do": 9.1} and sea_["Pr"] == 12.9 and buf_["Sh"] == 5.5
+                and abs(hn_[0] - (.15 + .69 * .47) / 1.69) < 1e-9
+                and P.own_normal([("SEA", 1.0, .2, .4)] * 2, "SEA") is None,
+                "a starter back in his role gets his normal usage; a backup gets the slot's (McConkey WR1)",
+                f"{rw_} {cle_} {den_} {sea_} {buf_} {hn_}"))
+
+    # EVEN (2026-11-03): the marked players share their combined work equally
+    ev_ = P.even_goals({"Ha": 4.8, "Al": 18.4, "Da": 2.1}, ["Ha", "Al"])
+    res.append((ev_ == {"Ha": 11.6, "Al": 11.6} and P.even_goals({"Ha": 5.0, "Al": 0.0}, ["Ha", "Al"]) == {},
+                "EVEN splits the marked players' work equally (Hall / Allen)", str(ev_)))
+
+    # RUSH <n> on a QB (2026-11-03, Daniels): the call reads as his rushing attempts
+    import read_review as RR
+    res.append((RR.parse_rush("rush 6.5") == 6.5 and RR.parse_rush("Rushes 7") == 7.0
+                and RR.parse_rush("65") is None and RR.parse_decision("rush 6.5")[2]
+                and RR.parse_rush("rush 6 ypc 6.5") == 6.0 and RR.parse_ypc("rush 6 ypc 6.5") == 6.5
+                and RR.parse_ypc("ypc 7") == 7.0 and RR.parse_rush("ypc 7") is None
+                and RR.parse_decision("ypc 7")[2] and RR.parse_decision("")[1] == "PLAY",
+                "'rush 6.5' / 'ypc 7' / 'rush 6 ypc 6.5' on a QB read as carries / yards per carry", ""))
+
+    # QB carries / QB yds/carry columns (2026-11-04, Joe): their own fields, so a QB can be
+    # START and have a rushing call; a blank column falls back to the old text call
+    import tempfile
+    import review_book as RB
+    with tempfile.TemporaryDirectory() as td_:
+        with open(os.path.join(td_, "review_2099_wk01.csv"), "w", newline="", encoding="utf-8") as fh:
+            fh.write("player_id,player,pos,team,decision,role,rush,ypc,note\n"
+                     "A,Qa,QB,WAS,START,,7,6.5,\nB,Qb,QB,BAL,rush 5 ypc 6,,,,\nC,Qc,QB,NYJ,ypc 8,,4,,\n")
+        old_data, RR.DATA = RR.DATA, td_
+        try:
+            ru_, yp_ = RR.load_rush(2099, 1), RR.load_rush(2099, 1, RR.parse_ypc)
+        finally:
+            RR.DATA = old_data
+    res.append((ru_ == {"A": 7.0, "B": 5.0, "C": 4.0} and yp_ == {"A": 6.5, "B": 6.0, "C": 8.0}
+                and RB._edit_tuple(["", "OUT", "n"]) == ("", "OUT", "n", "", "")
+                and RB._sheet_num("7") == 7 and RB._sheet_num("6.5") == 6.5 and RB._sheet_num("") is None,
+                "QB carries / QB yds/carry columns read alongside START (old text calls still work)",
+                f"{ru_} {yp_}"))
+
+    # KNEELS_OUT (2026-11-04, Joe): a QB's kneels leave his carries / yards and his team's
+    # runs and plays; a non-QB row and the real stat rows are untouched
+    with tempfile.TemporaryDirectory() as td_:
+        with open(os.path.join(td_, "qb_kneels_2099.csv"), "w", newline="", encoding="utf-8") as fh:
+            fh.write("week,team,player_id,kneels,kneel_yds\n3,DET,Q,2,-2.0\n3,DET,T,1,-1.0\n")
+        old_data, P.DATA = P.DATA, td_
+        try:
+            rows_ = [{"player_id": "Q", "week": "3", "team": "DET", "position": "QB", "carries": "3", "rushing_yards": "4"},
+                     {"player_id": "T", "week": "3", "team": "DET", "position": "TE", "carries": "1", "rushing_yards": "-1"}]
+            kr_, tk_ = P.strip_kneels(rows_, 2099)
+        finally:
+            P.DATA = old_data
+    tm_ = {("DET", 3): {"rush_att": "30", "qb_rush_att": "3", "plays": "70", "dropbacks": "40",
+                        "qb_rush_share": "0.1", "pass_rate": "0.5714", "rush_yds": "120"}}
+    P.strip_team_kneels(tm_, tk_)
+    t3_ = tm_[("DET", 3)]
+    res.append((kr_[0]["carries"] == "1.0" and kr_[0]["rushing_yards"] == "6.0" and kr_[1] is rows_[1]
+                and rows_[0]["carries"] == "3" and t3_["rush_att"] == "28" and t3_["qb_rush_att"] == "1"
+                and t3_["plays"] == "68" and t3_["pass_rate"] == str(round(40 / 68, 4)),
+                "kneel-downs come out of a QB's carries / yards and his team's runs and plays", f"{kr_} {t3_}"))
 
     # one-back guard
     res.append((P.rb_backup_need([0.9]) > 0, "a team with one back gets an unnamed backup", ""))

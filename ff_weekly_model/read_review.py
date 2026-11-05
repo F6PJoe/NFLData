@@ -11,14 +11,52 @@ The decision column accepts, case-insensitively:
     FULL      plays, full go    -> PLAY, and any game he LEFT injured (snaps
                                    under half his usual) is thrown out of his
                                    history -- Jefferson wk4 2026: hurt early
-                                   in wk3, 2 targets, expected back at 100%
+                                   in wk3, 2 targets, expected back at 100%.
+                                   On a back returning from 2+ missed games
+                                   it also forces the workhorse return: his
+                                   backups' games without him barely count,
+                                   even if the model thought they took the job
+    SPLIT     back, job shared  -> PLAY, but NO workhorse return for this
+                                   returning back: his backups keep the share
+                                   they earned while he was out (2026-10-30,
+                                   Joe: "override the 'backup took the job'")
+    EVEN      even split        -> the players marked EVEN at one position
+                                   on a team share their combined work
+                                   equally (backs: carries + targets), each
+                                   with his own efficiency; teammates
+                                   untouched. Also SPLIT for a returning back
+                                   (2026-11-03, Joe on Hall / Allen)
     START     QB starts         -> this quarterback is his team's starter;
                                    the others become backups. Nobody has to
                                    be marked OUT to make the switch.
+    RUSH <n>  e.g. rush 6.5     -> QB only: his rushing attempts (add "ypc 6"
+                                   for his yards per carry, or "ypc 6" alone
+                                   -- Joe on Daniels 2026-11-04), at his own
+                                   yards per carry and TD rate; the extra
+                                   carries come out of his team's backs
+                                   (passing untouched). 2026-11-03, Daniels.
+                                   Since 2026-11-04 these have their own
+                                   columns, `rush` and `ypc` (the workbook's
+                                   QB carries / QB yds/carry), which win over the
+                                   text here -- so the decision cell stays
+                                   free for START / chance 50 / 85 only
     <number>  e.g. 40 or 40%    -> that percent of normal usage
     <n> ONLY  e.g. 85 only      -> HIS line x 85%, teammates untouched -- an
                                    eased-in player whose missing work does
                                    NOT go to the backups (Joe, 2026-10-22)
+
+The role column (2026-10-31) takes RB1 / RB2 / WR3 / TE1 / QB1 ...: he gets
+the work the model projects for that slot on his team, and the rest of the
+position group shifts down a slot (project.role_multipliers). QB1 = START.
+A player moved UP gets his own normal workload instead when it is more --
+his share in healthy games with the players placed ahead of him playing
+(project.ROLE_NORMAL; McConkey WR1 wk8: 6.4 targets, not the 4.4 the
+Chargers' top receiver had while he was hurt). A player moved DOWN gets his
+workload from games with the players now above him playing and ahead of him,
+but never more than the model has him at now (ROLE_NORMAL_DOWN; Johnston WR2
+under McConkey wk8 stays 3.9 -- his 2025 games beside McConkey said 7.0).
+Both columns are usually filled from the team tabs of the review workbook
+(review_book.py), which copies its edits into this sheet.
 
 Blank always means PLAY, so an unfilled sheet is valid and changes nothing.
 Anything it cannot parse is REPORTED rather than silently ignored -- a typo
@@ -41,6 +79,8 @@ OUT_WORDS = {"out", "o", "sit", "no", "n", "inactive", "scratch"}
 PLAY_WORDS = {"play", "p", "yes", "y", "active", "go", "in", ""}
 FULL_WORDS = {"full", "full go", "fullgo", "100", "100%"}
 START_WORDS = {"start", "starter", "starting", "qb1", "s"}
+SPLIT_WORDS = {"split", "shared", "share", "committee", "rbbc"}
+EVEN_WORDS = {"even", "50/50", "50-50", "even split"}
 LIMITED_WORDS = {"limited", "ltd", "lim", "l", "reduced", "snap count", "pitch count"}
 LIMITED_DEFAULT = 0.60
 # CHANCE TO PLAY (2026-10-16): "chance 25", "25% chance", "c25" = a 25% chance
@@ -61,6 +101,26 @@ def parse_only(raw):
     return p / 100 if 0 < p <= 100 else None
 
 
+RUSH_RE = re.compile(r"(?:rush(?:es)?\s*(\d{1,2}(?:\.\d)?))?\s*(?:ypc\s*(\d{1,2}(?:\.\d{1,2})?))?")
+
+
+def _rush_call(raw):
+    m = RUSH_RE.fullmatch((raw or "").strip().lower().rstrip("."))
+    return m if m and (m.group(1) or m.group(2)) else None
+
+
+def parse_rush(raw):
+    """"rush 6.5" / "rush 6.5 ypc 6" -> 6.5 (a QB's rushing attempts), else None."""
+    m = _rush_call(raw)
+    return float(m.group(1)) if m and m.group(1) else None
+
+
+def parse_ypc(raw):
+    """"ypc 6.5" / "rush 6 ypc 6.5" -> 6.5 (a QB's yards per carry), else None."""
+    m = _rush_call(raw)
+    return float(m.group(2)) if m and m.group(2) else None
+
+
 def parse_chance(raw):
     m = CHANCE_RE.fullmatch((raw or "").strip().lower().rstrip("."))
     if not m:
@@ -78,6 +138,10 @@ def parse_decision(raw):
         return 1.0, "FULL (injury-shortened games ignored)", True
     if v in START_WORDS:
         return 1.0, "START (made his team's starter)", True
+    if v in SPLIT_WORDS:
+        return 1.0, "SPLIT (backups keep their share -- no workhorse return)", True
+    if v in EVEN_WORDS:
+        return 1.0, "EVEN (equal share with the others marked EVEN)", True
     if v in OUT_WORDS:
         return 0.0, "OUT", True
     if v in LIMITED_WORDS:
@@ -85,6 +149,10 @@ def parse_decision(raw):
     ch = parse_chance(v)
     if ch is not None:
         return 1.0, f"{ch:.0%} CHANCE TO PLAY", True
+    ru, yc = parse_rush(v), parse_ypc(v)
+    if ru is not None or yc is not None:
+        return 1.0, " ".join(x for x in (f"{ru:g} QB RUSHES" if ru is not None else "",
+                                         f"{yc:g} YDS/CARRY" if yc is not None else "") if x)             + " (passing untouched)", True
     on = parse_only(v)
     if on is not None:
         return 1.0, f"{on:.0%} OF HIS LINE ONLY", True
@@ -96,8 +164,39 @@ def parse_decision(raw):
     return 1.0, f"UNRECOGNISED {raw!r} -- treated as PLAY", False
 
 
+ROLE_RE = re.compile(r"(qb|rb|wr|te)\s*-?\s*(\d)")
+
+
+def parse_role(raw):
+    """'RB2' -> ('RB', 2); blank or unreadable -> None."""
+    m = ROLE_RE.fullmatch((raw or "").strip().lower())
+    return (m.group(1).upper(), int(m.group(2))) if m and int(m.group(2)) >= 1 else None
+
+
+def load_roles(year, week):
+    """player_id -> (group, slot) for rows with a role, e.g. ('RB', 2)."""
+    path = os.path.join(DATA, f"review_{year}_wk{week:02d}.csv")
+    out = {}
+    if not os.path.exists(path):
+        return out
+    with open(path, newline="", encoding="utf-8-sig") as fh:
+        rows = list(csv.DictReader(fh))
+    for r in rows:
+        ro = parse_role(r.get("role"))
+        if ro is None:
+            if (r.get("role") or "").strip():
+                print(f"  !! review sheet: could not read role {r.get('role')!r} for {r.get('player')}")
+            continue
+        pid = (r.get("player_id") or "").strip()
+        if not pid:
+            pid = _ids_by_name(year).get(((r.get("player") or "").strip().lower(), (r.get("team") or "").strip()))
+        if pid:
+            out[pid] = ro
+    return out
+
+
 def load_flags(year, week):
-    """player_id -> "FULL" or "START" for the rows that say so."""
+    """player_id -> "FULL", "START", "SPLIT" or "EVEN" for the rows that say so."""
     path = os.path.join(DATA, f"review_{year}_wk{week:02d}.csv")
     out = {}
     if not os.path.exists(path):
@@ -107,7 +206,8 @@ def load_flags(year, week):
         rows = list(csv.DictReader(fh))
     for r in rows:
         v = (r.get("decision") or "").strip().lower().rstrip(".")
-        flag = "FULL" if v in FULL_WORDS else "START" if v in START_WORDS else None
+        flag = ("FULL" if v in FULL_WORDS else "START" if v in START_WORDS
+                else "SPLIT" if v in SPLIT_WORDS else "EVEN" if v in EVEN_WORDS else None)
         if not flag:
             continue
         pid = (r.get("player_id") or "").strip()
@@ -136,6 +236,41 @@ def load_only(year, week):
             pid = _ids_by_name(year).get(((r.get("player") or "").strip().lower(), (r.get("team") or "").strip()))
         if pid:
             out[pid] = f
+    return out
+
+
+def rush_number(raw):
+    """A number typed in the sheet's rush / ypc column ("7", "6.5", "rush 7")
+    -> float, or None if blank / not a positive number."""
+    m = re.search(r"\d+(?:\.\d+)?", str(raw or ""))
+    return float(m.group(0)) if m and float(m.group(0)) > 0 else None
+
+
+def load_rush(year, week, parse=None):
+    """player_id -> rushing attempts (parse_ypc: his yards per carry), from
+    the sheet's own `rush` / `ypc` columns -- the review workbook's QB carries
+    / QB yds/carry cells (2026-11-04, Joe: separate fields, so a QB can carry START
+    or "chance 50" AND a rushing call). A blank column falls back to the old
+    one-cell call in decision: "rush 6.5" / "ypc 6.5" / "rush 6 ypc 6.5"."""
+    parse = parse or parse_rush
+    col = "ypc" if parse is parse_ypc else "rush"
+    path = os.path.join(DATA, f"review_{year}_wk{week:02d}.csv")
+    out = {}
+    if not os.path.exists(path):
+        return out
+    with open(path, newline="", encoding="utf-8-sig") as fh:
+        rows = list(csv.DictReader(fh))
+    for r in rows:
+        n = rush_number(r.get(col))
+        if n is None:
+            n = parse(r.get("decision"))
+        if n is None:
+            continue
+        pid = (r.get("player_id") or "").strip()
+        if not pid:
+            pid = _ids_by_name(year).get(((r.get("player") or "").strip().lower(), (r.get("team") or "").strip()))
+        if pid:
+            out[pid] = n
     return out
 
 

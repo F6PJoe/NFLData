@@ -14,7 +14,7 @@ Built 2026-10-24 so a lock is the same every time (and can be scheduled):
   4. projections, every version
   5. known-case checks                        -> stop BEFORE freezing if any fail
   6. freeze (teams already under way keep their earlier lock)
-  7. comparison workbook + gap report
+  7. comparison workbook + gap report + review workbook (team tabs)
 
 Exit code 1 at the first failure; nothing is frozen after a failed check.
 """
@@ -44,6 +44,34 @@ def step(label, *cmd, cwd=HERE, fatal=True):
             return
         print(f"\n  LOCK STOPPED at: {label}\n")
         sys.exit(1)
+
+
+def step_parallel(jobs, fatal=True):
+    """step() for several commands at once (Joe, 2026-11-01: the 7.5-minute
+    run "is not going to cut it"): the projection versions and the model-only
+    run do not depend on each other. Each run's output is printed in full when
+    all are done; REVIEW_SYNCED stops them all syncing the workbook at once
+    (main syncs it first)."""
+    import tempfile
+    env = dict(os.environ, REVIEW_SYNCED="1")
+    procs = []
+    for label, cmd in jobs:
+        fh = tempfile.TemporaryFile(mode="w+")
+        procs.append((label, subprocess.Popen(list(cmd), cwd=HERE, env=env, stdout=fh,
+                                              stderr=subprocess.STDOUT, text=True), fh))
+    bad = []
+    for label, p, fh in procs:
+        p.wait()
+        fh.seek(0)
+        print(f"\n  == {label}")
+        print(fh.read().rstrip())
+        if p.returncode != 0:
+            bad.append(label)
+    if bad and fatal:
+        print(f"\n  LOCK STOPPED at: {', '.join(bad)}\n")
+        sys.exit(1)
+    for label in bad:
+        print(f"\n  WARNING: {label} failed -- the projections ARE locked; re-run it when you can\n")
 
 
 def archive_site_projections(year, week):
@@ -104,14 +132,20 @@ def main():
     step("late-news check", py, "late_news.py", "--year", y, "--week", w)
     step("freshness check (lock rules)", py, "check_freshness.py", "--year", y, "--week", w, "--lock")
     import project
-    for name in project.VARIANTS:
-        extra = [] if name == "current" else ["--version", name]
-        step(f"projections ({name})", py, "project.py", "--year", y, "--week", w, "--live", *extra)
+    import review_book
+    if review_book.sync(args.year, args.week) is None:
+        print("\n  WARNING: the review workbook could not be read -- its newest calls are NOT in\n")
+    nocalls = os.path.join(HERE, "data", f"projections_{y}_wk{int(w):02d}_nocalls.csv")
+    step_parallel([(f"projections ({name})", [py, "project.py", "--year", y, "--week", w, "--live"]
+                    + ([] if name == "current" else ["--version", name])) for name in project.VARIANTS])
     step("known-case checks", py, "check_projections.py", "--year", y, "--week", w)
     if not args.no_freeze:
         step("freeze", py, "score_week.py", "--year", y, "--week", w, "--freeze")
-    step("comparison workbook", py, "build_comparison_xlsx.py", "--year", y, "--week", w, fatal=False)
-    step("gap report", py, "gap_report.py", "--year", y, "--week", w, fatal=False)
+    step_parallel([("model only (no calls)", [py, "project.py", "--year", y, "--week", w, "--live",
+                                              "--ignore-sheet", "--out", nocalls]),
+                   ("comparison workbook", [py, "build_comparison_xlsx.py", "--year", y, "--week", w]),
+                   ("gap report", [py, "gap_report.py", "--year", y, "--week", w])], fatal=False)
+    step("review workbook", py, "review_book.py", "--year", y, "--week", w, "--no-model-run", fatal=False)
     print("\n  " + ("TEST RUN DONE (not frozen)." if args.no_freeze else "LOCKED.") + "\n")
 
 

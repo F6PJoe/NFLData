@@ -18,7 +18,7 @@ failed or partial download can never overwrite good data):
   ff_projections/cached/sleeper/players_nfl_<date>.json
                                     Sleeper injury tags
 
-Then rebuilt: team/QB features, and play-by-play injury exits.
+Then rebuilt: team/QB features, QB kneel-downs, and play-by-play injury exits.
 
 With --week N it also re-runs the week's projections, review sheet and
 comparison workbook, so one command leaves everything current.
@@ -116,6 +116,32 @@ def refresh_sleeper():
         print(f"  FAIL  {'sleeper tags':<18} {e}  (kept existing snapshot)")
 
 
+PULLED = os.path.join(DATA, "reports_pulled.txt")
+
+
+def now_et():
+    """The time in New York (game days and the 11:30 inactives run on ET)."""
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.datetime.now(ZoneInfo("America/New_York")).replace(tzinfo=None)
+    except Exception:
+        return datetime.datetime.now()
+
+
+def mark_pulled():
+    """Record when the reports were last pulled (rerun.py reads it)."""
+    with open(PULLED, "w", encoding="utf-8") as fh:
+        fh.write(now_et().isoformat(timespec="seconds"))
+
+
+def last_pulled():
+    try:
+        with open(PULLED, encoding="utf-8") as fh:
+            return datetime.datetime.fromisoformat(fh.read().strip())
+    except (OSError, ValueError):
+        return None
+
+
 def refresh_sheet(year, week):
     """The injury/status sheet, brought fully up to date -- used by the full
     refresh AND before every lock (late_news.py), so a Friday status or a
@@ -125,6 +151,8 @@ def refresh_sheet(year, week):
     was rebuilt; False (loudly) if it could not be, e.g. open in Excel."""
     swap_csv("injury report", f"{REL}/injuries/injuries_{year}.csv",
              os.path.join(DATA, f"injuries_{year}.csv"), 50, year)
+    # nflverse runs a day behind the clubs' own pages -- bring the week up to date
+    run("team_reports.py", "--year", str(year), "--week", str(week))
     swap_csv("weekly rosters", f"{REL}/weekly_rosters/roster_weekly_{year}.csv",
              os.path.join(DATA, f"roster_{year}.csv"), 1000, year)
     refresh_sleeper()
@@ -133,6 +161,8 @@ def refresh_sheet(year, week):
     ok = run("player_log.py", "--year", str(year), "--week", str(week)) and ok
     if not ok:
         print("  !!! the status sheet was NOT fully updated -- see above")
+    else:
+        mark_pulled()
     return ok
 
 
@@ -159,6 +189,10 @@ def main():
              os.path.join(DATA, f"stats_player_week_{y}.csv"), 500, y)
     swap_csv("injury report", f"{REL}/injuries/injuries_{y}.csv",
              os.path.join(DATA, f"injuries_{y}.csv"), 50, y)
+    # CLUB PAGES (2026-10-30): nflverse had Thursday's practice and no Sunday
+    # game statuses on Friday night -- the clubs' own report pages are current
+    if args.week:
+        run("team_reports.py", "--year", str(y), "--week", str(args.week))
     # roster STATUS (ACT / RES / EXE / PUP ...): availability reads it first, and
     # it had not been refreshed since wk2 (2026-10-24: Jordan Mason still "RES"
     # after being designated to return)
@@ -177,10 +211,12 @@ def main():
 
     print()
     run("build_team_qb_features.py", "--year", str(y))
+    run("build_qb_kneels.py", "--year", str(y))      # KNEELS_OUT (2026-11-04)
     run("build_injury_exits.py", "--year", str(y))
     run("news.py", "--year", str(y))
     if not args.week:
         run("player_log.py", "--year", str(y))
+    mark_pulled()
 
     if args.week:
         print()
@@ -209,6 +245,8 @@ def main():
             subprocess.run([sys.executable, os.path.join(HERE, "check_projections.py"),
                             "--year", str(y), "--week", str(args.week), "--output-only"])
         run("gap_report.py", "--year", str(y), "--week", str(args.week))
+        # the team-tab workbook the calls are made in (2026-10-31)
+        run("review_book.py", "--year", str(y), "--week", str(args.week))
     print()
 
 

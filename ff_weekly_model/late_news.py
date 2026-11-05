@@ -18,6 +18,7 @@ Joe already has OUT is left alone. Teams that have kicked off are skipped.
 """
 
 import argparse
+import collections
 import csv
 import datetime
 import os
@@ -43,7 +44,11 @@ def official_inactives(year, week, started):
     ids = news.espn_to_gsis(year)
     sess = requests.Session()
     sess.headers["User-Agent"] = "Mozilla/5.0"
-    out, posted = {}, set()
+    # POSTED = the team has game-day INACTIVE entries (or 5+ outs -- a Friday
+    # report rarely has that many). 2026-11-01 11:31: an ESPN "Out" from the
+    # injury report marked 23 teams posted with no list up anywhere, and flagged
+    # Breece Hall (Joe: OUT) as active.
+    out, posted, n_out = {}, set(), collections.Counter()
     with open(os.path.join(DATA, "games.csv"), newline="", encoding="utf-8") as fh:
         games = [r for r in csv.DictReader(fh)
                  if r["season"] == str(year) and r["week"] == str(week) and r.get("espn")]
@@ -56,15 +61,49 @@ def official_inactives(year, week, started):
             continue
         for t in d.get("injuries", []):
             tm = t.get("team", {}).get("abbreviation", "")
+            tm = {"WSH": "WAS", "LAR": "LA"}.get(tm, tm)   # ESPN codes -> ours (2026-11-01: WAS never "posted")
             for i in t.get("injuries", []):
                 fs = ((i.get("details") or {}).get("fantasyStatus") or {}).get("abbreviation", "")
                 if fs != "INACTIVE" and i.get("status") != "Out":
                     continue
-                posted.add(tm)
+                n_out[tm] += 1
+                if fs == "INACTIVE":
+                    posted.add(tm)
                 hit = ids.get(str((i.get("athlete") or {}).get("id", "")))
                 if hit and hit[3] in ("QB", "RB", "WR", "TE"):
                     out[hit[0]] = (hit[1], hit[2])
+    posted |= {tm for tm, n in n_out.items() if n >= 5}
     return out, posted
+
+
+def out_why(tm, posted):
+    """The note for a player listed out: the game-day list, or (no list yet)
+    the injury report."""
+    return "OFFICIAL INACTIVE (game-day list)" if tm in posted else "ruled OUT (injury report)"
+
+
+def save_nfl_inactives(year, week):
+    """nfl.com/inactives, the league's own game-day list (Joe, 2026-10-30: "this
+    is supposed to be the official place"). Empty all week, and past weeks are
+    404s, so its layout is unknown -- every game-day run keeps a copy, and the
+    reader is built from the first filled one. Until then the ESPN game feed
+    above is the list we go by."""
+    import requests
+    try:
+        r = requests.get("https://www.nfl.com/inactives/",
+                         headers={"User-Agent": "Mozilla/5.0"}, timeout=30)
+        r.raise_for_status()
+    except Exception as exc:  # noqa: BLE001 -- a copy we could not take changes nothing
+        print(f"  nfl.com inactives: fetch failed ({type(exc).__name__})")
+        return
+    d = os.path.join(DATA, "nfl_inactives")
+    os.makedirs(d, exist_ok=True)
+    dest = os.path.join(d, f"{year}_wk{week:02d}_{datetime.datetime.now():%Y%m%d_%H%M}.html")
+    with open(dest, "w", encoding="utf-8") as fh:
+        fh.write(r.text)
+    empty = "check back soon" in r.text.lower()
+    print(f"  nfl.com inactives: {'nothing posted' if empty else 'LISTS POSTED'}"
+          f" -- copy saved as {os.path.basename(dest)}")
 
 
 def main():
@@ -109,6 +148,8 @@ def main():
     # (a Saturday run read 19 teams as "posted" and flagged Najee as active)
     soon = {tm for tm, k in kicks.items() if k - datetime.datetime.now() <= datetime.timedelta(hours=3)}
     posted &= soon
+    if soon - {tm for tm, k in kicks.items() if k <= datetime.datetime.now()}:
+        save_nfl_inactives(args.year, args.week)
 
     started = {tm for tm, k in score_week.kickoffs(args.year, args.week).items()
                if k <= datetime.datetime.now()}
@@ -135,7 +176,7 @@ def main():
         why = None
         st = tags.get(pid, ("", ""))[0]
         if pid in inactive:
-            why = "OFFICIAL INACTIVE (game-day list)"
+            why = out_why(r.get("team"), posted)
         elif st in GONE and prev_tags.get(pid, ("", ""))[0] not in GONE:
             why = f"Sleeper {st} ({tag_date}, new since {prev_date})"
         elif pid in fresh:
@@ -170,20 +211,22 @@ def main():
         if r is not None and (r.get("decision") or "").strip():
             continue                      # Joe's call (handled above, or already OUT)
         changed.append((nm, tm, "(blank)" if r is not None else "(not on sheet)",
-                        "OFFICIAL INACTIVE (game-day list)"))
+                        out_why(tm, posted)))
         if not args.dry_run:
             if r is None:
                 r = {k: "" for k in fields}
                 r.update(player_id=pid, player=nm, team=tm, source="late news")
                 rows.append(r)
             r["decision"] = "out"
-            r["note"] = "auto (late news): OFFICIAL INACTIVE (game-day list)"
+            r["note"] = f"auto (late news): {out_why(tm, posted)}"
     # Joe has him OUT but the official inactives are posted and he is NOT on
     # them: he is active -- flag only (this check never turns anyone on)
     active_flags = []
     for r in rows:
         pid = r.get("player_id")
-        if (r.get("decision") or "").strip().lower() == "out" and r.get("team") in posted                 and pid not in inactive and r.get("team") not in started                 and tags.get(pid, ("", ""))[0] not in GONE                 and report.get(pid, "") not in availability.BLOCKING_REPORT:
+        if (r.get("decision") or "").strip().lower() == "out" and r.get("team") in posted                 and pid not in inactive and r.get("team") not in started                 and report.get(pid, "") not in availability.BLOCKING_REPORT:
+            # the posted game-day list outranks a Sleeper tag (2026-11-01: Breece
+            # Hall tagged out by Sleeper, not on the Jets' posted inactives: active)
             # players already ruled OUT on the official report are not repeated on
             # the game-day inactives list, so their absence from it means nothing
             active_flags.append((r.get("player"), r.get("team")))

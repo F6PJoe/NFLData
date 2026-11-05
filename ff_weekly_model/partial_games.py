@@ -20,11 +20,12 @@ When he left:
 Checked against 2024-25 participation data (who was on the field for every
 play): `python partial_games.py --calibrate 2025`.
 
-NOT ADOPTED (2026-10-28): 9 versions tested against dropping the game, none
-passed Joe's rule (results in ../TESTED_SETTINGS.md, PARTIAL_GAME). The model
-instead keeps the exit game as it happened at a weight (EXIT_KEEP_W). Kept
-for the calibration: the play-by-play exit moment is exact; snap-only exits
-were half in-and-out games.
+For EVERY exit this lost the 3-season test (2026-10-28, TESTED_SETTINGS.md,
+PARTIAL_GAME): the model keeps exit games as they happened (EXIT_KEEP_W). It is
+used only for players Joe marks FULL (2026-10-29): he is vouching the player
+is healthy now, so a game he left hurt counts as the part he played healthy
+(Joe on McConkey wk1: "he got hurt essentially at half time, his usage before
+that was really good").
 """
 
 import argparse
@@ -33,9 +34,7 @@ import csv
 import os
 import statistics
 
-import sys
-HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # research/ -> ff_weekly_model
-sys.path.insert(0, HERE)
+HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(HERE, "data")
 UTIL = os.path.join(os.path.dirname(HERE), "ff_utilization", "cached", "nflverse")
 SKILL = ("RB", "WR", "TE")
