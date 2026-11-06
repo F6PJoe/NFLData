@@ -1090,3 +1090,60 @@ QB level check: published 2026 wks 3-8 QBs -0.15 vs actual (consensus -0.09; con
 -0.60 vs -0.35). Today's model on all games, projected starters: -0.35 / +0.48 / +0.40
 (2026: 17+ -0.3, 14-17 +0.6, under 14 +1.1) -- the QB rushing / style changes since then lifted
 QBs; slope 1.08 / .91 / 1.18, no steady spread fix.
+
+### MISS_TEAM_GAMES / MISS_TD (2026-11-05) -- 2 games ADOPTED, TD move off
+Joe on Purdy wk9 (21.55): "He does not play nearly as well without Evans, remove Deebo and its
+even worse"; both missed wk7 and the 2nd half of wk6. Purdy wks 1-5 with them 23.0 a game (8.4
+yds/att, 13 TD / 2 INT); wk6 2nd half + wk7 without them 9.9 a game (7.2, 1 TD / 2 INT).
+Bug-like gap: "absent" (VAC_EQ / VAC_TPRR / MISS_YPT) = played in calendar week-1 or week-2, so
+SF wk9 (bye wk8, both out wk7) had nobody missing.
+```
+MISS_TEAM_GAMES 2            ALL -.001 / .000 / -.002 (net -.003)  QB +.001/.000/-.004  ADOPTED
+MISS_TEAM_GAMES 3            ALL +.005 / -.002 / +.001  fails
+MISS_TD .5                   ALL +.003 / +.001 / .000   QB +.020 / +.016 / -.013  fails
+MISS_TEAM_GAMES 2 + TD .25   ALL .000 / .000 / -.003    QB +.010 / +.007 / -.017  (2026-only QB gain)
+```
+Wk9: Kittle 18.02 -> 16.30, CMC 21.88 -> 20.89, Purdy 21.55 -> 21.16 (254 -> 244 yds; TDs 2.46
+unchanged -- SF -10 vs LV, total 51.5, 30.8 implied). Re-test MISS_TD wks 10-12.
+
+### BYE_AWARE (2026-11-05) -- ADOPTED
+Joe: "i'm concerned that you did not find that Evans and Deebo were both out in Week 7 why did that
+happen?" The model had wk7 (its real targets); the "just went out" rule looked back by calendar
+week, so the SF wk8 bye hid Evans (fixed by MISS_TEAM_GAMES 2 above). The bye hid a newly-out
+role player (10%+ of touches) 10 / 5 / 2 times in 2024 / 25 / 26. Deebo: no snaps wk6 or wk7
+(last played wk5) -- two missed games, treated as already absorbed, as designed.
+Same blind spot found in injury_confirmed: a snap collapse is an injury exit when the report that
+week or "the next" lists him -- read as week+1, the bye after the game. BYE_AWARE = the team's
+previous GAME (and live, the Sleeper tag backs his team's last game). ALL even every season, WR
+2024 -.002 -- adopted as a correctness fix. Calendar half-life weights are unaffected (a bye
+shifts every past game equally).
+
+### K_RZ re-test (2026-11-05, Joe: Parkinson "so high"; Raridon "not replacing [Henry's]
+productivity 100%")
+Both lean on the red-zone role: Raridon 3 of NE's 14 targets inside the 10 in 2026 (21% vs 9%
+overall), Parkinson 3 of LA's 17 (18% vs 6%; 2025 10 of 57 vs 10%) -> 0.42 TDs each.
+```
+K_RZ 40 (was 20)   ALL .000 / .000 / -.001   TE +.002 / .000 / .000   WR 2026 -.002
+K_RZ 80            ALL .000 / +.001 / -.001  TE +.004 / +.001 / .000
+```
+Trusting red-zone roles less makes TEs worse (2024) -- kept 20. Raridon wk9: 5.1 targets (his
+recent ~4 beside Henry -- last 4 games Raridon 16 targets, Henry 19 -- plus ~1 of Henry's); model
+alone with Henry in 5.36, with Joe's calls 7.89 vs Henry's own 8.89. Parkinson: 6 / 6 targets in
+wks 6-7 (Adams out since wk7), DNP Wed (ribs), missed wk8 -- projected as playing (no call).
+Rams TE split (Joe: "together both don't usually do well, its maybe one of them"): 2025 both played
+8 g -- Parkinson 2.9 tgt / 6.2 pts, Higbee 3.5 / 5.1; one alone -- Parkinson 4.7 / 8.7 (7 g),
+Higbee 4.0 / 8.8 (2 g). 2026 both 6 g: Parkinson 3.2 / 3.9, Higbee 4.3 / 6.0. Wk9 projection 4.0 /
+7.31 and 4.0 / 7.00 (TDs .42 + .30 + Allen .25 vs Rams TEs 4 TDs in 8 games). League-wide check
+(current model, TEs 3+ projected targets): two-TE committees proj - actual -0.57 / -0.18 / +0.05,
+lone TEs -0.29 / -0.53 / +0.19 -- committees are NOT over-projected in general, so no rule; a
+Rams-specific pattern for Joe's calls. Roles P TE1 / H TE2 change nothing (model order already
+P first). What-if Parkinson OUT: Higbee 8.50 (4.8 tgt), Allen 5.54, Nacua 19.67.
+
+### HALF_LIFE_TGT_POS TE (2026-11-05) -- fails, off
+Joe on Higbee 8.50 (TE10): "Shouldn't the model be smart enough to know the role is not consistent
+and not give him basically his ceiling projection?" His 8.5 = Rams 37.3 projected attempts (last 3
+games 33 / 29 / 25; wks 3-5 55 / 51 / 54) x 14.3% share (recent 12.5 / 10 / 8%, + part of
+Parkinson's) + 0.39 TDs (1 TD in 8 games) with Adams and Parkinson out. Faster recency for TE
+target share: TE 2 weeks TE +.005 / +.003 / -.001 (ALL net +.001) fails; 3 weeks +.001 / +.001 /
+.000. Volatility itself does not lower an average (a Monte Carlo returns the same mean); the
+judgment on a shrinking role is Joe's Call number.

@@ -809,6 +809,31 @@ _TIER_RATIO = {}
 # 5.381 -> 5.378, 5.290 -> 5.289), 2026 worse (5.168 -> 5.169-5.176, QB
 # 6.667 -> 6.67-6.71, also via PASS_RECON). Mixed -- off.
 MISS_YPT = 0.15  # ADOPTED 2026-10-22 re-test under Joe's rule (6 together: ALL -.002/-.008/-.001)
+# WHO COUNTS AS "OUT" (2026-11-05, Joe on Purdy wk9: "He does not play nearly as
+# well without Evans, remove Deebo and its even worse"). An absent player only
+# counted (VAC_EQ / VAC_TPRR / MISS_YPT) if he played in calendar weeks
+# week-1 or week-2 -- so SF wk9 (bye wk8, Evans and Deebo out wk7) had NOBODY
+# missing. MISS_TEAM_GAMES N = played in any of his team's last N games (byes
+# skipped). None = the calendar weeks.
+# ADOPTED 2026-11-05 at 2: ALL -.001 / .000 / -.002 (net -.003), QB +.001 / .000 / -.004,
+# RB -.001 / -.001 / -.004, TE -.002 / +.002 / -.002. 3 games fails (2024 +.005).
+# Wk9 SF: Evans (out wk7 + 2nd half wk6) now counts -- Kittle 18.02 -> 16.30, CMC 21.88 ->
+# 20.89, Purdy 21.55 -> 21.16 (254 -> 244 yds).
+MISS_TEAM_GAMES = 2
+# BYE WEEKS IN THE INJURY CHECK (2026-11-05, Joe: "i'm concerned that you did not find that
+# Evans and Deebo were both out in Week 7 why did that happen?"). A snap collapse counts as
+# an injury exit when backed by the report for that week or "the next" -- read as week+1,
+# which after a bye is the bye (no report). True = the team's next GAME. None = old.
+# ADOPTED 2026-11-05: ALL even every season, WR 2024 -.002 -- a correctness fix.
+BYE_AWARE = True
+# ...and passing TDs: with receivers out, QBs ran +0.15 / +0.07 / +0.17 TDs a
+# game over projection (2024-26, <20% of targets missing; 20%+: +.17/+.05/+.41)
+# vs ~0 with everyone in. MISS_TD x the missing share of the team's passing TDs
+# go to its rushing TDs (team total unchanged). None = off.
+# TESTED 2026-11-05: .5 ALL +.003/+.001/.000 (QB +.020/+.016/-.013) fails; .25 with
+# MISS_TEAM_GAMES 2: ALL .000/.000/-.003 but QB +.010/+.007/-.017 -- a 2026-only QB gain,
+# re-test wks 10-12.
+MISS_TD = None
 # TEAM SHEET (2026-10-15, Joe: ATL is run-first whoever plays QB). Live runs
 # read data/team_adjust_<yr>_wk<NN>.csv -- team, pass_rate (47 or 0.47),
 # plays, qb_rush_share (the QB's share of the team's runs), note -- and a
@@ -1137,6 +1162,12 @@ WIND_THRESHOLD, WIND_PASS_PENALTY = 15.0, 0.026   # measured within-team
 # is now about as responsive as the signal justifies. Most of a mid-season
 # "breakout" is noise, so chasing it harder makes projections worse, not better.
 HALF_LIFE = 4.0
+# TARGET-SHARE HALF-LIFE BY POSITION (re-test 2026-11-05, Joe on Higbee: "Shouldn't the model
+# be smart enough to know the role is not consistent"). {pos: weeks} for the target share
+# only; None = HALF_LIFE for all. (2026-10-13: longer WR 6-8 flat or worse.)
+# TESTED 2026-11-05: TE 2 -> TE +.005 / +.003 / -.001 (ALL net +.001) fails; TE 3 -> TE
+# +.001 / +.001 / .000 even. Faster TE recency chases swings that mostly bounce back.
+HALF_LIFE_TGT_POS = None
 
 
 def num(v, default=0.0):
@@ -2089,23 +2120,32 @@ def first_games_back(year):
     return out
 
 
-def injury_confirmed(year, sleeper_now=None, last_week=None):
+def injury_confirmed(year, sleeper_now=None, last_week=None, last_game_of=None):
     """(gsis_id, week) pairs where a snap collapse in that week is backed by an
     injury listing: the official report for that week or the next (any game
     status or practice status), plus -- for the live week only -- a CURRENT
     Sleeper tag on his most recent game. Saquon Barkley, wk2 2026: 12 snaps
     after 71% in wk1, and Questionable (arm) since."""
     out = set()
+    tw_ = collections.defaultdict(list)          # BYE_AWARE: team -> its game weeks
+    if BYE_AWARE:
+        for (tm_, wk_) in load_games(year):
+            tw_[tm_].append(wk_)
     path = os.path.join(DATA, f"injuries_{year}.csv")
     if os.path.exists(path):
         with open(path, newline="", encoding="utf-8") as fh:
             for r in csv.DictReader(fh):
                 if (r.get("report_status") or r.get("practice_status")) and r.get("gsis_id"):
                     w = int(r["week"])
-                    out.add((r["gsis_id"], w)); out.add((r["gsis_id"], w - 1))
+                    pw = w - 1                   # "the game before this report"
+                    if BYE_AWARE:
+                        pr_ = [x for x in tw_.get(r.get("team"), ()) if x < w]
+                        if pr_:
+                            pw = max(pr_)        # ...skipping a bye
+                    out.add((r["gsis_id"], w)); out.add((r["gsis_id"], pw))
     if sleeper_now and last_week:
         for pid in sleeper_now:
-            out.add((pid, last_week))
+            out.add((pid, (last_game_of or {}).get(pid, last_week) if BYE_AWARE else last_week))
     return out
 
 
@@ -3235,7 +3275,7 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             if n_pc >= DUD_MIN_GAMES and pri_c >= DUD_MIN_SHARE_CAR:
                 sc_ = floored(sc_, pri_c)
         gw_ = _EXIT_W.get(pid)
-        ot, nt = recent_mean(st_, week, half_life, gw_)
+        ot, nt = recent_mean(st_, week, (HALF_LIFE_TGT_POS or {}).get(pos.get(pid), half_life), gw_)
         oc, nc = recent_mean(sc_, week, half_life, gw_)
         part_ = _PRE_PART.get(pid) if PRESEASON_FADE is not None else None
         if part_ and (PRESEASON_FADE_WHO == "all" or group == "no history") and (
@@ -3351,7 +3391,12 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             po = pos.get(pid)
             if pid in raw or t_ not in team_proj or po not in POSITIONS:
                 continue
-            recent = [w for w in (week - 1, week - 2)
+            if MISS_TEAM_GAMES:              # his team's last N GAMES (byes skipped)
+                tw_ = sorted((w for (tm2, w) in teams_cur if tm2 == t_ and w < week),
+                             reverse=True)[:int(MISS_TEAM_GAMES)]
+            else:
+                tw_ = (week - 1, week - 2)
+            recent = [w for w in tw_
                       if w in tgt_cur.get(pid, {}) or w in car_cur.get(pid, {})]
             if not recent:
                 continue
@@ -3403,6 +3448,14 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 rb_c[tm].append(cs)
         for tm, cl in rb_c.items():
             tot_c[tm] += rb_backup_need(cl)
+    # MISS_TD: receivers out -> some passing TDs become rushing TDs
+    if MISS_TD:
+        for tm_, m_ in miss_wr.items():
+            tp = team_proj.get(tm_)
+            if tp and m_ > 0:
+                d_ = tp["pass_td"] * MISS_TD * m_
+                tp["pass_td"] -= d_
+                tp["rush_td"] += d_
     # team-WR1s this week and the season calibration for them (TIER_CAL_K)
     tier1, tier_r = set(), None
     if TIER_CAL_K and _TIER_RATIO.get(week):
@@ -3993,7 +4046,7 @@ def main():
                 a.split(":")[0]: tuple(float(x) for x in a.split(":")[1].split("/")) for a in v.split(",") if a}
             continue
         if k in ("POS_KT_MULT", "POS_KEFF_MULT", "ROUTE_MODEL_W_POS", "DEPTH_DEMOTE", "EXIT_KEEP_W",
-                 "REC_TD_OWN_K", "POS_SPREAD"):
+                 "REC_TD_OWN_K", "POS_SPREAD", "HALF_LIFE_TGT_POS"):
             globals()[k] = None if v == "None" else {
                 a.split(":")[0]: float(a.split(":")[1]) for a in v.split(",") if a}
             continue
@@ -4049,8 +4102,19 @@ def main():
                     tags_now = set(_av.sleeper_tags(args.year)[0])
                 except Exception:
                     tags_now = None
+            lg_of = None
+            if BYE_AWARE and args.live and args.week:
+                tm_of = {}                       # his team's last GAME before this week
+                for r in cur_rows:
+                    if int(r["week"]) < args.week:
+                        tm_of[r["player_id"]] = r["team"]
+                gw_ = collections.defaultdict(list)
+                for (tm_, wk_) in games_cur:
+                    if wk_ < args.week:
+                        gw_[tm_].append(wk_)
+                lg_of = {pid: max(gw_[t]) for pid, t in tm_of.items() if gw_.get(t)}
             conf = injury_confirmed(args.year, tags_now,
-                                    (args.week - 1) if args.week else None)
+                                    (args.week - 1) if args.week else None, lg_of)
         drop_exit_weeks(tgt_cur, car_cur, load_snap_pct(args.year),
                         load_snap_pct(args.year - 1), positions=pos, confirmed=conf,
                         returning=first_games_back(args.year),
