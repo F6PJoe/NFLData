@@ -196,13 +196,14 @@ def short_key(name, team, pos=""):
 def match_prefix(entries, first_name):
     """entries: {prefix: value} from the gamebook. Pick the entry whose
     abbreviated first name prefixes this player's, longest match wins, so
-    'Br' beats 'B' for Brian. Returns None if nothing matches."""
+    'Br' beats 'B' for Brian. Returns (prefix, value), or None if nothing
+    matches."""
     best, best_len = None, -1
     low = (first_name or "").lower()
     for prefix, val in entries.items():
         p = prefix.lower()
         if low.startswith(p) and len(p) > best_len:
-            best, best_len = val, len(p)
+            best, best_len = (prefix, val), len(p)
     return best
 
 
@@ -417,6 +418,9 @@ def build(year, wmin, wmax, use_cache=False, snap_source="auto"):
     # --- gamebook snaps (timely) overlay the PFR-sourced ones (slow) -------
     # Keyed by name because gamebooks carry no player ids; the weekly roster
     # bridges short name -> gsis id.
+    # (wk, short_key, gamebook prefix) -> [(gsis_id, snap row before the
+    # gamebook overwrote it)]; resolved after pbp, see "one gamebook row".
+    gb_claims = collections.defaultdict(list)
     if snap_source in ("auto", "gsis"):
         print("  gamebook snaps...", end="", flush=True)
         gb, ok, bad = collect_gamebook_snaps(year, wmin, wmax, refresh)
@@ -451,7 +455,9 @@ def build(year, wmin, wmax, use_cache=False, snap_source="auto"):
             if hit is None:
                 ambiguous += 1
                 continue
-            n, pct = hit
+            prefix, (n, pct) = hit
+            prev = dict(snaps[(gid, wk)]) if (gid, wk) in snaps else None
+            gb_claims[(wk, key_, prefix)].append((gid, prev))
             if (gid, wk) in snaps:
                 snaps[(gid, wk)]["snaps"] = n
                 snaps[(gid, wk)]["snaps_pct"] = round(pct, 1)
@@ -540,6 +546,33 @@ def build(year, wmin, wmax, use_cache=False, snap_source="auto"):
     # --- team snap totals, for snap share ----------------------------------
     # offense_pct is already per-team, so the denominator is recoverable as
     # snaps / pct -- but snap_counts gives pct directly, so just carry it.
+
+    # --- one gamebook row, two rostered players ---------------------------
+    # The gamebook only lengthens an abbreviation when BOTH same-surname,
+    # same-position teammates appear ("Bi.Robinson" / "Br.Robinson"). When
+    # just one of them played offense it writes "B.Robinson", and that bare
+    # prefix matches both -- 2026 wk9 gave Brian Robinson (0 offensive snaps)
+    # Bijan's 51. Keep the claimant with the most pbp touches that week; the
+    # rest get back whatever snap row they had before (none, usually).
+    for (wk, _key, prefix), claimants in gb_claims.items():
+        if len(claimants) < 2:
+            continue
+        touches = {gid: stat[(gid, wk)]["rush_att"] + stat[(gid, wk)]["targets"]
+                   for gid, _ in claimants}
+        ranked = sorted(claimants, key=lambda c: -touches[c[0]])
+        if touches[ranked[0][0]] == touches[ranked[1][0]]:
+            print(f"    WARNING: wk{wk} gamebook '{prefix}.{_key[1].title()}' "
+                  f"({_key[0]}) matches {len(claimants)} players with equal "
+                  f"touches -- snaps left on all of them, check by hand")
+            continue
+        for gid, prev in ranked[1:]:
+            if prev is None:
+                snaps.pop((gid, wk), None)
+            else:
+                snaps[(gid, wk)] = prev
+            print(f"    wk{wk} gamebook '{prefix}.{_key[1].title()}' ({_key[0]}): "
+                  f"snaps kept on {gsis_name.get(ranked[0][0], ranked[0][0])}, "
+                  f"removed from {gsis_name.get(gid, gid)}")
 
     # --- merge -------------------------------------------------------------
     rows = []
