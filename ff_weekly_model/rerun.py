@@ -162,6 +162,8 @@ def main():
     run_parallel([("comparison workbook", ["build_comparison_xlsx.py", "--year", ys, "--week", ws]),
                   ("gap report", ["gap_report.py", "--year", ys, "--week", ws])])
     ok = run("review workbook", "review_book.py", "--year", ys, "--week", ws, "--no-model-run") and ok
+    # the three site rankings files, every run (Joe 2026-11-12); a failure here never fails the run
+    run("rankings files", "site_rankings_export.py", "--year", ys, "--week", ws)
     print("\n  " + ("DONE -- open " + os.path.basename(book) + " to see the new numbers."
                     if ok else "FINISHED WITH PROBLEMS -- see above.") + "\n")
     sys.exit(0 if ok else 1)
