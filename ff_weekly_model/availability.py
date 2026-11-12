@@ -234,6 +234,25 @@ def _ord(n):
     return f"{n}{'th' if 10 <= n % 100 <= 20 else {1:'st', 2:'nd', 3:'rd'}.get(n % 10, 'th')}"
 
 
+def _cut_news(year, days=21):
+    """player_id -> the team that cut him (his newest news item is a CUT, within `days`)."""
+    import datetime
+    path = os.path.join(DATA, f"news_{year}.csv")
+    if not os.path.exists(path):
+        return {}
+    since = (datetime.datetime.now() - datetime.timedelta(days=days)).strftime("%Y-%m-%d %H:%M")
+    newest = {}
+    with open(path, newline="", encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            t = set((r.get("tags") or "").split())
+            if not t & {"CUT", "SIGNED", "TRADE"}:
+                continue
+            if r["player_id"] not in newest or r["published"] > newest[r["player_id"]]["published"]:
+                newest[r["player_id"]] = r
+    return {pid: r["team"] for pid, r in newest.items()
+            if "CUT" in r["tags"].split() and r["published"] >= since}
+
+
 def build(year, week, *, candidates, depth_rank=None, review=None, positions=None):
     """candidates: {player_id: team}. -> ({pid: multiplier}, {pid: reason}).
 
@@ -305,6 +324,7 @@ def build(year, week, *, candidates, depth_rank=None, review=None, positions=Non
         return (prev[lw][0].get(pid) in BLOCKING_REPORT
                 or prev[lw][1].get(pid) in ("RES", "PUP", "EXE"))
 
+    cut_news = _cut_news(year)
     mult, reason = {}, {}
     for pid in candidates:
         st = status.get(pid)
@@ -331,6 +351,13 @@ def build(year, week, *, candidates, depth_rank=None, review=None, positions=Non
                 mult[pid] = 0.0
                 reason[pid] = f"sleeper: {tag}" + (f" ({part})" if part else "")
                 continue
+        # CUT in the news by this team in the last 3 weeks (news.py CUT tag) -- the weekly roster
+        # file can lag a Saturday cut by days (Kendre Miller NO, cut 2026-11-07, projected as the
+        # lead back on Sunday). Joe's sheet call still wins below.
+        if cut_news.get(pid) == candidates[pid]:
+            mult[pid] = 0.0
+            reason[pid] = "news: cut by his team"
+            continue
         # rotation check -- conservative on purpose. Not for a player on THIS
         # week's injury report: his empty last week was the injury, not the
         # bench (Jordan Mason MIN wk7 2026: off IR, Questionable, listed 4th

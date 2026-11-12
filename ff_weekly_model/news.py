@@ -46,7 +46,7 @@ TAG_RULES = [
     ("FULL_PRACTICE", r"\bfull practice\b|\bfull participant\b|\bpracticed fully\b|\bfully participated\b"),
     ("RETURN", r"\breturn(?:s|ing)?\b|\bactivated\b|\bcleared\b|\bback at practice\b|\bset to play\b|\bexpected to play\b"),
     ("TRADE", r"\btraded\b|\btrade\b|\bacquire[sd]?\b"),
-    ("SIGNED", r"\bsigned\b|\belevated\b|\bpromoted\b|\bclaimed\b|\bwaived\b|\breleased\b"),
+    ("SIGNED", r"\bsigned\b|\belevated\b|\bpromoted\b|\bclaimed\b"),
     ("STARTER", r"\bnamed (?:the )?starter\b|\bwill start\b|\bto start\b|\bgets? the start\b|\bstarting (?:qb|quarterback|rb|running back|role)\b|\bqb1\b"),
     ("BENCHED", r"\bbenched\b|\bdemoted\b|\breduced role\b|\bsnap count\b|\bpitch count\b"),
 ]
@@ -63,6 +63,20 @@ def tags_for(text):
     return tags
 
 
+CUT_VERB = r"(?:cuts?|cutting|waive[sd]?|waiving|release[sd]?|releasing)"
+
+
+def is_cut(headline, last):
+    """True if the headline says THIS player was cut / waived / released: the verb within a few
+    words before his name, or right after it. 2026-11-07: "Saints activate WR Jordyn Tyson, LT
+    Kelvin Banks, cut RB Kendre Miller" was tagged IR RETURN for Miller and he stayed projected
+    as the Saints' lead back (Joe: "it should have been caught by the code")."""
+    h = (headline or "").lower()
+    ln = re.escape(last)
+    return bool(re.search(rf"\b{CUT_VERB}\s+(?:[\w.'-]+\s+){{0,4}}{ln}\b", h)
+                or re.search(rf"\b{ln}\b(?:\s+[\w.'-]+){{0,2}}\s+(?:cut|waived|released)\b", h))
+
+
 def tags_about(headline, description, last):
     """Tags for ONE player. A multi-item headline ("Week 6 inactives: Williams
     to play; Hurts, Jackson ruled out") is split on ';' and only the clause
@@ -70,6 +84,8 @@ def tags_about(headline, description, last):
     h = headline or ""
     if last not in h.lower():
         return []
+    if is_cut(h, last):
+        return ["CUT"]          # nothing else in a multi-player headline is about him
     if ";" in h:
         clause = next((c for c in h.split(";") if last in c.lower()), h)
         return tags_for(clause.split(":")[-1])

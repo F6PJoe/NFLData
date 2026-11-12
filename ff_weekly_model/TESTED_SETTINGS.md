@@ -1244,3 +1244,8 @@ CHANGED_KT_POS (less weight on a new-team player's old-team share): TE .1 +.001/
 +.010); TE .5 FAILS; TE/WR/RB .1 FAILS +.010 (WR +.009/+.005/+.012). Old-team history HELPS -- Likely is the
 exception, not the rule. Backup-TE-on-starter's-return = ABSENT_GAME_W (tested 10-29: WR/TE .5 net +.004, worse).
 TE 2x (POS_KT_MULT TE 2.0) ADOPTED 2026-11-12 (Joe: 'i'm good with that test'); re-test wks 10-12.
+
+## CUT NEWS (2026-11-12, Joe: the Kendre Miller cut 'should have been caught by the code')
+news.py: CUT tag when cut/waive/release sits next to THIS player's name (multi-player headlines no longer
+share tags; waived/released no longer SIGNED). availability: newest roster-move item a CUT by his current
+team in the last 21 days -> removed ('news: cut by his team'); Joe's sheet call wins. Backtest unchanged.
