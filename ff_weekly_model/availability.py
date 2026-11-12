@@ -247,6 +247,22 @@ def _ord(n):
     return f"{n}{'th' if 10 <= n % 100 <= 20 else {1:'st', 2:'nd', 3:'rd'}.get(n % 10, 'th')}"
 
 
+def _signed_news(year, days=6):
+    """player_ids whose newest roster-move news item (last `days` days) is a signing / elevation."""
+    import datetime
+    path = os.path.join(DATA, f"news_{year}.csv")
+    if not os.path.exists(path):
+        return set()
+    since = (datetime.datetime.now() - datetime.timedelta(days=days)).strftime("%Y-%m-%d %H:%M")
+    newest = {}
+    with open(path, newline="", encoding="utf-8") as fh:
+        for r in csv.DictReader(fh):
+            if set((r.get("tags") or "").split()) & {"CUT", "SIGNED"}:
+                if r["player_id"] not in newest or r["published"] > newest[r["player_id"]]["published"]:
+                    newest[r["player_id"]] = r
+    return {pid for pid, r in newest.items() if "SIGNED" in r["tags"].split() and r["published"] >= since}
+
+
 def _cut_news(year, days=21):
     """player_id -> the team that cut him (his newest news item is a CUT, within `days`)."""
     import datetime
@@ -277,6 +293,7 @@ def build(year, week, *, candidates, depth_rank=None, review=None, positions=Non
     """
     status = _roster_status(year, week)
     roster_team = _roster_team(year, week)
+    signed_news = _signed_news(year)
     report = _injury_report(year, week)
     dtr = _designated_return(year, week)
 
@@ -311,6 +328,11 @@ def build(year, week, *, candidates, depth_rank=None, review=None, positions=Non
         # is likely to repeat (Elijah Mitchell PHI wk9 2026, 57% of the snaps in wk8; Khalil
         # Herbert ATL). Joe 2026-11-12. Out / Doubtful / Sleeper tags below still remove him.
         if st == "DEV" and snaps.get(candidates[pid], {}).get(pid, 0) > 0:
+            st = None
+        # ...or the news says he was signed / elevated / promoted in the last 6 days (a first call-up,
+        # before he has any snaps -- Joe 2026-11-12: "it won't catch practice squad players if they
+        # are activated before then")
+        if st == "DEV" and pid in signed_news:
             st = None
             if tag == "IR":   # Sleeper's IR tag is the same roster status
                 tag = ""

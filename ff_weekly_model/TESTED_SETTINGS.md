@@ -1257,3 +1257,4 @@ team in the last 21 days -> removed ('news: cut by his team'); Joe's sheet call 
 - Practice squad (DEV) + offensive snaps in his team's last game = treated as available (repeat elevation:
   Mitchell PHI, Herbert ATL). Out / Doubtful / Sleeper tags still remove him.
 Live-only; backtest unchanged.
+- Practice squad + newest roster-move news is a signing/elevation in the last 6 days = available (first call-up, no snaps yet). Joe 2026-11-12.
