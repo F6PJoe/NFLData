@@ -66,6 +66,19 @@ def _roster_status(year, week=None):
     return {p: s for p, (s, _) in out.items()}
 
 
+def _roster_team(year, week=None):
+    """pid -> team of his latest roster row at or before `week`."""
+    path = os.path.join(DATA, f"roster_{year}.csv")
+    out = {}
+    if os.path.exists(path):
+        with open(path, newline="", encoding="utf-8") as fh:
+            for r in csv.DictReader(fh):
+                pid, wk = r.get("gsis_id"), int(r.get("week") or 0)
+                if pid and (week is None or wk <= week) and wk >= out.get(pid, ("", -1))[1]:
+                    out[pid] = (r.get("team", ""), wk)
+    return {p: t for p, (t, _) in out.items()}
+
+
 def _designated_return(year, week):
     """Players whose latest roster row at or before `week` is reserve,
     designated for return (status_description_abbr R48)."""
@@ -263,6 +276,7 @@ def build(year, week, *, candidates, depth_rank=None, review=None, positions=Non
     carries once Rico Dowdle was ruled out.
     """
     status = _roster_status(year, week)
+    roster_team = _roster_team(year, week)
     report = _injury_report(year, week)
     dtr = _designated_return(year, week)
 
@@ -288,6 +302,15 @@ def build(year, week, *, candidates, depth_rank=None, review=None, positions=Non
         rep = report.get(pid, "")
         tag = "" if rep else tags.get(pid, ("", ""))[0]
         if st and st not in PLAYABLE_STATUS and off_reserve(pid):
+            st = None
+        # a roster row from ANOTHER team is stale: he has moved since (Kendre Miller: "CUT" by NO,
+        # then signed by DAL -- 2026-11-12, Joe: "it needs to ... know if they were picked up again")
+        if st and st not in PLAYABLE_STATUS and roster_team.get(pid) and roster_team[pid] != candidates[pid]:
+            st = None
+        # PRACTICE SQUAD but he played offense in his team's last game = a game-day elevation that
+        # is likely to repeat (Elijah Mitchell PHI wk9 2026, 57% of the snaps in wk8; Khalil
+        # Herbert ATL). Joe 2026-11-12. Out / Doubtful / Sleeper tags below still remove him.
+        if st == "DEV" and snaps.get(candidates[pid], {}).get(pid, 0) > 0:
             st = None
             if tag == "IR":   # Sleeper's IR tag is the same roster status
                 tag = ""

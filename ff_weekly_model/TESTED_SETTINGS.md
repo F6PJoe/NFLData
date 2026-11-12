@@ -1249,3 +1249,11 @@ TE 2x (POS_KT_MULT TE 2.0) ADOPTED 2026-11-12 (Joe: 'i'm good with that test'); 
 news.py: CUT tag when cut/waive/release sits next to THIS player's name (multi-player headlines no longer
 share tags; waived/released no longer SIGNED). availability: newest roster-move item a CUT by his current
 team in the last 21 days -> removed ('news: cut by his team'); Joe's sheet call wins. Backtest unchanged.
+
+## RE-SIGNED / PRACTICE-SQUAD PLAYERS (2026-11-12, Joe: "know if they were picked up again"; Mitchell)
+- Sleeper's team (matched by name + position among this season's players) moves a player within hours of a
+  signing or trade; the team-moves file still wins. Kendre Miller NO -> DAL.
+- A not-playable roster row from ANOTHER team is ignored as stale (his "CUT" by NO).
+- Practice squad (DEV) + offensive snaps in his team's last game = treated as available (repeat elevation:
+  Mitchell PHI, Herbert ATL). Out / Doubtful / Sleeper tags still remove him.
+Live-only; backtest unchanged.

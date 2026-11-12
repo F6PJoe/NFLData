@@ -4369,6 +4369,35 @@ def main():
                 print(f"  team change: {mv['player']} {active.get(mv['player_id'], '-')} -> "
                       f"{mv['to_team']} (team-moves file)")
             active[mv["player_id"]] = mv["to_team"]
+        # ...and SLEEPER's team for anyone who has played this season: it catches a signing or
+        # trade within hours, before the depth chart / roster file (Kendre Miller, cut by NO
+        # 2026-11-07, DAL by the 11th -- Joe 2026-11-12). The team-moves file (Joe's word) wins.
+        try:
+            import availability as _av
+            _moved = {mv["player_id"] for mv in load_team_moves(args.year, args.week)}
+            _fix = {"LAR": "LA", "JAC": "JAX", "WSH": "WAS", "OAK": "LV"}
+            _teams = {tm for (tm, _w) in games_cur}
+            # by name + position among this season's players (Sleeper's gsis_id is mostly blank,
+            # and a just-cut player is on no depth chart to match through)
+            _byname = collections.defaultdict(set)
+            for r_ in cur_rows:
+                if r_["position"] in ALL_POSITIONS and r_["player_id"] in played:
+                    _byname[(_av.norm_name(r_["player_display_name"]), r_["position"])].add(r_["player_id"])
+            _blob, _ = _av._sleeper_blob()
+            for v_ in (_blob or {}).values():
+                if not isinstance(v_, dict) or not v_.get("team"):
+                    continue
+                nm_ = f"{v_.get('first_name', '')} {v_.get('last_name', '')}".strip()
+                ids_ = _byname.get((_av.norm_name(nm_), v_.get("position")), ())
+                if len(ids_) != 1:
+                    continue
+                pid_ = next(iter(ids_))
+                t_ = _fix.get(v_["team"], v_["team"])
+                if pid_ not in _moved and t_ in _teams and active.get(pid_) != t_:
+                    print(f"  team change: {nm_} {active.get(pid_, '-')} -> {t_} (Sleeper)")
+                    active[pid_] = t_
+        except Exception as e_:
+            print(f"  Sleeper team check skipped ({type(e_).__name__}: {e_})")
         # BYE WEEKS: only teams with a game this week. Without this the bye teams
         # were projected anyway (wk5 2026 CAR, KC; wk6 CIN, DET, MIA, MIN).
         playing = {tm for (tm, wk_) in games_cur if wk_ == args.week}
