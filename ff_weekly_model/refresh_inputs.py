@@ -216,6 +216,12 @@ def main():
     run("news.py", "--year", str(y))
     if not args.week:
         run("player_log.py", "--year", str(y))
+    if args.week:              # newest site-projections scrape -> local consensus copy (Joe 2026-11-07)
+        try:
+            import lock
+            lock.archive_site_projections(y, args.week)
+        except Exception as e:
+            print(f"  consensus not updated ({type(e).__name__}: {e})")
     mark_pulled()
 
     if args.week:

@@ -179,7 +179,10 @@ def main():
             why = out_why(r.get("team"), posted)
         elif st in GONE and prev_tags.get(pid, ("", ""))[0] not in GONE:
             why = f"Sleeper {st} ({tag_date}, new since {prev_date})"
-        elif pid in fresh:
+        elif pid in fresh and d != "start":
+            # (2026-11-05: "Vikings to start QB Carson Wentz ... with Kyler Murray
+            # ruled out" is tagged OUT for Murray -- news never overrides Joe's
+            # START; only the official inactive list or a new Sleeper Out does)
             n = fresh[pid]
             why = f"news {n['published'][5:16]}: {n['headline'][:70]}"
         if why:

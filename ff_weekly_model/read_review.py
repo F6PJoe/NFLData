@@ -98,7 +98,8 @@ def parse_only(raw):
     if not m:
         return None
     p = int(m.group(1) or m.group(2))
-    return p / 100 if 0 < p <= 100 else None
+    # up to 150 (2026-11-11, Fannin "110 only": a boost -- undo a cut on his own line, teammates as they are)
+    return p / 100 if 0 < p <= 150 else None
 
 
 RUSH_RE = re.compile(r"(?:rush(?:es)?\s*(\d{1,2}(?:\.\d)?))?\s*(?:ypc\s*(\d{1,2}(?:\.\d{1,2})?))?")

@@ -15,6 +15,7 @@ Settings that were tested and then removed from project.py are documented in
 | sweep_workhorse.py | whether a stubborn prior helps established workhorses early | workhorse returns now handled by RETURN_STAR_* |
 | analyze_snaps.py / test_snap_weighting.py | snap share vs touch share; how to count partial games | starting point for partial-game counting |
 | neutral.py | neutral-situation pass rate per team-game | not adopted |
+| rank_check.py | Joe's published RANKINGS vs the model (as published + today's) as rankings, against actual finishes; who wins the 5+ spot disagreements (2026-11-05) | wks 4-8: QB/RB/WR even, TE rankings ahead; big gaps RB model 21-15, WR 52-47, QB rankings 11-7, TE rankings 13-6 |
 | scoreboard_vs_sources.py | our PUBLISHED finals vs every source, same player-weeks, by position and tier (2026-11-05) | wks 3-8: WR mid-pack (field within 0.1), TE ~0.13 behind |
 | who_is_right.py / gap_parts.py / gap_count.py | 2026: when we're far from consensus who was right; which part of the gap (volume / efficiency / TD) holds up; big-gap counts per variant (2026-11-04) | usage in each docstring; DUMPS = folder of backtest dumps |
 | qb_run_types.py / qb_run_types_followup.py | QB carries split into designed runs, scrambles, kneels: stability, game script, injury, forecast (2026-11-04) | not built -- splitting didn't help the forecast; kneels did (TESTED_SETTINGS.md) |

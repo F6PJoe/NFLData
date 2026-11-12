@@ -6,7 +6,7 @@
 
 Joe, 2026-10-31: make the calls on the team tabs of "F6P Week N Review.xlsx",
 save and close it, then rerun ("Rerun projections.bat" runs this):
-  0. FRESH REPORTS (Joe, 2026-11-01: "if reruns are on a new day, we should
+  0. FRESH REPORTS + CONSENSUS (Joe, 2026-11-01: "if reruns are on a new day, we should
      pull fresh reports, and then again for sure after 11:30 AM ET on game
      day"). The first rerun of a day runs the daily refresh (stats, injury
      report, rosters, depth charts, lines, Sleeper, news) and rebuilds the
@@ -15,6 +15,8 @@ save and close it, then rerun ("Rerun projections.bat" runs this):
      inactives + late news -- only ever switches a player OFF) and refreshes
      the lines. The refresh, the late-news check and the lock all record when
      they pulled (data/reports_pulled.txt), so nothing is pulled twice.
+     Each of those pulls also copies the newest site-projections scrape (CI)
+     into the local consensus archive (Joe, 2026-11-07).
   1. the workbook's calls are copied into the sheet (review_book.sync)
   2. projections, every version
   3. output checks
@@ -137,6 +139,16 @@ def main():
             ok = run("late news + inactives", "late_news.py", "--year", ys, "--week", ws) and ok
         else:
             ok = refresh_inputs.refresh_sheet(y, w) and ok
+        # CONSENSUS (Joe 2026-11-07: "if it is the first time we are working on things that day then it
+        # needs to update consensus for the local copy"). The sites are scraped by CI several times a
+        # day, but the local archive only moved at a lock -- wk9 compared against Tuesday's copy all
+        # week (Lock / Wentz / Milton / Sanders at ~1 pt). Benchmark only; never a model input.
+        try:
+            import lock
+            if not lock.archive_site_projections(y, w):
+                print("  WARN  consensus            not updated -- comparisons use the older copy")
+        except Exception as e:
+            print(f"  WARN  consensus            not updated ({type(e).__name__}: {e})")
         refresh_inputs.mark_pulled()
         print()
     if kind and review_book.sync(y, w) is None:     # the late-news check may have edited the sheet

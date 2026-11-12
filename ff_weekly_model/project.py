@@ -215,7 +215,7 @@ RZ_HIST_W = 0.5
 # same pattern -- a lighter prior is no better LATE in the season either
 # (n is the game count, so this season's weight already grows: 57% of the
 # target share at 6 games, 74% at 13). RBs a hair better lighter (<0.005).
-POS_KT_MULT = {"WR": 1.5, "TE": 1.5, "RB": 1.5}   # 1.5 with PRESEASON_W, 2026-10-13
+POS_KT_MULT = {"WR": 1.5, "TE": 2.0, "RB": 1.5}   # 1.5 with PRESEASON_W, 2026-10-13; TE 2.0 ADOPTED 2026-11-12 (Joe): ALL .000/.000/-.001, TE +.002/+.002/-.008 -- a 2026 signal, RE-TEST wks 10-12
 POS_KEFF_MULT = {"TE": 0.5, "WR": 0.5}
 # ROUTE PARTICIPATION (fl_routes.py, 2026-10-01): the same rescale as the snap
 # version, but by ROUTE % -- the share of dropbacks a player actually ran a
@@ -536,6 +536,14 @@ GS_RUSH_ID = None
 # 5.357, better at every position; 50%+ hurts TEs (a TE3 is a blocker), and no
 # per-position mix beat a flat 25%.
 VAC_EQ = 0.25
+# Per-position override of VAC_EQ for the ABSENT player's position (2026-11-11, Joe on the Rams wk10:
+# "both Rams TE in the top 10 is waaay too high" -- Puka out, his targets went 43% to the TEs). 2023-26,
+# 157 team-games a 15%+ WR missed: remaining WRs gained 1.76x their proportional share of his targets,
+# TEs 1.06x, RBs 0.56x. {} = VAC_EQ everywhere.
+VAC_EQ_POS = {}
+# A player on a NEW team: extra multiplier on his target-share prior weight, by position (2026-11-12,
+# Joe on Likely: "we should 100% not be looking at his Ravens usage as much"). {} = off.
+CHANGED_KT_POS = {}
 # Vacated TARGETS to the best target-earners (2026-10-13, Joe: when a stud WR
 # is out, the elite target-getter left should absorb the most). This fraction
 # of an absent player's target share goes to his remaining teammates by
@@ -562,6 +570,11 @@ ELITE_MIN_ROUTES = 150
 ELITE_MIN_RP = 0.6
 ELITE_POS = ("WR",)
 ELITE_EFF_PRIOR_W = 1.0
+# ELITE RULE FADES WITH GAMES (2026-11-11, Joe on Metcalf, 8 games at 5.9 yds/tgt: "he is no longer
+# on a cold stretch"). (g0, g1): the elite prior weight fades linearly from ELITE_EFF_PRIOR_W at g0
+# games this season to EFF_PRIOR_WEIGHT at g1 -- half a season of form is his level, not a stretch.
+# None = off (the elite weight all season).
+ELITE_FADE = None
 # PRESEASON PROJECTIONS as a starting point (preseason.py, 2026-10-13, Joe:
 # "we had consensus projections, ranks, depth chart data available to us just
 # like they did"). Each player's preseason projected targets / carries, as a
@@ -1142,6 +1155,10 @@ CARRY_TRIM_TD = True
 # +.001 / -.001 / -.006 (net -.006; WR +.003/-.003/-.015). TE trims fail.
 TGT_TRIM = {"WR": (0.6, 9.0)}
 TGT_TRIM_REST = 0.0
+# PROVEN ALPHAS skip the trim (2026-11-12, Joe: "way lower on top tier WR projections"; Puka projected
+# 11.0 vs 14.0 actual, Lamb 9.3 vs 13.0 wks 3-9). (min games, min targets a game THIS season): a WR
+# already averaging that many keeps his full projection. None = everyone trimmed.
+TGT_TRIM_EXEMPT = None
 QB_PASS_TD_HIST_W = 1.0   # TESTED 2026-11-03: 0.5/0.25/0 all worse in 2026; TESTED_SETTINGS.md
 K_RB_RUSH_TD = 150.0   # carries; fit 150-300 flat, 150 best calibrated
 QB_RUSH_TD_MIN_SEASONS = 2   # qualifying SEASONS, not weeks -- picks out Allen and Hurts
@@ -2218,7 +2235,13 @@ def keep_exit_games(tgt, car, exits, pos):
     return dict(out)
 
 
-def qb_shares_by_week(rows, teams):
+# (QB, week) -> the team he played for that week. A starter TRADED in (Cousins LV -> MIN, wk10
+# 2026) started his weeks for another team; his new backups must not be judged on those weeks --
+# Kyler was MIN's starter then, so he kept 21% of the attempts behind Cousins' START.
+_QB_TEAM_WK = {}
+
+
+def qb_shares_by_week(rows, teams, record_team=False):
     """QB -> {week: (share of team pass attempts, share of team QB carries)}.
 
     Quarterback usage is close to binary -- a healthy starter takes essentially
@@ -2226,10 +2249,14 @@ def qb_shares_by_week(rows, teams):
     availability layer does the rest when he is not.
     """
     patt, ratt = collections.defaultdict(dict), collections.defaultdict(dict)
+    if record_team:
+        _QB_TEAM_WK.clear()
     for r in rows:
         if r["position"] != "QB":
             continue
         wk, tm = int(r["week"]), r["team"]
+        if record_team:
+            _QB_TEAM_WK[(r["player_id"], wk)] = tm
         t = teams.get((tm, wk))
         if not t:
             continue
@@ -3215,6 +3242,8 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         past_t = [v for w, v in tgt_cur.get(pid, {}).items() if w < week]
         past_c = [v for w, v in car_cur.get(pid, {}).items() if w < week]
         kt = _k_tgt(group) * POS_KT_MULT.get(pos.get(pid), 1.0)
+        if group == "changed team" and CHANGED_KT_POS:
+            kt *= CHANGED_KT_POS.get(pos.get(pid), 1.0)
         kc = _k_car(group) * POS_KT_MULT.get((pos.get(pid), "car"), 1.0)
         # availability scales the share BEFORE normalisation, so a removed
         # player's touches are handed to his teammates rather than vanishing
@@ -3389,7 +3418,10 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         vac = collections.defaultdict(float)          # (tm, pos, kind) -> share
         for pid, t_ in team_of.items():
             po = pos.get(pid)
-            if pid in raw or t_ not in team_proj or po not in POSITIONS:
+            # a player TRADED away (Downs / Allen IND -> KC / SF, wk10 2026) is in this week's pool,
+            # but for his NEW team -- to his old team he is gone, so his share is vacated there too
+            # (before: skipped, and plain normalisation handed most of it to Tyler Warren)
+            if (pid in raw and raw[pid][0] == t_) or t_ not in team_proj or po not in POSITIONS:
                 continue
             if MISS_TEAM_GAMES:              # his team's last N GAMES (byes skipped)
                 tw_ = sorted((w for (tm2, w) in teams_cur if tm2 == t_ and w < week),
@@ -3416,7 +3448,10 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             who = mates.get((tm, po), [])
             if not who or v <= 0:
                 continue
-            bump = VAC_EQ * v / len(who)
+            # "RB.t" / "RB.c" = that position's targets / carries only (2026-11-12: fill-in lead backs
+            # 2.2 projected targets vs 3.2 actual 2024, 2.1 / 2.7 2025, 2.2 / 2.4 2026)
+            _vp = VAC_EQ_POS or {}
+            bump = _vp.get(f"{po}.{kind}", _vp.get(po, VAC_EQ)) * v / len(who)
             for pid in who:
                 t0, ts0, cs0 = raw[pid]
                 raw[pid] = (t0, ts0 + (bump if kind == "t" else 0.0),
@@ -3519,9 +3554,10 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                     # when the starter returns -- Wentz started both games
                     # Kyler missed and was still holding 14% of Minnesota's
                     # attempts for week 3.
-                    pp = [qb_patt.get(pid, {}).get(w, 0.0) for w in starter_keep]
-                    pr = [qb_ratt.get(pid, {}).get(w, 0.0) for w in starter_keep]
-                    gp = len(starter_keep)
+                    sk_ = [w for w in starter_keep if _QB_TEAM_WK.get((lst[0][1], w), tm) == tm]
+                    pp = [qb_patt.get(pid, {}).get(w, 0.0) for w in sk_]
+                    pr = [qb_ratt.get(pid, {}).get(w, 0.0) for w in sk_]
+                    gp = len(sk_)
                 if i == 0 and QB1_SKIP_MISSED:
                     # This week's STARTER is judged only on games he actually
                     # started and stayed in. Dividing by team games (right for
@@ -3770,8 +3806,15 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 e["ypc"] = (1 - TEAM_YPC_W) * e["ypc"] + TEAM_YPC_W * t_ypc
         if ROOKIE_KEFF_MULT is not None and pos[pid] in ROOKIE_KEFF_POS and 0 not in (player_eff.get(pid) or {}):
             km *= ROOKIE_KEFF_MULT
+        pw_ = None
+        if pid in elite_now:
+            pw_ = ELITE_EFF_PRIOR_W
+            if ELITE_FADE:
+                g_ = sum(1 for w_ in (player_eff.get(pid) or {}) if 0 < w_ < week)
+                f_ = min(max((g_ - ELITE_FADE[0]) / max(ELITE_FADE[1] - ELITE_FADE[0], 1e-9), 0.0), 1.0)
+                pw_ = pw_ + f_ * (EFF_PRIOR_WEIGHT - pw_)
         e = blended_rates(player_eff.get(pid), week, e, K_EFF_TGT * km, K_EFF_CAR * km,
-                          prior_w=ELITE_EFF_PRIOR_W if pid in elite_now else None)
+                          prior_w=pw_)
         if tm in backup_teams:
             e = dict(e)
             e["ypt"] *= BACKUP_EFF_MULT; e["catch"] *= BACKUP_CATCH_MULT
@@ -3834,6 +3877,10 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 t_ = out[pid]["targets"]
                 if not k_at or t_ <= k_at[1]:
                     continue
+                if TGT_TRIM_EXEMPT:
+                    gw_ = [c_.get("tgt", 0.0) for w_, c_ in (player_eff.get(pid) or {}).items() if 0 < w_ < week]
+                    if len(gw_) >= TGT_TRIM_EXEMPT[0] and sum(gw_) / len(gw_) >= TGT_TRIM_EXEMPT[1]:
+                        continue
                 cut = (t_ - k_at[1]) * (1 - k_at[0])
                 rest = [q for q in ps_ if q != pid and out[q]["targets"] > 0]
                 pool = sum(out[q]["targets"] for q in rest)
@@ -4046,7 +4093,7 @@ def main():
                 a.split(":")[0]: tuple(float(x) for x in a.split(":")[1].split("/")) for a in v.split(",") if a}
             continue
         if k in ("POS_KT_MULT", "POS_KEFF_MULT", "ROUTE_MODEL_W_POS", "DEPTH_DEMOTE", "EXIT_KEEP_W",
-                 "REC_TD_OWN_K", "POS_SPREAD", "HALF_LIFE_TGT_POS"):
+                 "REC_TD_OWN_K", "POS_SPREAD", "HALF_LIFE_TGT_POS", "VAC_EQ_POS", "CHANGED_KT_POS"):
             globals()[k] = None if v == "None" else {
                 a.split(":")[0]: float(a.split(":")[1]) for a in v.split(",") if a}
             continue
@@ -4214,7 +4261,7 @@ def main():
                                                     args.week if args.live else None))
 
     # --- quarterback layer
-    qb_patt, qb_ratt = qb_shares_by_week(cur_rows, teams_cur)
+    qb_patt, qb_ratt = qb_shares_by_week(cur_rows, teams_cur, record_team=True)
     qb_patt_p, qb_ratt_p = qb_shares_by_week(prev_rows, teams_prev)
     qb_eff = qb_efficiency_means(prev_rows)
     # (QB priors are no longer built here: the starter is decided inside

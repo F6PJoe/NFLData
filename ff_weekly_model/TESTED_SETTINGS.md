@@ -1147,3 +1147,100 @@ Parkinson's) + 0.39 TDs (1 TD in 8 games) with Adams and Parkinson out. Faster r
 target share: TE 2 weeks TE +.005 / +.003 / -.001 (ALL net +.001) fails; 3 weeks +.001 / +.001 /
 .000. Volatility itself does not lower an average (a Monte Carlo returns the same mean); the
 judgment on a shrinking role is Joe's Call number.
+
+### Model vs Joe's published RANKINGS (2026-11-05, research/rank_check.py)
+Joe: "the model and the rankings are waaaaay off in quite a few spots ... Ideally these projections
+become my rankings in the future too so they need to be really really good." Wks 4-8, Joe's
+published top N (QB 24 / RB 36 / WR 48 / TE 24) who played; rank correlation with actual finish:
+QB rankings .455 / model as published .444 / today's model .461; RB .462 / .475 / .456; WR .305 /
+.291 / .325; TE .278 / .226 / .250. 5+ spot disagreements, whose rank was closer: RB model 21 vs
+15; WR 52 vs 47; QB rankings 11 vs 7 (Darnold in 6 of 19 -- model higher every time; Bryce Young
+model low twice); TE rankings 13 vs 6 (model high on low-tier TEs: Gadsden, Ferguson, Andrews,
+Barner, Otton). Small samples (5 weeks).
+
+## PLAY-CALLER PASS TENDENCY (study, 2026-11-08 -- not built)
+Joe: when a play-caller changes teams, blend the team's last-season pass rate with the caller's rate
+elsewhere (same QB, no big roster change). playcallers.csv (ESPN preseason guides 2023-26, 128 rows;
+mid-season changes still to fill) + research/playcaller_proe.py (pass rate and PROE from nflverse xpass).
+Predicting 2024-26 team-season pass rate from last season, mean abs error (pass-rate pts):
+  caller moved teams, his last season known (n=14): team-only 4.68, +25% caller 4.55, 50% 4.64, caller-only 5.63
+    same QB (7): team-only best 4.40; new QB (7): 50% best 4.45 (vs 4.95) -- opposite of the hypothesis, n tiny
+  PROE year to year: same caller r=.46; caller changed: team's old PROE r=-.39, caller's old PROE r=.10
+  model-style prior (w x team last + (1-w) x league): same caller w=.5 2.99 (best); changed caller w=.5 2.74,
+    w=.25 2.76 -- today's 50/50 TEAM_PRIOR_W_RATE is already right for both groups
+Verdict: a caller's tendency on another roster barely carries (r=.10); nothing to build yet. Revisit with
+2018-22 caller lists (more moves) -- 18 new callers in 2026 alone. Preseason only; k=8 takes over in season.
+EXTENDED 2026-11-08 (Joe OK'd pbp 2016-20 download; playcallers.csv now 2016-26, 380 rows incl. 27 mid-season
+changes, 65 UNVERIFIED): test 2017-26, weeks credited to whoever called them, opening caller scored on his weeks.
+  caller new to team w/ 8+ game history elsewhere (n=53): CALLER's last PROE vs new team's PROE r=-0.00
+    (verified-only n=48: .04); TEAM's last PROE r=.46 even with the new caller (same caller r=.53)
+  model 50/50 team+league prior: 2.85 MAE; + caller shift .25 2.90, .5 3.37, 1.0 4.65 (worse every step)
+    new QB only (24): 2.99 -> 2.88 at .25 (verified 3.11 -> 3.05) -- tiny, not worth a rule
+  w x team + (1-w) x league: .5 best overall (3.13), .25-.5 tied for new callers -- current TEAM_PRIOR_W_RATE stands
+Verdict: REJECTED. A team's pass tendency follows the team (roster, QB, front office), not the play-caller.
+
+## TE SLOWER SHARES (2026-11-10, Joe: "lets test whatever we have to for TE"; baseline re-saved with wk9)
+Why: wks 3-9 our TE departures from consensus were right only 40% (1-2 pts) / 29% (2-3 pts); bias even
+(+.26 vs +.21). TE miss vs consensus is spread evenly: targets RMSE 2.61 vs 2.50, rec 2.20/2.14, yds 27.3/26.8,
+TD .52/.51 -- it's WHICH TEs get the targets.
+ALL / TE change vs baseline 5.366/5.260/5.140 (TE 4.055/4.305/4.276):
+  POS_KT_MULT TE 2      ALL .000/.000/-.001  TE +.002/+.002/-.008   cleanest; 2026 TE better wks 2-4,6-9, worse wk5
+  POS_KT_MULT TE 2.5    ALL .000/+.001/-.003 TE +.004/+.005/-.014
+  POS_KT_MULT TE 4      ALL +.001/+.002/-.004 TE +.010/+.014/-.021
+  POS_KT_MULT TE 1      ALL .000/.000/+.003 TE .000/-.002/+.014  FAILS
+  ROUTE_MODEL_W_POS TE 0  ALL -.001/+.001/-.001 TE -.002/+.008/-.008
+  HALF_LIFE_TGT_POS TE 8  ALL .000/.000/-.001 TE .000/.000/-.003
+  POS_KEFF_MULT TE .75  ALL even, TE +.002/.000/-.002
+  TE 2.5 + route 0      ALL -.001/+.003/-.004 TE +.002/+.015/-.025
+  TE 2.5 + half-life 8  ALL .000/+.001/-.003 TE +.004/+.006/-.016
+Pattern: slower TE shares help 2026, hurt 2024-25 TE -- a 2026-only signal (re-test wks 10-12). Moves a TE
+0.1-0.3 pts a week; far smaller than the ~0.14 pts/player-week gap to consensus. Not the main lever.
+
+## TRADE FIXES (2026-11-10, wk10 trades: Cousins LV->MIN, Downs IND->KC, Allen IND->SF)
+1. QB backups behind a starter TRADED IN were judged on the starter's weeks -- weeks he started for his OLD
+   team, when the backups were starting for theirs (Kyler kept 21% of MIN's attempts behind Cousins' START;
+   Cousins 9.5 pts / 21 att). Now only weeks the starter played for THIS team count (_QB_TEAM_WK, current
+   season only). Cousins 12.9 / 28.6 att, Kyler 0.3. Backtest even (.000/.000/.000).
+2. A player traded AWAY was skipped by vacated roles (he is in the pool, for his new team), so plain
+   normalisation handed his share around by size -- IND: Warren 11.0 targets. Now his old team treats him as
+   absent (VAC_EQ / VAC_TPRR). Warren 9.4, Treadwell 3.8 -> 4.4, Burks 2.3 -> 3.0, Dulin 2.3 -> 3.0.
+   Backtest ALL .000/-.001/.000 (TE -.002/-.005/.000) -- net gain, kept.
+Study (2023-26, 157 team-games a 15%+ WR missed): remaining WRs gained 1.76x their proportional share of
+his targets, TEs 1.06x, RBs 0.56x -- the model's split still leans proportional (next test).
+3. (2026-11-11) The bench check (availability: no snaps in his team's last game + 3rd or deeper) removed a
+   player TRADED in -- Keenan Allen had no SF snaps because he played for IND. Now snaps for any team's last
+   game count. Backtest unchanged.
+
+## VAC_EQ_POS (2026-11-11, Joe: Rams wk10 TEs too high with Puka out -- TEs got 43% of LA targets vs 26% season)
+Even split of an absent WR's share among the remaining WRs (instead of VAC_EQ .25), ALL vs 5.366/5.260/5.140:
+  WR .50   +.004/+.001/-.002  (TE 2026 -.011)  FAILS net +.003
+  WR .75   +.011/+.009/+.002  FAILS            WR 1.0  +.020/+.019/+.009 FAILS
+An EVEN split hands WR5/WR6 the same bump as the WR3 -- the study's 1.76x is concentrated in the next man up.
+Next idea (not built): same-position split by route share / depth slot rather than evenly. Off ({}).
+
+## ELITE_FADE (2026-11-11, Joe on Metcalf: "he is no longer on a cold stretch")
+Elite last-season efficiency weight fades to EFF_PRIOR_WEIGHT as this season's games pile up.
+vs current code (ALL 5.366/5.259/5.140): 4-10 games .000/.000/.000 (QB 2025 +.002); 6-8 +.001/.000/.000;
+2-8 .000/.000/+.001 FAILS; 6-12 / 8-8 +.001/.000/.000. Wk10 moves only Lamb/Chase/Olave/London (+-0.25).
+Not adopted -- no gain. NOTE: Metcalf is NOT lifted by the elite rule (fade leaves him at 11.96). His
+11.96 = 9.0 tgt (26% of a 36.6-att, 49.5-total game; he averages 8.0, 6 in wks 7-8) + 0.43 TD (1 in 8 games)
++ efficiency shrunk toward the league (last season at weight 0 still gives 11.05: 6.5 yds/tgt vs his 5.9).
+
+## 2026-11-12 pass (top WRs, TE matchup, Saints backs)
+Calibration by projected-target tier (backtest dumps): WRs projected 9-10 targets score 14.5/15.1, 13.9/14.1,
+14.7/15.4 (proj/actual 2024/25/26); 10+ : 15.7/21.6 (n12), 15.9/15.2, 17.1/17.8 -- about right on average,
+a little low in 2024 and 2026. TE tiers level; the TE problem is ORDER, not level.
+TGT_TRIM_EXEMPT (proven alphas skip the WR trim; games, tgt/g): 4/10 +.000/-.001/+.002 FAILS; 4/9 same;
+3/11 FAILS; 4/9.5 FAILS; 6/10 .000/-.001/-.001 passes -- sign flips with the games cutoff = noise. Off.
+MATCHUP_EPA_BETA_POS TE 0: TE -.004/-.008/+.020, ALL fails; TE .25: TE -.006/-.010/+.009 fails (2026 worse).
+The TE matchup helps 2026; Fannin wk10 was one case, not the TE leak.
+NO backs: Kamara 7/6/6 carries wks 6/7/9 whoever leads (Miller 20, 8; Estime 15). Model wk10: Estime 10.1,
+Kamara 8.3 -- the replacement does not inherit the departed lead back's role (idea: role inheritance).
+FILL-IN LEAD BACK (lead back absent, the back we project to lead; n 32/29/12): carries 11.5/11.7, 11.8/13.1,
+12.2/11.2 (proj/actual) -- no inheritance rule; targets 2.2/3.2, 2.1/2.7, 2.2/2.4 (short every season).
+VAC_EQ_POS RB.t (absent back's TARGETS split among the backs): .5 +.002/-.002/.000 even; .75 FAILS +.003;
+1.0 FAILS +.008. Off.
+CHANGED_KT_POS (less weight on a new-team player's old-team share): TE .1 +.001/-.001/+.002 FAILS (TE 2026
++.010); TE .5 FAILS; TE/WR/RB .1 FAILS +.010 (WR +.009/+.005/+.012). Old-team history HELPS -- Likely is the
+exception, not the rule. Backup-TE-on-starter's-return = ABSENT_GAME_W (tested 10-29: WR/TE .5 net +.004, worse).
+TE 2x (POS_KT_MULT TE 2.0) ADOPTED 2026-11-12 (Joe: 'i'm good with that test'); re-test wks 10-12.

@@ -337,7 +337,10 @@ def build(year, week, *, candidates, depth_rank=None, review=None, positions=Non
         # on the chart while on reserve, so "no snaps in wk6, 4th" removed him)
         tm_ = candidates[pid]
         if tm_ in snap_week and live_rank(pid) >= 3 and not returning(pid):
-            if snaps.get(tm_, {}).get(pid, 0) == 0:
+            # ...nor for a player TRADED in: no snaps in his new team's last game is the trade,
+            # not the bench (Keenan Allen IND -> SF wk10 2026: 56% of IND's snaps in wk9, listed
+            # 4th on SF's chart -> removed). Snaps for ANY team in its last game count.
+            if not any(snaps.get(t_, {}).get(pid, 0) > 0 for t_ in snaps):
                 mult[pid] = 0.0
                 reason[pid] = (f"rotation: no snaps in {tm_}'s last game (wk{snap_week[tm_]}) "
                                f"(effectively {_ord(live_rank(pid))})")
