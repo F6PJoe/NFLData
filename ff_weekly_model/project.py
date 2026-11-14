@@ -544,6 +544,7 @@ VAC_EQ_POS = {}
 # A player on a NEW team: extra multiplier on his target-share prior weight, by position (2026-11-12,
 # Joe on Likely: "we should 100% not be looking at his Ravens usage as much"). {} = off.
 CHANGED_KT_POS = {}
+SHARE_PRIOR_FADE = None   # see project_week; None = off
 # Vacated TARGETS to the best target-earners (2026-10-13, Joe: when a stud WR
 # is out, the elite target-getter left should absorb the most). This fraction
 # of an absent player's target share goes to his remaining teammates by
@@ -3242,9 +3243,16 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         past_t = [v for w, v in tgt_cur.get(pid, {}).items() if w < week]
         past_c = [v for w, v in car_cur.get(pid, {}).items() if w < week]
         kt = _k_tgt(group) * POS_KT_MULT.get(pos.get(pid), 1.0)
+        kc = _k_car(group) * POS_KT_MULT.get((pos.get(pid), "car"), 1.0)
         if group == "changed team" and CHANGED_KT_POS:
             kt *= CHANGED_KT_POS.get(pos.get(pid), 1.0)
-        kc = _k_car(group) * POS_KT_MULT.get((pos.get(pid), "car"), 1.0)
+        # SHARE PRIOR FADES WITH GAMES (2026-11-14, Joe on Likely, 27% of targets over 8 games,
+        # projected 21%: "we should be closer to the target share for the season average now that
+        # we are at week 10"). {pos: F}: the prior's weight x F / (F + his games this season).
+        if SHARE_PRIOR_FADE and pos.get(pid) in SHARE_PRIOR_FADE:
+            f_ = SHARE_PRIOR_FADE[pos.get(pid)]
+            kt *= f_ / (f_ + len(past_t))
+            kc *= f_ / (f_ + len(past_c))
         # availability scales the share BEFORE normalisation, so a removed
         # player's touches are handed to his teammates rather than vanishing
         m = 1.0 if avail is None else avail.get(pid, 1.0)
@@ -4093,7 +4101,7 @@ def main():
                 a.split(":")[0]: tuple(float(x) for x in a.split(":")[1].split("/")) for a in v.split(",") if a}
             continue
         if k in ("POS_KT_MULT", "POS_KEFF_MULT", "ROUTE_MODEL_W_POS", "DEPTH_DEMOTE", "EXIT_KEEP_W",
-                 "REC_TD_OWN_K", "POS_SPREAD", "HALF_LIFE_TGT_POS", "VAC_EQ_POS", "CHANGED_KT_POS"):
+                 "REC_TD_OWN_K", "POS_SPREAD", "HALF_LIFE_TGT_POS", "VAC_EQ_POS", "CHANGED_KT_POS", "SHARE_PRIOR_FADE"):
             globals()[k] = None if v == "None" else {
                 a.split(":")[0]: float(a.split(":")[1]) for a in v.split(",") if a}
             continue

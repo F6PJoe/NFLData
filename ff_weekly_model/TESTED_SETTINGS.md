@@ -1258,3 +1258,16 @@ team in the last 21 days -> removed ('news: cut by his team'); Joe's sheet call 
   Mitchell PHI, Herbert ATL). Out / Doubtful / Sleeper tags still remove him.
 Live-only; backtest unchanged.
 - Practice squad + newest roster-move news is a signing/elevation in the last 6 days = available (first call-up, no snaps yet). Joe 2026-11-12.
+
+## 2026-11-14: share calibration, league pass volume, SHARE_PRIOR_FADE (Joe on Likely: 27% season, projected 21%)
+Calibration by season-to-date share (4+ games; season / projected / actual next week), 2024/25/26:
+  WR 24-30%: 26.5/25.5/26.2, 26.9/26.9/27.0, 26.7/25.7/25.9   WR 30%+: 33.0/29.6/30.1, 33.1/29.5/30.6, 32.4/31.3/33.4
+  TE 22%+: 25.2/25.0/25.6, 25.0/25.9/23.3, 27.1/26.2/23.0     RB carries 60%+: 66.7/64.7/65.1, 65.0/63.0/62.5, 67.7/68.2/64.3
+  top-2 pair at 50%+ combined: 54.6/51.1/52.8, 53.0/49.2/49.2, 53.7/51.1/48.2 -- shares are calibrated league-wide.
+Likely wk10 = NYG-specific: pair at 56.5% pulled to 47%; 8.6% went to Desrosiers + Hyatt (0 targets).
+LG_VOL_K 8 / 1 (league volume baseline follows this season faster): no change in any season (K 32 is already
+~90% this season by wk10). 2026 pass attempts still project 32.5 vs 33.2 actual -- cause not found.
+SHARE_PRIOR_FADE (prior weight x F/(F+games)), vs 5.367/5.259/5.148 (2026 now wks 2-10):
+  all F16 .000/.000/+.003; F8 +.001/.000/+.005 FAILS; F4 +.002/+.001/+.008 FAILS; WR+TE F8 FAILS;
+  TE F8 TE -.001/-.001/+.009; TE F4 TE .000/.000/+.017. Leaning harder on this season's share is WORSE,
+  most of all for TEs in 2026 -- even with Likely's wk10 in the sample. Off.
