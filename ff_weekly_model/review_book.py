@@ -761,6 +761,30 @@ def build(year, week, run_model=True):
                        "or make a call on the team tab",
                    ["Team", "Player", "Pos", "Ours", "Consensus", "ETR", "Gap", "Why (ours vs consensus)"], gaps)
 
+    # WATCH LIST (Joe 2026-11-14: "yes keep a list") -- players the model is routinely wrong on in the
+    # same direction, where no league-wide rule passes the backtest. data/watch_list.csv, kept by Claude;
+    # the suggested call is only a suggestion -- type it on the team tab to use it.
+    wl_ = os.path.join(DATA, "watch_list.csv")
+    if os.path.exists(wl_):
+        def _pts(fn):
+            p_ = os.path.join(DATA, fn)
+            return ({r["player_id"]: r for r in csv.DictReader(open(p_, encoding="utf-8-sig"))}
+                    if os.path.exists(p_) else {})
+        cur_, base_ = _pts(f"projections_{year}_wk{week:02d}.csv"), _pts(f"projections_{year}_wk{week:02d}_nocalls.csv")
+        rv_ = {r["player_id"]: r for r in csv.DictReader(open(os.path.join(DATA, f"review_{year}_wk{week:02d}.csv"),
+                                                               encoding="utf-8-sig"))}
+        wl = []
+        for w_ in csv.DictReader(open(wl_, encoding="utf-8")):
+            pid_ = w_["player_id"]; c_ = cur_.get(pid_) or base_.get(pid_)
+            if not c_:
+                continue
+            fv = lambda d, k: round(float(d[k]), 2) if d and d.get(k) not in (None, "") else ""
+            call_ = " ".join(x for x in ((rv_.get(pid_) or {}).get("role", ""), (rv_.get(pid_) or {}).get("decision", "")) if x)
+            wl.append((c_["team"], w_["player"], c_["pos"], fv(base_.get(pid_), "half_ppr"), fv(cur_.get(pid_), "half_ppr"),
+                       fv(c_, "consensus"), call_, w_["suggested"], w_["why"]))
+        r0 = table(r0, "WATCH LIST -- the model is routinely wrong on these the same way; suggested call (yours to use)",
+                   ["Team", "Player", "Pos", "Model pts", "With calls", "Consensus", "Your call", "Suggested", "Why"], wl)
+
     def qb_rushing(v):
         parts = [f"{v['QB carries']} carries" if v.get("QB carries") is not None else "",
                  f"{v['QB yds/carry']} yds/carry" if v.get("QB yds/carry") is not None else ""]
