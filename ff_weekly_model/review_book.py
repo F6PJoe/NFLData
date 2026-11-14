@@ -63,11 +63,11 @@ CALLS = ("OUT,PLAY,FULL,SPLIT,EVEN,START,LIMITED,25,50,60,70,75,80,85,90,110,125
          "85 only,70 only,chance 50,chance 25")
 RUSHES = "3,4,5,6,7,8,9,10"            # QB carries dropdown (any number can be typed)
 YPCS = "4,4.5,5,5.5,6,6.5,7,7.5,8"     # QB yds/carry dropdown
-COLS = ["Pos", "Model role", "Player", "Your role", "Call", "QB carries", "QB yds/carry", "Note",
+COLS = ["Pos", "Model role", "Player", "Your role", "Call", "QB carries", "QB yds/carry", "Note", "Flag",
         "Status", "Practice", "Injury", "Source", "Model pts", "With calls", "Change", "Carries",
         "Car chg", "Targets", "Tgt chg", "Pass att", "Consensus", "ETR", "Last 3 games", "News",
         "player_id"]
-WIDTH = [5, 7, 22, 9, 10, 9, 9, 18, 16, 26, 14, 12, 8, 8, 7, 7, 7, 7, 7, 7, 9, 6, 70, 70, 12]
+WIDTH = [5, 7, 22, 9, 10, 9, 9, 18, 40, 16, 26, 14, 12, 8, 8, 7, 7, 7, 7, 7, 7, 9, 6, 70, 70, 12]
 C = {name: i + 1 for i, name in enumerate(COLS)}      # column numbers
 HEADER_ROW = 4
 CALLS_TAB = "Calls"
@@ -385,6 +385,7 @@ KEY_INFO = [      # the read-only columns
     ("Targets / Tgt chg", "Projected targets with your calls, and the change."),
     ("Pass att", "Projected pass attempts (QBs)."),
     ("Consensus / ETR", "The sites' half-PPR projections, to compare."),
+    ("Flag", "Claude's flags: WATCH = the model is routinely wrong on him the same way (suggested call); GAP = 3+ pts from consensus and ETR, with why. Read-only."),
     ("Last 3 games", "His last three games: injury, practice, snaps, left early."),
     ("News", "The latest news item about him."),
 ]
@@ -463,6 +464,24 @@ def build(year, week, run_model=True):
     if synced is None:
         sys.exit("  WORKBOOK NOT REBUILT -- its edits could not be copied into the sheet (above)")
     w2 = f"{week:02d}"
+    # FLAG column on the team tabs (Joe 2026-11-14: "put a note next to the player on the review
+    # sheet instead of me having to go back and forth"): watch-list suggestion + big-gap reason
+    flags_ = {}
+    _wl = os.path.join(DATA, "watch_list.csv")
+    if os.path.exists(_wl):
+        for w_ in csv.DictReader(open(_wl, encoding="utf-8")):
+            flags_[w_["player_id"]] = f"WATCH: suggest {w_['suggested']} -- {w_['why']}"
+    _gp = os.path.join(DATA, f"gap_report_{year}_wk{w2}.csv")
+    if os.path.exists(_gp):
+        _pid_by = {}
+        for r_ in csv.DictReader(open(os.path.join(DATA, f"projections_{year}_wk{w2}.csv"), encoding="utf-8-sig")):
+            _pid_by[(r_["player"], r_["team"])] = r_["player_id"]
+        for g_ in csv.DictReader(open(_gp, encoding="utf-8-sig")):
+            pid_ = _pid_by.get((g_["player"], g_["team"]))
+            if pid_:
+                txt = (f"GAP: ours {g_['ours']} vs consensus {g_['consensus']}"
+                       + (f" / ETR {g_['etr']}" if g_.get("etr") else "") + f" -- {g_.get('why (ours vs consensus)', '')}")
+                flags_[pid_] = (flags_[pid_] + " | " + txt) if pid_ in flags_ else txt
     base_p = os.path.join(DATA, f"projections_{year}_wk{w2}_nocalls.csv")
     if run_model:
         r = subprocess.run([sys.executable, os.path.join(HERE, "project.py"), "--year", str(year),
@@ -628,7 +647,7 @@ def build(year, week, run_model=True):
                 st = status_of(pid)
                 vals = {"Pos": g, "Model role": model_role.get(pid, "-"), "Player": name_of.get(pid, pid),
                         "Your role": role, "Call": call, "QB carries": rush_v, "QB yds/carry": ypc_v,
-                        "Note": note, "Status": st,
+                        "Note": note, "Flag": flags_.get(pid, ""), "Status": st,
                         "Practice": practice_of(pid),
                         "Injury": (s_.get("injury") or inj.get(pid, {}).get("report_primary_injury")
                                    or inj.get(pid, {}).get("practice_primary_injury") or ""),
@@ -650,7 +669,7 @@ def build(year, week, run_model=True):
                 for name, val in vals.items():
                     c = ws.cell(row, C[name], val)
                     c.font = BF
-                    c.alignment = WRAP if name in ("Last 3 games", "News", "Practice", "Status") else TOP
+                    c.alignment = WRAP if name in ("Last 3 games", "News", "Practice", "Status", "Flag") else TOP
                     if isinstance(val, float):
                         c.number_format = "0.0"
                 for name in ("Change", "Car chg", "Tgt chg"):
