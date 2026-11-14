@@ -545,6 +545,7 @@ VAC_EQ_POS = {}
 # Joe on Likely: "we should 100% not be looking at his Ravens usage as much"). {} = off.
 CHANGED_KT_POS = {}
 SHARE_PRIOR_FADE = None   # see project_week; None = off
+SHARE_PRIOR_FADE_DOWN = None
 # Vacated TARGETS to the best target-earners (2026-10-13, Joe: when a stud WR
 # is out, the elite target-getter left should absorb the most). This fraction
 # of an absent player's target share goes to his remaining teammates by
@@ -3249,7 +3250,12 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         # SHARE PRIOR FADES WITH GAMES (2026-11-14, Joe on Likely, 27% of targets over 8 games,
         # projected 21%: "we should be closer to the target share for the season average now that
         # we are at week 10"). {pos: F}: the prior's weight x F / (F + his games this season).
-        if SHARE_PRIOR_FADE and pos.get(pid) in SHARE_PRIOR_FADE:
+        # SHARE_PRIOR_FADE_DOWN r: only when his share THIS season is under r x his prior share
+        # (a role that shrank -- BTJ 2026; Joe: "I can't imagine after 9 weeks we can't trust this
+        # year's role"). Steady and rising players keep the full prior.
+        _down_ok = (not SHARE_PRIOR_FADE_DOWN or len(past_t) < 3 or not pri_t
+                    or sum(past_t) / len(past_t) < SHARE_PRIOR_FADE_DOWN * pri_t)
+        if SHARE_PRIOR_FADE and pos.get(pid) in SHARE_PRIOR_FADE and _down_ok:
             f_ = SHARE_PRIOR_FADE[pos.get(pid)]
             kt *= f_ / (f_ + len(past_t))
             kc *= f_ / (f_ + len(past_c))

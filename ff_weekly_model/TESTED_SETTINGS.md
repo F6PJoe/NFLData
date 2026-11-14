@@ -1271,3 +1271,8 @@ SHARE_PRIOR_FADE (prior weight x F/(F+games)), vs 5.367/5.259/5.148 (2026 now wk
   all F16 .000/.000/+.003; F8 +.001/.000/+.005 FAILS; F4 +.002/+.001/+.008 FAILS; WR+TE F8 FAILS;
   TE F8 TE -.001/-.001/+.009; TE F4 TE .000/.000/+.017. Leaning harder on this season's share is WORSE,
   most of all for TEs in 2026 -- even with Likely's wk10 in the sample. Off.
+WHO THE FADE HURTS (all-position F8 vs current, weeks 6+, 2024-26, RMSE; role = this season's touches vs last):
+  role about the same: WR +.006, RB +.003   TE role DOWN +.020 (they bounce back)   WR role UP +.003
+  helps: no last season (TE -.011, RB -.004, WR -.003), WR role DOWN -.003, RB role UP -.004.
+SHARE_PRIOR_FADE_DOWN (fade only when this season's share < r x prior -- the BTJ case): WR F8 r.8 +.000/+.001/
+  (2026 n/a) FAILS; WR F4 r.8 -.001/+.001 even; WR+RB F4 r.7 -.001/+.001 even. No gain -> off.
