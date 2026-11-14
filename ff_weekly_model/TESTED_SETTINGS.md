@@ -1276,3 +1276,8 @@ WHO THE FADE HURTS (all-position F8 vs current, weeks 6+, 2024-26, RMSE; role = 
   helps: no last season (TE -.011, RB -.004, WR -.003), WR role DOWN -.003, RB role UP -.004.
 SHARE_PRIOR_FADE_DOWN (fade only when this season's share < r x prior -- the BTJ case): WR F8 r.8 +.000/+.001/
   (2026 n/a) FAILS; WR F4 r.8 -.001/+.001 even; WR+RB F4 r.7 -.001/+.001 even. No gain -> off.
+FADE_GROUPS (Joe: "there was some positives. why not use those?") -- fade only for the groups that improved
+(no last season / WR role down / RB role up), vs current code 5.367/5.259/5.148 (2026 wks 2-10):
+  all three F8 .000/.000/.000; F4 .000/.000/.000 (TE 2025 -.007, 2026 +.004; RB 2024 +.003); F2 .000/.000/.000
+  new only F4 -.001/.000/+.001 (WR/TE 2026 worse); WR_down F4 -.001/+.001/.000; RB_up F4 .000/.000/.000.
+Every version a wash -- the group gains (picked after seeing them) were offset elsewhere. Off.

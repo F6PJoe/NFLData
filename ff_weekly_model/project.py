@@ -546,6 +546,8 @@ VAC_EQ_POS = {}
 CHANGED_KT_POS = {}
 SHARE_PRIOR_FADE = None   # see project_week; None = off
 SHARE_PRIOR_FADE_DOWN = None
+FADE_GROUPS = None
+FADE_DOWN_R, FADE_UP_R = 0.8, 1.25
 # Vacated TARGETS to the best target-earners (2026-10-13, Joe: when a stud WR
 # is out, the elite target-getter left should absorb the most). This fraction
 # of an absent player's target share goes to his remaining teammates by
@@ -3259,6 +3261,24 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             f_ = SHARE_PRIOR_FADE[pos.get(pid)]
             kt *= f_ / (f_ + len(past_t))
             kc *= f_ / (f_ + len(past_c))
+        # TARGETED FADE (2026-11-14, Joe: "it looks like there was some positives. why not use
+        # those?"): fade the share prior only for the groups where the all-player fade helped --
+        # FADE_GROUPS = {"new": F, "WR_down": F, "RB_up": F}; down/up = this season's share vs his
+        # prior below FADE_DOWN_R / above FADE_UP_R (3+ games). Chosen AFTER seeing the group table.
+        if FADE_GROUPS and len(past_t) + len(past_c) > 0:
+            po_ = pos.get(pid)
+            cur_t = sum(past_t) / len(past_t) if past_t else 0.0
+            cur_c = sum(past_c) / len(past_c) if past_c else 0.0
+            f_ = None
+            if group == "no history" and "new" in FADE_GROUPS:
+                f_ = FADE_GROUPS["new"]
+            elif po_ == "WR" and "WR_down" in FADE_GROUPS and len(past_t) >= 3 and pri_t                     and cur_t < FADE_DOWN_R * pri_t:
+                f_ = FADE_GROUPS["WR_down"]
+            elif po_ == "RB" and "RB_up" in FADE_GROUPS and len(past_c) >= 3 and pri_c                     and cur_c > FADE_UP_R * pri_c:
+                f_ = FADE_GROUPS["RB_up"]
+            if f_ is not None:
+                kt *= f_ / (f_ + len(past_t))
+                kc *= f_ / (f_ + len(past_c))
         # availability scales the share BEFORE normalisation, so a removed
         # player's touches are handed to his teammates rather than vanishing
         m = 1.0 if avail is None else avail.get(pid, 1.0)
@@ -4107,7 +4127,7 @@ def main():
                 a.split(":")[0]: tuple(float(x) for x in a.split(":")[1].split("/")) for a in v.split(",") if a}
             continue
         if k in ("POS_KT_MULT", "POS_KEFF_MULT", "ROUTE_MODEL_W_POS", "DEPTH_DEMOTE", "EXIT_KEEP_W",
-                 "REC_TD_OWN_K", "POS_SPREAD", "HALF_LIFE_TGT_POS", "VAC_EQ_POS", "CHANGED_KT_POS", "SHARE_PRIOR_FADE"):
+                 "REC_TD_OWN_K", "POS_SPREAD", "HALF_LIFE_TGT_POS", "VAC_EQ_POS", "CHANGED_KT_POS", "SHARE_PRIOR_FADE", "FADE_GROUPS"):
             globals()[k] = None if v == "None" else {
                 a.split(":")[0]: float(a.split(":")[1]) for a in v.split(",") if a}
             continue
