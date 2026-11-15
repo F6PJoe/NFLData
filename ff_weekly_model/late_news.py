@@ -153,6 +153,17 @@ def main():
 
     started = {tm for tm, k in score_week.kickoffs(args.year, args.week).items()
                if k <= datetime.datetime.now()}
+    # Before a team's game-day list is posted, ESPN's "Out" is not final: it showed OUT for
+    # players the official report had QUESTIONABLE who then played (2026-11-15: A.J. Brown,
+    # Jaylen Wright, VanSumeren; McConkey the same that afternoon). Without the posted list, an
+    # ESPN Out counts only when the official report agrees (Out / Doubtful); the rest are
+    # listed to check, not switched.
+    espn_only = []
+    for pid, (nm, tm) in list(inactive.items()):
+        rep = report.get(pid, "")
+        if tm not in posted and rep and rep not in availability.BLOCKING_REPORT:
+            espn_only.append((nm, tm, rep))
+            del inactive[pid]
     fresh = {}
     with open(os.path.join(DATA, f"news_{args.year}.csv"), newline="", encoding="utf-8") as fh:
         for r in csv.DictReader(fh):
@@ -245,6 +256,9 @@ def main():
     for nm, tm, was, why in changed:
         print(f"  -> OUT  {nm} ({tm})  was {was}   [{why}]")
     print(f"  official inactives posted for {len(posted)} teams" + (f": {', '.join(sorted(posted))}" if posted else ""))
+    for nm, tm, rep in espn_only:
+        print(f"  ?? CHECK   {nm} ({tm}) -- ESPN shows him Out, but the official report says {rep} "
+              f"and the game-day list is not posted yet: NOT switched")
     for nm, tm in active_flags:
         print(f"  ?? ACTIVE  {nm} ({tm}) -- you have him OUT, but he is not on the official inactives list")
 
