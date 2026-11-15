@@ -1259,6 +1259,47 @@ def load_team_moves(year, week):
     return list(latest.values())
 
 
+_POOL_ADDS = set()       # players put in the pool by hand this run (pool_add_players)
+
+
+def pool_add_players(year, week, pos, pos_prev, sheet=True):
+    """pid -> (team, position, source) for players Joe put on a team who have no position yet
+    (no game this season, on no current depth chart): team-moves rows, and review-sheet rows with
+    a team whose call is not OUT. Position from last season, else the nflverse roster, else the
+    sheet's pos column; players at no skill position are skipped."""
+    want = {mv["player_id"]: (mv["to_team"], "team-moves file")
+            for mv in load_team_moves(year, week)}
+    path = os.path.join(DATA, f"review_{year}_wk{week:02d}.csv")
+    sheet_pos = {}
+    if sheet and os.path.exists(path):
+        import read_review
+        with open(path, newline="", encoding="utf-8-sig") as fh:
+            for r in csv.DictReader(fh):
+                pid, tm = (r.get("player_id") or "").strip(), (r.get("team") or "").strip().upper()
+                raw = (r.get("decision") or "").strip()
+                if not pid or not tm or not raw or read_review.parse_decision(raw)[0] <= 0:
+                    continue
+                want.setdefault(pid, (tm, "review sheet"))
+                sheet_pos[pid] = (r.get("pos") or "").strip().upper()
+    want = {p: v for p, v in want.items() if p not in pos}
+    if not want:
+        return {}
+    ros = {}
+    rpath = os.path.join(DATA, f"roster_{year}.csv")
+    if os.path.exists(rpath):
+        with open(rpath, newline="", encoding="utf-8") as fh:
+            for r in csv.DictReader(fh):
+                if r.get("gsis_id") in want:
+                    ros[r["gsis_id"]] = r.get("position", "")
+    out = {}
+    for pid, (tm, why) in want.items():
+        po = next((x for x in (pos_prev.get(pid), ros.get(pid), sheet_pos.get(pid))
+                   if x in ALL_POSITIONS), None)
+        if po:
+            out[pid] = (tm, po, why)
+    return out
+
+
 def load_players(year):
     path = os.path.join(DATA, f"stats_player_week_{year}.csv")
     with open(path, newline="", encoding="utf-8") as fh:
@@ -2794,7 +2835,11 @@ def build_priors(tgt_cur, car_cur, tgt_prev, car_prev, pos, team_cur,
             # Backs are the exception: some who were off the preseason chart
             # became real contributors (signings, injuries), so the deepest slot
             # under-shoots them. They start from NO_HISTORY_RB_RANK instead.
-            if NO_HISTORY_DEEPEST and off_chart and p == "RB" and NO_HISTORY_RB_RANK:
+            # ...but not a POOL ADD (practice-squad call-up Joe put in by hand, Nate Carter KC
+            # wk10 2026): from the RB3 start he took half of a two-back room (11.9 carries next
+            # to Emmett Johnson's 12.3; ETR 2.9 pts). He starts from the deepest slot instead.
+            if (NO_HISTORY_DEEPEST and off_chart and p == "RB" and NO_HISTORY_RB_RANK
+                    and pid not in _POOL_ADDS):
                 pri_c = rc.get(("RB", NO_HISTORY_RB_RANK), pri_c)
                 pri_t = rt.get(("RB", NO_HISTORY_RB_RANK), pri_t)
         out[pid] = (group, pri_t, pri_c, len(hist_t), len(hist_c))
@@ -3479,7 +3524,10 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         for pid, (tm, _, _) in raw.items():
             mates[(tm, pos.get(pid))].append(pid)
         for (tm, po, kind), v in vac.items():
-            who = mates.get((tm, po), [])
+            # a POOL ADD (practice-squad call-up put in by hand) is not the next man up: Joe on Nate
+            # Carter, KC wk10 2026, "he is the backup" -- with Walker / Ott out he drew an even half
+            # of their carries (11.9 next to Emmett Johnson's 12.3)
+            who = [p_ for p_ in mates.get((tm, po), []) if p_ not in _POOL_ADDS] or mates.get((tm, po), [])
             if not who or v <= 0:
                 continue
             # "RB.t" / "RB.c" = that position's targets / carries only (2026-11-12: fill-in lead backs
@@ -4373,8 +4421,21 @@ def main():
         roster, asof = current_roster(args.year)
         for pid, p in chart_positions(args.year).items():
             pos.setdefault(pid, p)
+        # POOL ADDS (Joe 2026-11-15, Nate Carter KC wk10: "he is the backup"): a player Joe put on
+        # a team -- a team-moves row, or a review-sheet row with a team and a play call -- but who
+        # is on no current depth chart and has no game this season (a practice-squad call-up) was
+        # in neither `pos` nor the priors, so the pool filter dropped him whatever the sheet said.
+        # He now gets a position (his last season, else the nflverse roster, else the sheet) and a
+        # prior like any off-chart player (no history -> the deep-slot / NO_HISTORY_RB_RANK start).
+        pool_adds = pool_add_players(args.year, args.week, pos, pos_prev,
+                                     sheet=not args.ignore_sheet)
+        globals()["_POOL_ADDS"] = set(pool_adds)
+        for pid_, (tm_, po_, why_) in pool_adds.items():
+            pos.setdefault(pid_, po_)
+            print(f"  pool add: {pid_} {po_} {tm_} ({why_})")
         priors = build_priors(tgt_cur, car_cur, tgt_pri, car_pri, pos,
-                              team_cur, team_prev, chart, extra_ids=roster)
+                              team_cur, team_prev, chart,
+                              extra_ids=set(roster) | set(pool_adds))
         if VAC_PRIOR_W:
             priors = apply_vacated(priors, tgt_prev, car_prev, team_prev,
                                    {**roster, **team_cur}, chart, pos, pos_prev)
@@ -4403,6 +4464,10 @@ def main():
                 print(f"  team change: {mv['player']} {active.get(mv['player_id'], '-')} -> "
                       f"{mv['to_team']} (team-moves file)")
             active[mv["player_id"]] = mv["to_team"]
+        # ...and a sheet-only pool add (no team-moves row): the sheet's team
+        for pid_, (tm_, _po, why_) in pool_adds.items():
+            if why_ == "review sheet" and pid_ not in active:
+                active[pid_] = tm_
         # ...and SLEEPER's team for anyone who has played this season: it catches a signing or
         # trade within hours, before the depth chart / roster file (Kendre Miller, cut by NO
         # 2026-11-07, DAL by the 11th -- Joe 2026-11-12). The team-moves file (Joe's word) wins.
