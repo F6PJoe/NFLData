@@ -47,13 +47,13 @@ jobs:
       # whatever triggered the run: Joe updates that branch only when he's
       # happy with a version, so work in progress on main never reaches it.
       - name: Check out the phone-rankings branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: phone-rankings
           sparse-checkout: ff_rankings
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
