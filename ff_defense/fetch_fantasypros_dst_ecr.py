@@ -28,6 +28,8 @@ import datetime
 
 import requests
 
+from current_week import teams_playing
+
 CONSENSUS_URL = "https://partners.fantasypros.com/api/v1/consensus-rankings.php"
 HEADERS = {"User-Agent": "Mozilla/5.0 (personal rankings consensus tool)"}
 
@@ -74,10 +76,12 @@ def main():
     args = ap.parse_args()
 
     rows = fetch_rows(args.year, args.week)
-    if len(rows) < 28:
+    expected = teams_playing()
+    if len(rows) < expected:
         raise SystemExit(
-            f"Only found {len(rows)} D/ST rows (expected ~32) -- "
-            "FantasyPros' API may have changed, or this week isn't published yet."
+            f"Only found {len(rows)} D/ST rows -- expected {expected} playing "
+            "this week. FantasyPros' API may have changed, or this week isn't "
+            "published yet."
         )
 
     write_csv(rows, args.out)

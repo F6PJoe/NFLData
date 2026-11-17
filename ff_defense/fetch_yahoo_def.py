@@ -37,6 +37,7 @@ Requires: requests, beautifulsoup4
 """
 
 import argparse
+import time
 import csv
 import re
 
@@ -102,13 +103,38 @@ def selected_week(html):
     return int(m.group(1) or m.group(2)) if m else None
 
 
+def get_with_retry(url, attempts=3, timeout=45):
+    """GET with a couple of retries on transient network failures.
+
+    Yahoo read-timed-out once mid-run (week 11, 2026) and took the whole
+    step down with it, which left Rost%/Start% and the projection holding
+    the PREVIOUS week's numbers while every other column was current -- a
+    mixed-week board, which is worse than a missing one because nothing
+    looks wrong. A page fetch that fails once usually succeeds on a retry,
+    so spend a few seconds before giving up.
+    """
+    last = None
+    for i in range(attempts):
+        try:
+            resp = requests.get(url, headers=HEADERS, timeout=timeout)
+            resp.raise_for_status()
+            return resp
+        except requests.RequestException as e:
+            last = e
+            if i < attempts - 1:
+                wait = 2 ** i
+                print(f"[retry] {type(e).__name__} on {url.split('?')[0]} "
+                      f"-- attempt {i + 1}/{attempts}, waiting {wait}s")
+                time.sleep(wait)
+    raise last
+
+
 def fetch_paginated(url_template, seen_html=None, **fmt):
     rows = []
     offset = 0
     while True:
         url = url_template.format(offset=offset, **fmt)
-        resp = requests.get(url, headers=HEADERS, timeout=30)
-        resp.raise_for_status()
+        resp = get_with_retry(url)
         if seen_html is not None:
             seen_html.append(resp.text)
         soup = BeautifulSoup(resp.text, "html.parser")

@@ -38,6 +38,7 @@ import argparse
 import csv
 from pathlib import Path
 
+from current_week import teams_playing
 from team_names import normalize
 
 # Subvertadown's own sheet, shared with the service account read-only.
@@ -81,9 +82,10 @@ def main():
         out.append({"Team": normalize(r[1]), "Adjustment": adj,
                     "Rank": r[3] if len(r) > 3 else ""})
 
-    if len(out) < 28:
-        raise SystemExit(f"Only parsed {len(out)} teams -- expected 32. "
-                         "Has the sheet's layout changed?")
+    expected = teams_playing()
+    if len(out) < expected:
+        raise SystemExit(f"Only parsed {len(out)} teams -- expected {expected} "
+                         f"playing this week. Has the sheet's layout changed?")
 
     with open(args.out, "w", newline="", encoding="utf-8") as f:
         w = csv.DictWriter(f, fieldnames=FIELDNAMES)

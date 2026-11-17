@@ -70,6 +70,37 @@ def stale_week(rows, week=None, field="Week"):
     return None
 
 
+def teams_playing(schedule_csv="schedule.csv", floor=24):
+    """How many teams a week-scoped source should return this week.
+
+    Sources that only list the teams with a game -- Subvertadown's
+    adjustments, FantasyPros' weekly ECR -- return 32 minus the byes. Their
+    sanity guards used to hardcode "expect ~32, fail under 28", which held
+    up by exactly one through every 4-bye week and then broke on week 11 of
+    2026, the first 6-bye week: both sources correctly returned 26 and both
+    were rejected as broken.
+
+    schedule.csv (fetch_schedule.py, which runs first) knows the real
+    number, so use it. Without it, fall back to a floor low enough to clear
+    the biggest bye week the NFL schedules and high enough to still catch a
+    source that has actually broken.
+    """
+    import csv as _csv
+    import os as _os
+    if _os.path.exists(schedule_csv):
+        with open(schedule_csv, newline="", encoding="utf-8") as f:
+            rows = list(_csv.DictReader(f))
+        # Only trust it if it's THIS week's schedule. In CI that's always
+        # true -- fetch_schedule.py runs first in the same job -- but a
+        # local file can easily be last week's, and silently sizing the
+        # guard off the wrong week is how this helper would hand back 28
+        # during a 26-team week and reject good data all over again.
+        stamped = {int(r["Week"]) for r in rows if r.get("Week")}
+        if rows and stamped == {current_week()}:
+            return len(rows)
+    return floor
+
+
 def guard_week(path, rows, label):
     """Refuse to push a week-specific CSV left over from another week.
 
