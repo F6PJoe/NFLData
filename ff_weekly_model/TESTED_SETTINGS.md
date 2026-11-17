@@ -1310,3 +1310,16 @@ all from two shootouts, 45 and 46 targets -- the other six games SEA threw 25.5,
 WR tiers cut by OUR projection (wks 3-10, ours/cons/actual): 15+ 17.0/16.7/16.3; 12-15 13.1/13.4/14.1;
 9-12 10.4/10.6/10.8; 5-9 6.6/6.9/7.1 -- below 15 points we run ~0.3-1.0 low (consensus too, a bit less);
 cut by consensus the 12-15 gap looks bigger than it is (selection). RMSE about even every tier.
+
+## 2026-11-17 top of the slate (Joe: "maybe we aren't adjusting high enough on the very top, like top 2-3 each week")
+WRs ranked each week by OUR backtest projection, proj/actual (targets): WR1-3 2024 15.9/16.9 (9.4/9.6),
+2025 15.8/14.6 (9.6/9.6), 2026 17.2/20.3 (10.2/11.5); WR4-6 14.4/11.4, 14.2/15.3, 15.1/14.1.
+Published 2026 wks 3-10: top 3 by ours 17.5 / cons 17.0 / actual 16.8; top 3 by consensus 17.3 / 17.3 / 18.3
+(targets 10.4 vs 12.0) -- whichever list you rank by looks high (selection).
+TOP_RANK_BOOST {WR: (N, mult)} (points, targets scaled too) vs baseline (ALL 2024/2025/2026, WR):
+  3 x1.05  -.001/+.002/-.003 net -.002 (WR -.001/+.003/-.007)     3 x1.07 -.002 (2025 WR +.005)
+  3 x1.10  .000/+.005/-.005 even (2025 WR +.009)                   5 x1.05 FAILS (+.003)
+  2 x1.05  -.002/+.001/-.004 net -.005 (WR -.003/+.001/-.010)  <- ADOPTED
+  2 x1.08  -.002/+.002/-.006 net -.006   2 x1.10 -.002/+.003/-.007 net -.006 (2025 WR +.005)
+  1 x1.08  -.003/+.002/-.001 net -.002   3 x1.10 + TOP_SHRINK None FAILS (2025 +.007)
+  3 x1.05 points only (targets unscaled): same as with targets.

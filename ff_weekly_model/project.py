@@ -401,6 +401,14 @@ TOP_SHRINK = {"WR": (14.0, 0.85)}
 # (see project_week). ADOPTED 2026-11-17 at 0.5: ALL -.001/-.001/.000 (net -.002), TE -.003/-.002/-.003;
 # 0 net -.002 (2026 QB +.002), .75 net -.001. Small: JSN wk10 15.2 -> 15.4, Nabers 9.9 -> 10.4.
 NORM_EXCESS_P = 0.5
+# TOP OF THE SLATE (2026-11-17, Joe: "maybe we aren't adjusting high enough on the very top, like top 2-3
+# each week"). Backtest WR1-3 by our rank, proj/actual: 2024 15.9/16.9, 2025 15.8/14.6, 2026 17.2/20.3.
+# {pos: (N, mult)}: the week's top N at the position x mult (points; targets too if TOP_RANK_BOOST_TGT).
+# ADOPTED at WR top 2 x1.05: ALL -.002/+.001/-.004 (net -.005), WR -.003/+.001/-.010. 2 x1.08 net -.006
+# (2025 +.002), 2 x1.10 -.006 (2025 WR +.005), 3 x1.05 -.002, 3 x1.10 even, 5 x1.05 FAILS, 1 x1.08 -.002.
+# Chosen after seeing 2026 -- re-check wks 11-13.
+TOP_RANK_BOOST = {"WR": (2.0, 1.05)}
+TOP_RANK_BOOST_TGT = True
 # ...and the receivers' change in yards / TDs passed to their QB(s), so the
 # team still adds up (2026-11-05, Joe: "go ahead and test the QBs"). None = off.
 # ADOPTED 2026-11-05: ALL .000 / .000 / -.001, QB .000 / -.001 / -.005; 2026 wks 3-8 QBs
@@ -4090,10 +4098,10 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                     out[p][qk] = out[p].get(qk, 0.0) * t_ / q_
                 for p in rec:
                     out[p][rk] = out[p].get(rk, 0.0) * t_ / r_
-    if POS_SPREAD or TOP_SHRINK:
+    if POS_SPREAD or TOP_SHRINK or TOP_RANK_BOOST:
         scale_ = ("rec", "rec_yds", "rec_td", "rush_yds", "rush_td", "fum")
         spread_d = collections.defaultdict(float)      # (team, stat) -> receivers' change
-        for p_ in set(POS_SPREAD or {}) | set(TOP_SHRINK or {}):
+        for p_ in set(POS_SPREAD or {}) | set(TOP_SHRINK or {}) | set(TOP_RANK_BOOST or {}):
             ids_ = [pid for pid in out if pos.get(pid) == p_]
             pts_ = {pid: points(out[pid], p_) for pid in ids_}
             new_ = dict(pts_)
@@ -4109,6 +4117,15 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 for pid, v in new_.items():
                     if v > lv_:
                         new_[pid] = lv_ + s_ * (v - lv_)
+            if TOP_RANK_BOOST and p_ in TOP_RANK_BOOST:
+                # TOP OF THE SLATE (2026-11-17, Joe: "maybe we aren't adjusting high enough on the
+                # very top, like top 2-3 each week"): the week's top N at the position x mult.
+                # Targets / catches scale with it when TOP_RANK_BOOST_TGT (a volume call, not luck).
+                n_, mu_ = TOP_RANK_BOOST[p_]
+                for pid in sorted(new_, key=lambda q: -new_[q])[:int(n_)]:
+                    new_[pid] *= mu_
+                    if TOP_RANK_BOOST_TGT and pid in out:
+                        out[pid] = dict(out[pid], targets=out[pid]["targets"] * mu_)
             for pid in ids_:
                 if pts_[pid] > 0 and abs(new_[pid] - pts_[pid]) > 1e-9:
                     f_ = new_[pid] / pts_[pid]
@@ -4196,7 +4213,7 @@ def main():
         if k == "MATCHUP_EPA_BETA_POS":   # TE:0.5,WR:0.3
             globals()[k] = {a.split(":")[0]: float(a.split(":")[1]) for a in v.split(",") if a}
             continue
-        if k in ("TGT_TRIM", "TOP_SHRINK"):           # WR:0.85/8,TE:0.85/5.5 | WR:14/0.85
+        if k in ("TGT_TRIM", "TOP_SHRINK", "TOP_RANK_BOOST"):           # WR:0.85/8,TE:0.85/5.5 | WR:14/0.85
             globals()[k] = None if v == "None" else {
                 a.split(":")[0]: tuple(float(x) for x in a.split(":")[1].split("/")) for a in v.split(",") if a}
             continue
