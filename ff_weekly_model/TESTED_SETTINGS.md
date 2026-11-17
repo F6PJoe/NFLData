@@ -1323,3 +1323,4 @@ TOP_RANK_BOOST {WR: (N, mult)} (points, targets scaled too) vs baseline (ALL 202
   2 x1.08  -.002/+.002/-.006 net -.006   2 x1.10 -.002/+.003/-.007 net -.006 (2025 WR +.005)
   1 x1.08  -.003/+.002/-.001 net -.002   3 x1.10 + TOP_SHRINK None FAILS (2025 +.007)
   3 x1.05 points only (targets unscaled): same as with targets.
+  With the boost adopted, TGT_TRIM=None now FAILS: net +.004, 2026 +.002 (WR +.005) -- the trim stays.
