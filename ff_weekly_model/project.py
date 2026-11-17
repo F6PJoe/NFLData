@@ -409,6 +409,10 @@ NORM_EXCESS_P = 0.5
 # Chosen after seeing 2026 -- re-check wks 11-13.
 TOP_RANK_BOOST = {"WR": (2.0, 1.05)}
 TOP_RANK_BOOST_TGT = True
+RISER_KT = None          # (kt multiplier, share gap) for a WR whose share is up on last season (2026-11-17 test)
+RISER_POS = ("WR",)
+RISER_SAME_TEAM = False
+RISER_MIN = 0.0         # only risers whose share this season is at least this
 # ...and the receivers' change in yards / TDs passed to their QB(s), so the
 # team still adds up (2026-11-05, Joe: "go ahead and test the QBs"). None = off.
 # ADOPTED 2026-11-05: ALL .000 / .000 / -.001, QB .000 / -.001 / -.005; 2026 wks 3-8 QBs
@@ -3336,6 +3340,15 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             if f_ is not None:
                 kt *= f_ / (f_ + len(past_t))
                 kc *= f_ / (f_ + len(past_c))
+        # RISERS (2026-11-17, Joe: find what would NATURALLY get the WR boosts / trims). Raw model,
+        # WRs projected 24%+ of team targets: share UP 4+ pts on last season -> projected 28.2%,
+        # actual 26.4% (2024 -2.2, 2025 -0.8, 2026 -3.5 pts); steady -> 28.0 / 27.9. A jump in share
+        # half-holds, so a riser's last-season prior gets more weight: kt x RISER_KT[0] when this
+        # season's mean share (3+ games) is RISER_KT[1]+ above the prior. RISER_POS / RISER_SAME_TEAM.
+        if RISER_KT and pos.get(pid) in RISER_POS and len(past_t) >= 3 and pri_t > 0 \
+                and (group == "same team" or not RISER_SAME_TEAM) \
+                and sum(past_t) / len(past_t) >= max(pri_t + RISER_KT[1], RISER_MIN):
+            kt *= RISER_KT[0]
         # availability scales the share BEFORE normalisation, so a removed
         # player's touches are handed to his teammates rather than vanishing
         m = 1.0 if avail is None else avail.get(pid, 1.0)
@@ -4207,7 +4220,7 @@ def main():
         if k == "MATCHUP_QB_USE":    # yds/td/int
             globals()[k] = tuple(x for x in v.split("/") if x and x != "None")
             continue
-        if k == "QB_CARRY_TRIM":     # 0.5/4
+        if k in ("QB_CARRY_TRIM", "RISER_KT"):     # 0.5/4 | 3/0.04
             globals()[k] = None if v == "None" else tuple(float(x) for x in v.split("/"))
             continue
         if k == "MATCHUP_EPA_BETA_POS":   # TE:0.5,WR:0.3

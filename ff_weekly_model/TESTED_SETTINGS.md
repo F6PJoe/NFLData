@@ -1324,3 +1324,19 @@ TOP_RANK_BOOST {WR: (N, mult)} (points, targets scaled too) vs baseline (ALL 202
   1 x1.08  -.003/+.002/-.001 net -.002   3 x1.10 + TOP_SHRINK None FAILS (2025 +.007)
   3 x1.05 points only (targets unscaled): same as with targets.
   With the boost adopted, TGT_TRIM=None now FAILS: net +.004, 2026 +.002 (WR +.005) -- the trim stays.
+
+## 2026-11-17 WR patches: is there a natural cause? (Joe: "find what would naturally get the boosts/adjustments")
+Raw model (TGT_TRIM, TOP_SHRINK, TOP_RANK_BOOST all off), WRs ranked by our projection, pts gap split
+(actual - proj) into share / team volume / ypt / TD:
+  WR1-2  2024 +0.2 share +0.4 vol | 2025 -0.3 / -0.6 (TD -0.6) | 2026 +0.3 / +1.4 (team threw 36.4 vs 34.0)
+         -> the top two's SHARE is right every season; their miss is team volume + TDs, sign flips by season.
+  WR3-6  share too high every season: 28.1/25.5%, 28.6/28.2%, 30.0/28.1% -- what the trim was catching.
+WRs projected 24%+ share, by share vs last season (proj/actual share, all 3 seasons): steady 28.0/27.9;
+UP 4+ pts 28.2/26.4 (2024 -2.2, 2025 -0.8, 2026 -3.5); DOWN 27.1/26.6; no last season 28.2/28.8.
+RISER_KT (kt x M when this season's share is 4+ pts over the prior; RISER_MIN, RISER_SAME_TEAM), vs baseline:
+  2/.04 net -.001 (2024 WR +.004, 2026 WR -.005, TE +.003)  3/.04 FAILS +.001   2/.04 min .22 even
+  3/.04 min .22 FAILS   2/.04 same team FAILS +.003   2/.04 min .22 same team FAILS
+  with all three patches off: patches off alone +.009 (2026 +.006); + RISER 2/.04 (min .22) +.008.
+Conclusion: the riser share bias is real but is not what the patches do; they work as shrinkage of the
+extreme WR projections (regression to the mean), with the top two (long, stable records) the exception.
+RISER_KT left in the code, off.
