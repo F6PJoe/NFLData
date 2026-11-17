@@ -1300,3 +1300,13 @@ vs baseline re-saved with wk10 graded (2024 / 2025 / 2026 ALL):
   NORM_EXCESS_P=0.5 + TGT_TRIM=None  -.003/.000/.000 net -.003 (WR -.006/+.003/.000) -- trim is Joe's 11-04 pick: his call
 Ablation (wk10 live, no calls), JSN pts/targets: base 15.2/9.0, no TOP_SHRINK 15.4, no route 15.4/9.1,
 no VAC 15.4/9.1, no trim 15.3, no ROLE 15.2, LG_VOL_K 0 15.2 -- nothing single explains him.
+Follow-up (same day; vs the NORM_EXCESS_P baseline), all FAIL:
+  ROUTE_MODEL_W_POS WR 0.2  net +.003 (2026 +.001) | WR 0  net +.016 (2026 +.008) | WR 0.6 net +.008
+  POS_KEFF_MULT WR 0.25 (less yds/tgt shrink) net +.003 (2025 QB +.006) | WR 1.0 net .000, 2026 +.002
+Team volume (backtest team dump, skill targets proj/actual): 2024 30.7/31.2, 2025 30.7/30.3, 2026 30.8/31.5 --
+2026 low only wks 3-6 (league threw a lot), wks 7-10 level (wk10 31.2/31.3). Nothing to fix league-wide.
+JSN wks 3-10: targets 9.6/10.9 = share (33.9% proj vs 35.7%, ~0.55 tgt) + SEA volume (28.4 vs 30.5, ~0.7 tgt;
+all from two shootouts, 45 and 46 targets -- the other six games SEA threw 25.5, under our number).
+WR tiers cut by OUR projection (wks 3-10, ours/cons/actual): 15+ 17.0/16.7/16.3; 12-15 13.1/13.4/14.1;
+9-12 10.4/10.6/10.8; 5-9 6.6/6.9/7.1 -- below 15 points we run ~0.3-1.0 low (consensus too, a bit less);
+cut by consensus the 12-15 gap looks bigger than it is (selection). RMSE about even every tier.
