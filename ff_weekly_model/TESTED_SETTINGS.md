@@ -1281,3 +1281,22 @@ FADE_GROUPS (Joe: "there was some positives. why not use those?") -- fade only f
   all three F8 .000/.000/.000; F4 .000/.000/.000 (TE 2025 -.007, 2026 +.004; RB 2024 +.003); F2 .000/.000/.000
   new only F4 -.001/.000/+.001 (WR/TE 2026 worse); WR_down F4 -.001/+.001/.000; RB_up F4 .000/.000/.000.
 Every version a wash -- the group gains (picked after seeing them) were offset elsewhere. Off.
+
+## 2026-11-17 star WRs (Joe: "their ceiling games make us look real bad when we are that low"; JSN)
+Published finals wks 3-10, WRs by consensus tier (ours / cons / actual): 15+ 16.8/16.9/17.2 (n35);
+12-15 12.1/13.1/12.8 (n79); 9-12 9.9/10.3/10.4; 5-9 6.9/7.0/7.2. Target-share calibration by
+season-to-date share is level (30%+: projected 30.4%, actual 30.9%; 25-30%: 25.8 / 26.9).
+Per player wks 3-10 (proj/actual): JSN tgt 9.6/10.9, TD .58/.75; Nico tgt 7.1/7.5, ypt 9.1/9.0, TD .38/.67;
+Parker tgt 6.6/6.6, ypt 9.0/10.1, TD .36/.71; Jefferson tgt 9.1/8.2 (we are HIGH, consensus higher).
+JSN share: 37.1% 2026, 35.8% 2025; model wk10 blend .351 -> route model .338 -> /1.060 team sum -> .326 x 27.7.
+vs baseline re-saved with wk10 graded (2024 / 2025 / 2026 ALL):
+  TGT_TRIM=None                   -.002/+.001/.000  net -.001 passes (WR -.004/+.001/-.001)
+  TGT_TRIM=WR:0.8/9               -.001/.000/.000   net -.001
+  TGT_TRIM=WR:0.6/10              -.001/.000/.000   net -.001
+  TOP_SHRINK=None                 -.001/+.001/.000  even (2026 QB +.003)
+  NORM_EXCESS_P=0.5               -.001/-.001/.000  net -.002 (TE -.003/-.002/-.003)  <- ADOPTED
+  NORM_EXCESS_P=0                 -.002/.000/.000   net -.002 (2026 QB +.002, RB 2024 +.004)
+  NORM_EXCESS_P=0.75              -.001/.000/.000   net -.001
+  NORM_EXCESS_P=0.5 + TGT_TRIM=None  -.003/.000/.000 net -.003 (WR -.006/+.003/.000) -- trim is Joe's 11-04 pick: his call
+Ablation (wk10 live, no calls), JSN pts/targets: base 15.2/9.0, no TOP_SHRINK 15.4, no route 15.4/9.1,
+no VAC 15.4/9.1, no trim 15.3, no ROLE 15.2, LG_VOL_K 0 15.2 -- nothing single explains him.

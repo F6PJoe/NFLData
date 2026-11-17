@@ -397,6 +397,10 @@ REC_TD_OWN_HIST_W = 1.0
 #   TE .92 lost the 2024 gain (.000/-.003/-.010) -- kept .95.
 POS_SPREAD = {"TE": 0.95}
 TOP_SHRINK = {"WR": (14.0, 0.85)}
+# NORM_EXCESS_P: a team's target shares summing over 1 lose the excess in proportion to share^P
+# (see project_week). ADOPTED 2026-11-17 at 0.5: ALL -.001/-.001/.000 (net -.002), TE -.003/-.002/-.003;
+# 0 net -.002 (2026 QB +.002), .75 net -.001. Small: JSN wk10 15.2 -> 15.4, Nabers 9.9 -> 10.4.
+NORM_EXCESS_P = 0.5
 # ...and the receivers' change in yards / TDs passed to their QB(s), so the
 # team still adds up (2026-11-05, Joe: "go ahead and test the QBs"). None = off.
 # ADOPTED 2026-11-05: ALL .000 / .000 / -.001, QB .000 / -.001 / -.005; 2026 wks 3-8 QBs
@@ -3865,10 +3869,32 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 tm_ = raw[pid][0]; tp_ = team_proj[tm_]
                 print(f"  [debug {pid}] final raw tgt {raw[pid][1]:.3f} / team {tot_t[tm_]:.3f}, raw car {raw[pid][2]:.3f} / team {tot_c[tm_]:.3f}"
                       f" | {tm_} plays {tp_['plays']:.1f} targets {tp_['targets']:.1f} non-QB rush {tp_['nonqb_rush']:.1f}")
+    # NORM_EXCESS_P (2026-11-17, Joe on JSN: 37% of SEA's targets this season, 36% last, projected
+    # 32.6%): when a team's blended target shares sum to MORE than 1, the excess is taken in
+    # proportion to share^P instead of share (P < 1 takes relatively more from the small shares --
+    # the fringe and returning players whose blends overlap -- and less from the alpha). Teams at or
+    # under 1 are normalised as before. None = plain proportional normalisation.
+    norm_t = {}
+    if NORM_EXCESS_P is not None:
+        by_tm = collections.defaultdict(list)
+        for pid, (tm, ts, cs) in raw.items():
+            by_tm[tm].append((pid, ts))
+        for tm, l_ in by_tm.items():
+            ex = tot_t[tm] - 1.0
+            if ex <= 0:
+                continue
+            w_ = {p_: (t_ ** NORM_EXCESS_P if t_ > 0 else 0.0) for p_, t_ in l_}
+            W_ = sum(w_.values())
+            if W_ <= 0:
+                continue
+            adj = {p_: max(t_ - ex * w_[p_] / W_, 0.25 * t_) for p_, t_ in l_}
+            s_ = sum(adj.values())
+            for p_, v_ in adj.items():
+                norm_t[p_] = v_ / s_ if s_ else 0.0
     out = {}
     for pid, (tm, ts, cs) in raw.items():
         tp = team_proj[tm]
-        ts = ts / tot_t[tm] if tot_t[tm] else 0.0
+        ts = norm_t[pid] if pid in norm_t else (ts / tot_t[tm] if tot_t[tm] else 0.0)
         cs = cs / tot_c[tm] if tot_c[tm] else 0.0
         targets, carries = ts * tp["targets"], cs * tp["nonqb_rush"]
         e = eff[pos[pid]]
