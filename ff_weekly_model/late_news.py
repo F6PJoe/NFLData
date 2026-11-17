@@ -161,8 +161,10 @@ def main():
     espn_only = []
     for pid, (nm, tm) in list(inactive.items()):
         rep = report.get(pid, "")
-        if tm not in posted and rep and rep not in availability.BLOCKING_REPORT:
-            espn_only.append((nm, tm, rep))
+        # (a BLANK report counts too: Skattebo, NYG wk10, full practice and no designation, was
+        # switched OUT this way and played -- 18 carries; Singletary got his projection)
+        if tm not in posted and rep not in availability.BLOCKING_REPORT:
+            espn_only.append((nm, tm, rep or "no designation"))
             del inactive[pid]
     fresh = {}
     with open(os.path.join(DATA, f"news_{args.year}.csv"), newline="", encoding="utf-8") as fh:

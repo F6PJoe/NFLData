@@ -1340,3 +1340,15 @@ RISER_KT (kt x M when this season's share is 4+ pts over the prior; RISER_MIN, R
 Conclusion: the riser share bias is real but is not what the patches do; they work as shrinkage of the
 extreme WR projections (regression to the mean), with the top two (long, stable records) the exception.
 RISER_KT left in the code, off.
+
+## 2026-11-17 RB highs (oddity_rate: 16 of our 35 breaks were RBs too high, net -12 pts)
+research/rb_breaks.py, 18 weeks 3-10 we were 3+ over the other sites: carries ours 16.9 / field 11.3 /
+actual 11.7; targets 3.9 / 2.3 / 3.4; rush TD .55 / .41 / .61 -- the gap is CARRIES. Backtest carries are
+calibrated in every bin all 3 seasons (17-20: 18.4/18.9, 18.3/15.9, 18.4/17.6), so the causes were live:
+  one-back backfields (pool missing the backups): Warren x3, Shipley (18.2 live vs 9.3 backtest; Pierce 11
+  carries), McLaughlin (15.1 vs 6.4; Estime), Hubbard, Cook -- wks 3-7, before RB_MIN_BACKUP (10-24) and
+  the pool-add fix (11-15); wrong availability: Singletary wk10 (Skattebo auto-OUT by late_news, played 18).
+  Lead backs 20+: 21.1/19.9, 20.8/19.1, 21.5/19.7 -- CARRY_TRIM_K .75 FAILS (+.002), AT 18 K .6 FAILS
+  (+.003, 2026 RB +.009), K .8 AT 14 FAILS (+.003). Current trim stays.
+late_news: an ESPN Out before the game-day list is posted no longer switches a player whose report is
+BLANK either (only Out / Doubtful on the report does).
