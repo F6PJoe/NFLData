@@ -1387,3 +1387,24 @@ TRIM_OWN_PRIOR_W (weight on last season's games in the own level; Joe on Golden,
 Golden wk10: share 30.2% this season (9 g) vs 16.6% last, blend k 4.5 -> 25.6%, raw 27.9% / team 1.055;
 GB projected 34.6 pass att a game wks 2-10 vs 36.4 actual (31 early -> 38-40 wks 6-7). Risers as a group
 are still over-projected (RISER_KT, 11-17), so Golden is the exception the rules can't catch -- a review call.
+
+## 2026-11-18 TEAM PERSONNEL CHANGES (Joe: "pulling harder and faster into using new usage rates for teams that
+## had fairly major personnel changes during the offseason and then adjust again when there are major injuries")
+Turnover = share of last season's targets held by players no longer on the team (team_turnover; PROJ_TURNOVER=1
+prints it). 2026: NYG 53%, MIA 50%, WAS 49%, GB 39%, NE 38% ... DEN 3%, LA 0%.
+STUDY (bare last-season share vs next-week share, 2022-26): best prior weight WR 4.5 games at <20% departed,
+2 at 20-35%+; TE 4.5/3/2; RB no pattern. In the model it does not carry over:
+  TURNOVER_KT 0.2,0.35,0.5 (holdover prior weight x.5 on remade teams)  .000/.000/+.002 FAILS (TE +.001/+.003/+.004)
+  TURNOVER_KT 0.2,0.35,0.75                                              .000/.000/+.001 FAILS
+  TURNOVER_PRE 0.2,0.4,0.75 (lean on the preseason half on remade teams) -.001/+.001/+.001 FAILS
+  TURNOVER_PRE 0.2,0.4,0.25 (lean on last season instead)                +.001/-.001/+.002 FAILS
+  Why: the model is already level on remade teams -- holdover WR/TE targets proj/actual, 35%+ departed:
+  wks 2-4 4.90/4.89, 5-8 4.77/5.07, 9+ 4.82/4.77 (RMSE 2.48/2.66/2.47, LOWER than stable teams' 2.89/2.94/2.69).
+  apply_vacated (departed shares to holdovers) + the preseason blend already do this job.
+STAR OUT (OUT_LINEUP_K: blend teammates' share in the games the 18%+ star already missed). Study 2021-26 vs a
+plain proportional hand-out: 3+ games 87.3 -> 75.8. In the model:
+  OUT_LINEUP_K 2  +.007/+.005/+.006 FAILS   K 4 +.003/+.002/+.004 FAILS   K 6 WR/TE only +.001/.000/+.002 FAILS
+  Why: on those weeks the model is already level -- teammate targets proj/actual with 1 / 2 / 3+ games
+  without him 3.47/3.44, 3.80/3.91, 4.28/4.39; the K2 blend 2.209 vs model 2.208 RMSE. Recency (HALF_LIFE 4)
+  + VAC_EQ / VAC_TPRR + same-lineup deflate already use the games without him. The study's baseline was weak.
+All four settings left in the code, off.

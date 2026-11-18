@@ -560,6 +560,33 @@ VAC_EQ_POS = {}
 # A player on a NEW team: extra multiplier on his target-share prior weight, by position (2026-11-12,
 # Joe on Likely: "we should 100% not be looking at his Ravens usage as much"). {} = off.
 CHANGED_KT_POS = {}
+# OFFSEASON TURNOVER, TEAM BY TEAM (2026-11-18, Joe: "pulling harder and faster into using new usage
+# rates for teams that had fairly major personnel changes during the offseason ... team based, not a
+# base league average"). Per team, the share of last season's targets (carries) that belonged to players
+# no longer on it (departed). A holdover's share-prior weight (kt / kc) is x 1 at TURNOVER_KT[0] departed
+# or less, x TURNOVER_KT[2] at TURNOVER_KT[1] or more, linear between -- so on a remade team this
+# season's games take over sooner. Study 2022-26 (bare last-season share vs next-week share): best prior
+# weight WR 4.5 games at <20% departed, 2 at 20-35%, 2 at 35%+; TE 4.5 / 3 / 2; RB 2 / 3 / 3 (no pattern).
+# None = off. TURNOVER_POS = positions it applies to; TURNOVER_CAR = also the carry prior.
+TURNOVER_KT = None
+TURNOVER_POS = ("WR", "TE")
+TURNOVER_CAR = False
+# ...or, instead of shrinking the prior, lean on the PRESEASON part of it (it knows the new roster):
+# (lo, hi, w) -- a holdover's PRESEASON_W goes to w at hi departed or more, linear from lo. None = off.
+TURNOVER_PRE = None
+_TURNOVER = {}     # team -> (departed target share, departed carry share), set in main()
+# STAR OUT: USE THE GAMES WITHOUT HIM (2026-11-18, Joe: "adjust again when there are major injuries during
+# the season"). When a teammate with OUT_STAR_MIN+ of the targets (games he played, 2+) is out this week,
+# a pass-catcher's share in the games this season he ALREADY missed (with this week's other big-role
+# teammates on the field) is blended in: (m x that share + OUT_LINEUP_K x the model's share) / (m + K),
+# m = those games. Study 2021-26, 2,800 teammate-weeks: next-week share error with 1 game without him
+# 78.6 -> 75.6 (K 2), 2 games 80.1 -> 73.3, 3+ 87.3 -> 75.8 (vs the best proportional hand-out).
+# None = off. OUT_LINEUP_K_CAR: the same for carries (lead back out, OUT_STAR_MIN_CAR of the carries).
+OUT_LINEUP_K = None
+OUT_STAR_MIN = 0.18
+OUT_LINEUP_POS = ("WR", "TE", "RB")
+OUT_LINEUP_K_CAR = None
+OUT_STAR_MIN_CAR = 0.40
 SHARE_PRIOR_FADE = None   # see project_week; None = off
 SHARE_PRIOR_FADE_DOWN = None
 FADE_GROUPS = None
@@ -2710,6 +2737,10 @@ def apply_preseason(priors, pre, team_of, pos, absent=None):
         if not v or not tm or pos.get(pid) not in POSITIONS:
             continue
         w = PRESEASON_W
+        if TURNOVER_PRE and g == "same team" and tm in _TURNOVER and pos.get(pid) in TURNOVER_POS:
+            lo_, hi_, wh_ = TURNOVER_PRE
+            d_ = _TURNOVER[tm][0]
+            w = PRESEASON_W if d_ <= lo_ else wh_ if d_ >= hi_ else                 PRESEASON_W + (wh_ - PRESEASON_W) * (d_ - lo_) / (hi_ - lo_)
         f = 1.0
         if PRESEASON_ABSENT and absent.get(pid):
             f = min(17.0 / max(17 - absent[pid], 1), PRESEASON_ABSENT_MAX)
@@ -2782,6 +2813,25 @@ def apply_vacated(priors, tgt_prev, car_prev, team_prev, team_cur, chart, pos, p
                 add = VAC_PRIOR_W * vac * out[q][idx] / tot
                 out[q] = (g, pt + add, pc, nt, nc) if idx == 1 else (g, pt, pc + add, nt, nc)
     return out
+
+
+def team_turnover(tgt_prev, car_prev, team_prev, team_cur, chart, pos, pos_prev):
+    """team -> (departed share of last season's targets, of its carries) -- TURNOVER_KT."""
+    tot = collections.defaultdict(lambda: [0.0, 0.0])
+    dep = collections.defaultdict(lambda: [0.0, 0.0])
+    for i, prev in enumerate((tgt_prev, car_prev)):
+        for pid, wks in prev.items():
+            tm = team_prev.get(pid)
+            p = pos_prev.get(pid) or pos.get(pid)
+            if not tm or p not in POSITIONS or not wks:
+                continue
+            v = sum(wks.values()) / 17.0
+            tot[tm][i] += v
+            now = team_cur.get(pid)
+            if (now and now != tm) or (not now and pid not in chart):
+                dep[tm][i] += v
+    return {tm: (dep[tm][0] / t[0] if t[0] else 0.0, dep[tm][1] / t[1] if t[1] else 0.0)
+            for tm, t in tot.items()}
 
 
 def preseason_rates(pre, pos):
@@ -3318,6 +3368,18 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         kc = _k_car(group) * POS_KT_MULT.get((pos.get(pid), "car"), 1.0)
         if group == "changed team" and CHANGED_KT_POS:
             kt *= CHANGED_KT_POS.get(pos.get(pid), 1.0)
+        if TURNOVER_KT and group == "same team" and tm in _TURNOVER:
+            def _tf(d_):
+                lo_, hi_, mu_ = TURNOVER_KT
+                if d_ <= lo_:
+                    return 1.0
+                if d_ >= hi_:
+                    return mu_
+                return 1.0 + (mu_ - 1.0) * (d_ - lo_) / (hi_ - lo_)
+            if pos.get(pid) in TURNOVER_POS:
+                kt *= _tf(_TURNOVER[tm][0])
+            if TURNOVER_CAR and pos.get(pid) == "RB":
+                kc *= _tf(_TURNOVER[tm][1])
         # SHARE PRIOR FADES WITH GAMES (2026-11-14, Joe on Likely, 27% of targets over 8 games,
         # projected 21%: "we should be closer to the target share for the season average now that
         # we are at week 10"). {pos: F}: the prior's weight x F / (F + his games this season).
@@ -3583,6 +3645,55 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
     tot_t, tot_c = collections.defaultdict(float), collections.defaultdict(float)
     for tm, ts, cs in raw.values():
         tot_t[tm] += ts; tot_c[tm] += cs
+    if (OUT_LINEUP_K is not None or OUT_LINEUP_K_CAR is not None) and team_of:
+        def _played(q, w):
+            return w in tgt_cur.get(q, {}) or w in car_cur.get(q, {})
+
+        def _season_share(q, series):
+            v_ = [x for w, x in series.get(q, {}).items() if w < week]
+            return (sum(v_) / len(v_), len(v_)) if v_ else (0.0, 0)
+        changed = False
+        for kind, K_, smin, series in (("t", OUT_LINEUP_K, OUT_STAR_MIN, tgt_cur),
+                                       ("c", OUT_LINEUP_K_CAR, OUT_STAR_MIN_CAR, car_cur)):
+            if K_ is None:
+                continue
+            stars_out, stars_in = collections.defaultdict(list), collections.defaultdict(list)
+            for q, t_ in team_of.items():
+                if pos.get(q) not in POSITIONS or (kind == "c" and pos.get(q) != "RB"):
+                    continue
+                sh_, g_ = _season_share(q, series)
+                if g_ < 2 or sh_ < smin:
+                    continue
+                if q in raw and raw[q][0] == t_:
+                    stars_in[t_].append(q)
+                elif t_ in team_proj:
+                    stars_out[t_].append(q)
+            for pid, (tm, ts, cs) in list(raw.items()):
+                if not stars_out.get(tm) or pos.get(pid) not in OUT_LINEUP_POS:
+                    continue
+                if kind == "c" and pos.get(pid) != "RB":
+                    continue
+                tot_ = tot_t[tm] if kind == "t" else tot_c[tm]
+                if not tot_:
+                    continue
+                wks = [w for w, x in series.get(pid, {}).items()
+                       if w < week and (pid, w) not in _EXITS
+                       and all(not _played(q, w) for q in stars_out[tm])
+                       and all(_played(q, w) for q in stars_in[tm] if q != pid)]
+                if not wks:
+                    continue
+                m_ = len(wks)
+                wo_ = sum(series[pid][w] for w in wks) / m_
+                cur_ = (ts if kind == "t" else cs) / tot_
+                new_ = (m_ * wo_ + K_ * cur_) / (m_ + K_)
+                if _DEBUG_PIDS and pid in _DEBUG_PIDS:
+                    print(f"  [debug {pid}] star out ({kind}): {m_} games without, share {wo_:.3f} vs model {cur_:.3f} -> {new_:.3f}")
+                raw[pid] = (tm, new_ * tot_, cs) if kind == "t" else (tm, ts, new_ * tot_)
+                changed = True
+        if changed:
+            tot_t, tot_c = collections.defaultdict(float), collections.defaultdict(float)
+            for tm, ts, cs in raw.values():
+                tot_t[tm] += ts; tot_c[tm] += cs
     # NO TEAM PLAYS ONE BACK (2026-10-24, Joe: "A team never goes into a game
     # with just a single RB. Bijan is a beast, but can't do 100%"). ATL wk7:
     # Brian Robinson out, Herbert / Jam Miller off the depth chart -> Bijan got
@@ -4360,6 +4471,10 @@ def main():
                           team_cur, team_prev, chart)
     if VAC_PRIOR_W:
         priors = apply_vacated(priors, tgt_prev, car_prev, team_prev, team_cur, chart, pos, pos_prev)
+    globals()["_TURNOVER"] = team_turnover(tgt_prev, car_prev, team_prev, team_cur, chart, pos, pos_prev)
+    if os.environ.get("PROJ_TURNOVER"):
+        for tm_, (a_, b_) in sorted(_TURNOVER.items(), key=lambda kv: -kv[1][0]):
+            print(f"  turnover {tm_}: targets {a_:.0%} carries {b_:.0%}")
     if DEPTH_DEMOTE:
         globals()["_DEPTH_FLAG"] = depth_flags(args.year, cur_rows)
     if TRADE_MULT:
@@ -4525,6 +4640,8 @@ def main():
         if VAC_PRIOR_W:
             priors = apply_vacated(priors, tgt_prev, car_prev, team_prev,
                                    {**roster, **team_cur}, chart, pos, pos_prev)
+        globals()["_TURNOVER"] = team_turnover(tgt_prev, car_prev, team_prev,
+                                               {**roster, **team_cur}, chart, pos, pos_prev)
         if pre_now and PRESEASON_W:
             tm_all = {**roster, **team_cur}
             priors = apply_preseason(priors, pre_now, tm_all, pos,
