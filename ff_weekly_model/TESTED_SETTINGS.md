@@ -1454,3 +1454,18 @@ Matching the lineup did not rescue it, and it HURT the TE pull (fewer games -> n
 SIDE VERSION "wrpull" (VARIANTS; Joe OK'd): TE as main + WR .15/4 matched (.20, bigger, in-only). Backtest
 ALL .000/+.003/.000, WR .000/+.005/-.001. Runs with lock/rerun next to current/noqbtd/epa; judge live wks 11-13.
 Wk10 2026: Golden 7.56 -> 7.96 (his 10.2 a game), JSN 10.09 -> 10.23 (11.0).
+
+## PER-PLAYER EXCEPTIONS (2026-11-18, Joe: "can we add exceptions into the model for certain players that are constantly over or under projected")
+Study on the walk-forward dumps (current model, TE season pull in), each player-week corrected by that
+player's OWN past misses this season (weeks before it only), shrunk n/(n+K). Not in project.py.
+- Persistence: players missed the same way in 75%+ of 6+ games. Going forward they keep missing that way
+  only 31-68% of games (about a coin flip). UNDER groups keep about 1/3 of the miss in points
+  (+4.4 -> +1.8, +4.9 -> +0.3, +5.4 -> +3.3; 5-10 players each). OVER groups keep about none (-2.5 -> -0.1, +0.1, +1.0).
+- Points correction, both ways: worse in every season at almost every setting (K 4-16, min 3/5 games,
+  same-way 0/.7, last season's miss as 0/3 games). For example, K8 min5 same.7: +.013 / +.015 / -.002.
+- Target correction, both ways: worse or flat (e.g. K8 min5 same.7: +.005 / +.000 / -.002).
+- Points, UNDER only: 2025 worse at most settings (+.002 to +.031).
+- Targets, UNDER only, 6+ games, 75% same way: K6 +.001/+.001/-.006, K10 +.000/+.000/-.004,
+  K16 .000/.000/-.003. Flat in 2024-25; the whole gain is 2026 weeks 8-9 WRs (Golden, Burden, Lemon,
+  Hutchinson). Week 10: +.006. A 2026-only signal, so NOT adopted. Re-test over weeks 10-12, and it would
+  need the model's own past projections inside project.py (not built).
