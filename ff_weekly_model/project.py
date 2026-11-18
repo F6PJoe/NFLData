@@ -1179,6 +1179,14 @@ TGT_TRIM_REST = 0.0
 # 11.0 vs 14.0 actual, Lamb 9.3 vs 13.0 wks 3-9). (min games, min targets a game THIS season): a WR
 # already averaging that many keeps his full projection. None = everyone trimmed.
 TGT_TRIM_EXEMPT = None
+# OWN-LEVEL TRIM (2026-11-17, Joe: "can we have the trim have exceptions? and adds/removes people as it
+# deems necessary"). (min games, mult, floor): with min games (this season + last) the trim line is
+# max(floor, mult x his own targets a game) instead of the fixed line -- a WR averaging 10.9 is not trimmed
+# at 10.1; with floor under the fixed line a WR projected well above his own level is trimmed even below
+# it. Fewer games keep the fixed line. CARRY_TRIM_OWN is the same for RB carries. None = off.
+TGT_TRIM_OWN = {"WR": (6.0, 1.0, 5.0)}   # ADOPTED 2026-11-17, see TESTED_SETTINGS.md
+CARRY_TRIM_OWN = None
+TRIM_OWN_PRIOR_W = 1.0   # weight on last season's games in the own level
 QB_PASS_TD_HIST_W = 1.0   # TESTED 2026-11-03: 0.5/0.25/0 all worse in 2026; TESTED_SETTINGS.md
 K_RB_RUSH_TD = 150.0   # carries; fit 150-300 flat, 150 best calibrated
 QB_RUSH_TD_MIN_SEASONS = 2   # qualifying SEASONS, not weeks -- picks out Allen and Hurts
@@ -3963,6 +3971,15 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             "targets": targets, "rush_att": carries,
         }
 
+    def _own_level(pid, key, min_g):
+        pe_ = player_eff.get(pid) or {}
+        cur_ = [c_.get(key, 0.0) for w_, c_ in pe_.items() if 0 < w_ < week]
+        pr_ = pe_.get(0) or {}
+        g_ = len(cur_) + TRIM_OWN_PRIOR_W * pr_.get("g", 0)
+        if g_ < min_g or g_ <= 0:
+            return None
+        return (sum(cur_) + TRIM_OWN_PRIOR_W * pr_.get(key, 0.0)) / g_
+
     if CARRY_TRIM_K is not None:
         rbs_ = collections.defaultdict(list)
         for pid, v in out.items():
@@ -3978,9 +3995,14 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         for tm, ps_ in rbs_.items():
             for pid in ps_:
                 c_ = out[pid]["rush_att"]
-                if c_ <= CARRY_TRIM_AT:
+                at_ = CARRY_TRIM_AT
+                if CARRY_TRIM_OWN:
+                    own_ = _own_level(pid, "car", CARRY_TRIM_OWN[0])
+                    if own_ is not None:
+                        at_ = max(CARRY_TRIM_OWN[2], CARRY_TRIM_OWN[1] * own_)
+                if c_ <= at_:
                     continue
-                cut = (c_ - CARRY_TRIM_AT) * (1 - CARRY_TRIM_K)
+                cut = (c_ - at_) * (1 - CARRY_TRIM_K)
                 rest = [q for q in ps_ if q != pid and out[q]["rush_att"] > 0]
                 pool = sum(out[q]["rush_att"] for q in rest)
                 if not pool:
@@ -4004,13 +4026,21 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             for pid in ps_:
                 k_at = TGT_TRIM.get(pos.get(pid)) if isinstance(TGT_TRIM, dict) else None
                 t_ = out[pid]["targets"]
-                if not k_at or t_ <= k_at[1]:
+                if not k_at:
+                    continue
+                at_ = k_at[1]
+                if TGT_TRIM_OWN and pos.get(pid) in TGT_TRIM_OWN:
+                    mg_, mu_, fl_ = TGT_TRIM_OWN[pos.get(pid)]
+                    own_ = _own_level(pid, "tgt", mg_)
+                    if own_ is not None:
+                        at_ = max(fl_, mu_ * own_)
+                if t_ <= at_:
                     continue
                 if TGT_TRIM_EXEMPT:
                     gw_ = [c_.get("tgt", 0.0) for w_, c_ in (player_eff.get(pid) or {}).items() if 0 < w_ < week]
                     if len(gw_) >= TGT_TRIM_EXEMPT[0] and sum(gw_) / len(gw_) >= TGT_TRIM_EXEMPT[1]:
                         continue
-                cut = (t_ - k_at[1]) * (1 - k_at[0])
+                cut = (t_ - at_) * (1 - k_at[0])
                 rest = [q for q in ps_ if q != pid and out[q]["targets"] > 0]
                 pool = sum(out[q]["targets"] for q in rest)
                 if not pool:
@@ -4226,7 +4256,7 @@ def main():
         if k == "MATCHUP_EPA_BETA_POS":   # TE:0.5,WR:0.3
             globals()[k] = {a.split(":")[0]: float(a.split(":")[1]) for a in v.split(",") if a}
             continue
-        if k in ("TGT_TRIM", "TOP_SHRINK", "TOP_RANK_BOOST"):           # WR:0.85/8,TE:0.85/5.5 | WR:14/0.85
+        if k in ("TGT_TRIM", "TOP_SHRINK", "TOP_RANK_BOOST", "TGT_TRIM_OWN"):           # WR:0.85/8,TE:0.85/5.5 | WR:14/0.85
             globals()[k] = None if v == "None" else {
                 a.split(":")[0]: tuple(float(x) for x in a.split(":")[1].split("/")) for a in v.split(",") if a}
             continue

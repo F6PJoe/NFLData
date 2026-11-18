@@ -1367,3 +1367,18 @@ PERSISTENCE: WRs we were 3+ pts low on over their prior 4+ games, next-week miss
 POS_KT_MULT WR 1.0 (more weight on this season): ALL +.002/+.002/+.002 FAILS (WR +.005/+.005/+.007).
 POS_KT_MULT WR 2.25 (more weight on last season): ALL +.001/+.001/-.001 net +.001 FAILS. WR 1.5 stays.
 (TD own rate REC_TD_OWN_K and TGT_TRIM_EXEMPT already failed 11-05 / 11-12.)
+
+## 2026-11-17 OWN-LEVEL TRIM (Joe: "can we have the trim have exceptions? and adds/removes people as it deems necessary")
+TGT_TRIM_OWN {pos: (min games, mult, floor)}: with 6+ games (this season + last) the trim line is
+max(floor, mult x his own targets a game) instead of the fixed 9. vs baseline (ALL 2024/2025/2026, net):
+  WR 6/1.0/9 (exceptions only)  +.001/.000/.000  FAILS      WR 6/1.0/8  -.000 even
+  WR 6/1.0/7  +.003/-.002/-.002 net -.001                   WR 6/1.05/7 net -.001   WR 10/1.0/7 net -.002
+  WR 6/1.0/6  +.001/-.003/-.004 net -.006                   WR 10/1.0/6 net -.006   WR 6/1.1/6 net -.003
+  WR 6/1.0/5  .000/-.003/-.004 net -.007 (WR -.002/-.005/-.006)  <- ADOPTED      WR 6/1.0/4 net -.005
+  + TE (TGT_TRIM TE keep .6 / .8, own 6/1.0/3): net -.006 / -.007, TE +.012/+.015/-.019, +.003/+.005/-.012
+    -- helps 2026 TE only, hurts 2024-25 TE: NOT adopted (2026-only signal; re-test wks 11-13).
+  + CARRY_TRIM_OWN 6,1.0,15 / 12 alone FAIL; with the WR rule, floor 8 net -.004, floor 10 -.005 (2026 RB
+    +.012/+.009) -- worse than WR alone, off.
+Who moves (2026 backtest): lifted 38 WR-weeks, tgt 10.37->10.86 vs 10.58 actual; cut 207, 7.17->6.79 vs
+7.01. JSN 9.9->10.1 (act 10.9), Chase 10.1->10.7, Puka 11.2->11.9, Lamb 10.0->10.2, Jefferson 9.1->8.8 (7.9).
+Miss: Matthew Golden cut ~1.1/wk (his rookie year drags his own level; 2026 actual 9-13) -- the riser case.
