@@ -1433,3 +1433,24 @@ vs 4.52, 2026 4.96->5.06 vs 5.06 -- the group bias flips by season (league volum
 Biggest 2026 gain Golden (+30 sq-err); 2025 losses Puka, Shaheed, Egbuka, Keenan Allen. WR pull off.
 TE adopted, 2026 per week (TE RMSE change): wk5 -.016 6 -.023 7 +.033 8 -.010 9 -.001 10 -.027 (better 5, worse 1);
 2024 better 8 / worse 6 weeks, 2025 8 / 5. Likely wk5-10 6.9->7.7, 8.2->8.8, 7.9->8.7, 6.7->7.6, 6.0->7.1 (act 13/11/4/6/11).
+
+## 2026-11-18 LINEUP-MATCHED SEASON PULL (Joe: "only be pulling WR2 toward his avg targets per game for when the
+## WR1 was also healthy ... TE are mixed into this too cause there are some TE like Bowers, McBride")
+SEASON_PULL_MATCH s: his average counts only games where each WR/TE teammate with s+ of the targets was in/out as
+this week (their exit games skipped); _BIGGER = only teammates bigger than him; _IN_ONLY = no pull when one is out;
+SEASON_PULL_CONSERVE {pos: c} = the extra targets come out of his teammates. vs baseline WITH the TE pull (ALL; WR; TE):
+  match .15, WR .25/3 + TE              +.002/+.008/+.001 FAILS (TE +.010/+.009/-.004 -- matching hurts the TE pull)
+  match .15, WR .4/3 + TE               +.004/+.012/+.003 FAILS     both ways WR .25 +.006/+.010/-.001 FAILS
+  match .15, TE only                    +.001/+.002/.000 FAILS
+  match .20 bigger in-only, TE only     .000/+.002/-.001 FAILS (TE -.001/+.005/-.006)
+  match .20 bigger in-only, WR .25/3    +.001/+.006/+.001 FAILS (WR +.001/+.009/+.001)
+  match .20 bigger in-only, WR .15/4    .000/+.004/-.001 FAILS (WR .000/+.005/-.001)
+  match .20 bigger (not in-only) WR .25 .000/+.006/+.001 FAILS
+  conserve WR 1.0, WR .15/4 (unmatched) .000/+.003/-.001 FAILS (WR +.001/+.004/-.003, QB 2025 +.003 not +.006)
+  conserve WR 1.0, WR .25/4             +.002/+.005/-.001 FAILS    conserve .5 WR .15 .000/+.003/.000 FAILS
+  conserve + match .20 bigger in-only WR .25/3  +.001/+.006/.000 FAILS
+Every WR pull makes 2025 worse (WR +.004 to +.020), whichever games are averaged; 2026 WR at best -.003.
+Matching the lineup did not rescue it, and it HURT the TE pull (fewer games -> noisier average). Main: TE unmatched.
+SIDE VERSION "wrpull" (VARIANTS; Joe OK'd): TE as main + WR .15/4 matched (.20, bigger, in-only). Backtest
+ALL .000/+.003/.000, WR .000/+.005/-.001. Runs with lock/rerun next to current/noqbtd/epa; judge live wks 11-13.
+Wk10 2026: Golden 7.56 -> 7.96 (his 10.2 a game), JSN 10.09 -> 10.23 (11.0).

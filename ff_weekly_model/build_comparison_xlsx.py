@@ -83,7 +83,7 @@ def load_etr(year, week):
     return out
 
 
-TEST_LABELS = {"noqbtd": "Old (no QB-TD)", "epa": "EPA Full-Strength Test"}
+TEST_LABELS = {"noqbtd": "Old (no QB-TD)", "epa": "EPA Full-Strength Test", "wrpull": "WR Season-Pull Test"}
 
 
 def load_tests(year, week):

@@ -520,6 +520,12 @@ VARIANTS = {
     # full-strength EPA matchups (the main model runs them at half since 2026-11-03)
     "epa": {"MATCHUP_K": 1.0, "MATCHUP_MODE": "epa", "MATCHUP_EPA_BETA": 0.5,
             "MATCHUP_EPA_PRIOR": 2.0},
+    # WR season-average pull, lineup-matched (2026-11-18, Joe: "only be pulling WR2 toward his avg targets
+    # per game for when the WR1 was also healthy"). Backtest: WR 2024 .000 / 2025 +.005 / 2026 -.001 --
+    # fails, a 2026-only signal; run live wks 11-13 next to the main model (Joe OK'd the side version).
+    "wrpull": {"SEASON_PULL": {"TE": (0.4, 4.0), "WR": (0.15, 4.0)}, "SEASON_PULL_MATCH": 0.20,
+               "SEASON_PULL_MATCH_BIGGER": True, "SEASON_PULL_MATCH_IN_ONLY": True,
+               "SEASON_PULL_MATCH_FOR": ("WR",)},
 }
 PROJECT_FUMBLES = True
 BACKUP_EFF_MULT = 0.92    # ADOPTED 2026-10-24 (Huntley): ALL +.002/-.002/-.004, QB 2026 -.017; .95 -.003 net, .85 -.003 (see starter_wks)
@@ -1228,6 +1234,20 @@ SEASON_PULL_UP = True
 SEASON_PULL_LINEUP = False
 # {pos: targets}: pull only when his season average and our projection are this far apart
 SEASON_PULL_MIN_GAP = {}
+# {pos: c}: c of a pulled player's extra targets are taken from his teammates (team total kept)
+SEASON_PULL_CONSERVE = {}
+# LINEUP-MATCHED AVERAGE (2026-11-18, Joe: "We should only be pulling WR2 toward his avg targets per game
+# for when the WR1 was also healthy ... TE are mixed into this too cause there are some TE like Bowers,
+# McBride who constantly get a lot of targets"). The big target-earners on his team -- SEASON_PULL_MATCH_POS
+# players with SEASON_PULL_MATCH+ of the targets in the games they played (2+) -- are each IN or OUT this
+# week; only his games where every one of them was in / out the same way count toward his average. A game
+# where one of them left early (exit game) is skipped. Fewer matching games than SEASON_PULL's min -> no
+# pull. None = every game counts (SEASON_PULL_LINEUP aside).
+SEASON_PULL_MATCH = None
+SEASON_PULL_MATCH_POS = ("WR", "TE")
+SEASON_PULL_MATCH_BIGGER = False   # only teammates with a BIGGER season share than his
+SEASON_PULL_MATCH_IN_ONLY = False  # no pull at all in a week one of those teammates is out
+SEASON_PULL_MATCH_FOR = ("WR", "TE")   # positions whose average is lineup-matched
 QB_PASS_TD_HIST_W = 1.0   # TESTED 2026-11-03: 0.5/0.25/0 all worse in 2026; TESTED_SETTINGS.md
 K_RB_RUSH_TD = 150.0   # carries; fit 150-300 flat, 150 best calibrated
 QB_RUSH_TD_MIN_SEASONS = 2   # qualifying SEASONS, not weeks -- picks out Allen and Hurts
@@ -4175,14 +4195,45 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                     _rec_scale(q, 1 + TGT_TRIM_REST * cut / pool)
 
     if SEASON_PULL:
+        bigs_ = collections.defaultdict(list)      # team -> [(pid, in this week)]
+        if SEASON_PULL_MATCH is not None and team_of:
+            for q, t_ in team_of.items():
+                if pos.get(q) not in SEASON_PULL_MATCH_POS:
+                    continue
+                v_ = [x for w, x in tgt_cur.get(q, {}).items() if w < week]
+                if len(v_) < 2 or sum(v_) / len(v_) < SEASON_PULL_MATCH:
+                    continue
+                in_ = q in raw and raw[q][0] == t_
+                bigs_[t_].append((q, in_, sum(v_) / len(v_)))
         for pid, v in list(out.items()):
             sp_ = SEASON_PULL.get(pos.get(pid))
             if not sp_ or pid not in raw or v["targets"] <= 0:
                 continue
             a_, mg_ = sp_
             fac_ = lineup_keep.get(pid, ("", {}))[1] if SEASON_PULL_LINEUP else {}
+            tm_ = raw[pid][0]
+            ok_w = None
+            if SEASON_PULL_MATCH is not None and pos.get(pid) in SEASON_PULL_MATCH_FOR:
+                own_ = [x for w, x in tgt_cur.get(pid, {}).items() if w < week]
+                own_ = sum(own_) / len(own_) if own_ else 0.0
+                mine_ = [(q, in_) for q, in_, sh_ in bigs_.get(tm_, ())
+                         if q != pid and (not SEASON_PULL_MATCH_BIGGER or sh_ > own_)]
+                if SEASON_PULL_MATCH_IN_ONLY and any(not in_ for _, in_ in mine_):
+                    continue
+                ok_w = set()
+                for w_ in (player_eff.get(pid) or {}):
+                    if not 0 < w_ < week:
+                        continue
+                    good = True
+                    for q, in_ in mine_:
+                        pl_ = w_ in tgt_cur.get(q, {}) or w_ in car_cur.get(q, {})
+                        if pl_ != in_ or (pl_ and (q, w_) in _EXITS):
+                            good = False
+                            break
+                    if good:
+                        ok_w.add(w_)
             gw_ = [c_.get("tgt", 0.0) * fac_.get(w_, 1.0) for w_, c_ in (player_eff.get(pid) or {}).items()
-                   if 0 < w_ < week and (pid, w_) not in _EXITS]
+                   if 0 < w_ < week and (pid, w_) not in _EXITS and (ok_w is None or w_ in ok_w)]
             if len(gw_) < mg_:
                 continue
             tpg_ = sum(gw_) / len(gw_)
@@ -4198,6 +4249,17 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             fum_c = v["rec"] * lg.get("fum_skill", 0.0) * (f_ - 1) if PROJECT_FUMBLES else 0.0
             out[pid] = dict(v, targets=t_ * f_, rec=v["rec"] * f_, rec_yds=v["rec_yds"] * f_,
                             rec_td=v["rec_td"] * f_, fum=v["fum"] + fum_c)
+            if SEASON_PULL_CONSERVE.get(pos.get(pid)):
+                extra_ = (nt_ - t_) * SEASON_PULL_CONSERVE[pos.get(pid)]
+                mates_ = [q for q in out if q != pid and q in raw and raw[q][0] == tm_
+                          and pos.get(q) in ("WR", "TE", "RB") and out[q]["targets"] > 0]
+                pool_ = sum(out[q]["targets"] for q in mates_)
+                if pool_ > extra_ > 0 or extra_ < 0 < pool_:
+                    g_ = 1 - extra_ / pool_
+                    for q in mates_:
+                        w_ = out[q]
+                        out[q] = dict(w_, targets=w_["targets"] * g_, rec=w_["rec"] * g_,
+                                      rec_yds=w_["rec_yds"] * g_, rec_td=w_["rec_td"] * g_)
 
     if qb_patt is not None:
         lg_qb_ypa, lg_qb_cmp = qb_eff["ypa"], qb_eff["comp_pct"]
@@ -4411,7 +4473,7 @@ def main():
                 a.split(":")[0]: tuple(float(x) for x in a.split(":")[1].split("/")) for a in v.split(",") if a}
             continue
         if k in ("POS_KT_MULT", "POS_KEFF_MULT", "ROUTE_MODEL_W_POS", "DEPTH_DEMOTE", "EXIT_KEEP_W",
-                 "REC_TD_OWN_K", "SEASON_PULL_MIN_GAP", "POS_SPREAD", "HALF_LIFE_TGT_POS", "VAC_EQ_POS", "CHANGED_KT_POS", "SHARE_PRIOR_FADE", "FADE_GROUPS"):
+                 "REC_TD_OWN_K", "SEASON_PULL_MIN_GAP", "SEASON_PULL_CONSERVE", "POS_SPREAD", "HALF_LIFE_TGT_POS", "VAC_EQ_POS", "CHANGED_KT_POS", "SHARE_PRIOR_FADE", "FADE_GROUPS"):
             globals()[k] = None if v == "None" else {
                 a.split(":")[0]: float(a.split(":")[1]) for a in v.split(",") if a}
             continue
