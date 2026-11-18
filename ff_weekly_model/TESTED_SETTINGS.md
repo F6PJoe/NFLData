@@ -1382,3 +1382,8 @@ max(floor, mult x his own targets a game) instead of the fixed 9. vs baseline (A
 Who moves (2026 backtest): lifted 38 WR-weeks, tgt 10.37->10.86 vs 10.58 actual; cut 207, 7.17->6.79 vs
 7.01. JSN 9.9->10.1 (act 10.9), Chase 10.1->10.7, Puka 11.2->11.9, Lamb 10.0->10.2, Jefferson 9.1->8.8 (7.9).
 Miss: Matthew Golden cut ~1.1/wk (his rookie year drags his own level; 2026 actual 9-13) -- the riser case.
+TRIM_OWN_PRIOR_W (weight on last season's games in the own level; Joe on Golden, rookie year drags him):
+  0 +.000/+.002/.000 FAILS; .25 net +.001 FAILS; .5 net +.001 FAILS; 0 with 4 games net +.003 FAILS. Stays 1.0.
+Golden wk10: share 30.2% this season (9 g) vs 16.6% last, blend k 4.5 -> 25.6%, raw 27.9% / team 1.055;
+GB projected 34.6 pass att a game wks 2-10 vs 36.4 actual (31 early -> 38-40 wks 6-7). Risers as a group
+are still over-projected (RISER_KT, 11-17), so Golden is the exception the rules can't catch -- a review call.
