@@ -413,6 +413,27 @@ RISER_KT = None          # (kt multiplier, share gap) for a WR whose share is up
 RISER_POS = ("WR",)
 RISER_SAME_TEAM = False
 RISER_MIN = 0.0         # only risers whose share this season is at least this
+# STEADY CHANGE -> TRUST THIS SEASON SOONER (2026-11-18, Joe: "should we look back at adopting their
+# season avgs faster in the current season" / "I like the conditional testing"). KT_STEADY =
+# (min games, share of games, gap, kt multiplier): when his share beat his prior (last season +
+# preseason) by KT_STEADY gap in at least that share of his games this season (min games+), the
+# prior's weight x multiplier. Steady across the season, not a last-4-games streak (ROLE_SHIFT,
+# which failed). KT_STEADY_DOWN: also when it was BELOW by the gap that often. KT_STEADY_POS.
+# TRIM_EXEMPT_STEADY: a steady riser also skips the WR target trim. KT_EARLY = (through week, mult):
+# the prior's weight x mult in early weeks (the shape of the season curve). None/False = off.
+# TESTED 2026-11-18 vs 5.363/5.254/5.192 (2026 halves wks 2-6 / 7-10): faster adoption for steady
+# risers does nothing (6 g x.5 +.0005/+.0002/-.0003; x.25, 4 g, both ways, WR+TE all flat-to-worse).
+# Trim exemption is what helps: 5 g/75%/.03 -.0005/+.0009/-.0028 (WR 2026 -.006, both halves better);
+# 6 g -.0006/+.0008/-.0020. Early weeks: prior x2 through wk3 -.0008/-.0008/-.0027 (ALL better in wks
+# 2-3 every season; RB/TE/WR flip by season); x1.5 thru wk4 -.0003/-.0001/-.0013; x.67 (faster) worse.
+# ADOPTED 2026-11-18 together (Joe: "I like the conditional testing of this. lets try it"):
+# ALL -.002/+.001/-.005 (net -.006). The 2026 gain is mostly Golden (wks 6-10 7.3 -> 8.5 tgt, actual
+# 11.4); judge live wks 11-13 under Joe's 2026 rule (11-18).
+KT_STEADY = (5.0, 0.75, 0.03, 1.0)   # x1.0 = no faster adoption; only flags steady risers for the trim exemption
+KT_STEADY_POS = ("WR",)
+KT_STEADY_DOWN = False
+TRIM_EXEMPT_STEADY = True
+KT_EARLY = (3.0, 2.0)
 # ...and the receivers' change in yards / TDs passed to their QB(s), so the
 # team still adds up (2026-11-05, Joe: "go ahead and test the QBs"). None = off.
 # ADOPTED 2026-11-05: ALL .000 / .000 / -.001, QB .000 / -.001 / -.005; 2026 wks 3-8 QBs
@@ -3026,6 +3047,7 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                  rz_use=None, route_pct=None, route_full=None,
                  half_life=None):
     """Projections for every active skill player in `week`. No week-`week` data used."""
+    _steady_up = set()   # KT_STEADY risers (TRIM_EXEMPT_STEADY)
     if half_life is None:            # read at call time, so --set HALF_LIFE works
         half_life = HALF_LIFE
     if INLINE_SLOTS and _INLINE:
@@ -3449,6 +3471,19 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         # actual 26.4% (2024 -2.2, 2025 -0.8, 2026 -3.5 pts); steady -> 28.0 / 27.9. A jump in share
         # half-holds, so a riser's last-season prior gets more weight: kt x RISER_KT[0] when this
         # season's mean share (3+ games) is RISER_KT[1]+ above the prior. RISER_POS / RISER_SAME_TEAM.
+        if KT_EARLY and week <= KT_EARLY[0]:
+            kt *= KT_EARLY[1]
+            kc *= KT_EARLY[1]
+        if KT_STEADY and pos.get(pid) in KT_STEADY_POS and len(past_t) >= KT_STEADY[0] and pri_t > 0:
+            mg_s, fr_s, gap_s, mu_s = KT_STEADY
+            up_ = sum(v >= pri_t + gap_s for v in past_t) / len(past_t)
+            dn_ = sum(v <= pri_t - gap_s for v in past_t) / len(past_t)
+            if up_ >= fr_s or (KT_STEADY_DOWN and dn_ >= fr_s):
+                kt *= mu_s
+                if up_ >= fr_s:
+                    _steady_up.add(pid)
+                if _DEBUG_PIDS and pid in _DEBUG_PIDS:
+                    print(f"  [debug {pid}] steady change: up {up_:.2f} down {dn_:.2f} of {len(past_t)} g -> kt x {mu_s}")
         if RISER_KT and pos.get(pid) in RISER_POS and len(past_t) >= 3 and pri_t > 0 \
                 and (group == "same team" or not RISER_SAME_TEAM) \
                 and sum(past_t) / len(past_t) >= max(pri_t + RISER_KT[1], RISER_MIN):
@@ -4181,6 +4216,8 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                         at_ = max(fl_, mu_ * own_)
                 if t_ <= at_:
                     continue
+                if TRIM_EXEMPT_STEADY and pid in _steady_up:
+                    continue
                 if TGT_TRIM_EXEMPT:
                     gw_ = [c_.get("tgt", 0.0) for w_, c_ in (player_eff.get(pid) or {}).items() if 0 < w_ < week]
                     if len(gw_) >= TGT_TRIM_EXEMPT[0] and sum(gw_) / len(gw_) >= TGT_TRIM_EXEMPT[1]:
@@ -4462,7 +4499,7 @@ def main():
         if k == "MATCHUP_QB_USE":    # yds/td/int
             globals()[k] = tuple(x for x in v.split("/") if x and x != "None")
             continue
-        if k in ("QB_CARRY_TRIM", "RISER_KT"):     # 0.5/4 | 3/0.04
+        if k in ("QB_CARRY_TRIM", "RISER_KT", "KT_STEADY", "KT_EARLY"):     # 0.5/4 | 3/0.04
             globals()[k] = None if v == "None" else tuple(float(x) for x in v.split("/"))
             continue
         if k == "MATCHUP_EPA_BETA_POS":   # TE:0.5,WR:0.3

@@ -1469,3 +1469,21 @@ player's OWN past misses this season (weeks before it only), shrunk n/(n+K). Not
   K16 .000/.000/-.003. Flat in 2024-25; the whole gain is 2026 weeks 8-9 WRs (Golden, Burden, Lemon,
   Hutchinson). Week 10: +.006. A 2026-only signal, so NOT adopted. Re-test over weeks 10-12, and it would
   need the model's own past projections inside project.py (not built).
+
+## STEADY RISERS + EARLY-SEASON CURVE (2026-11-18, Joe: "should we look back at adopting their season avgs
+## faster ... I like the conditional testing of this. lets try it")
+Steady = his share beat his prior (last season + preseason) by 3+ pts in 75%+ of his games (min games).
+vs 5.363/5.254/5.192; also 2026 wks 2-6 / 7-10 and WR (Joe's 2026 rule, 11-18):
+  faster adoption (prior weight x M for steady risers): 6 g x.5 +.0005/+.0002/-.0003; x.25 +.0010/-.0002/-.0002;
+    4 g x.5 +.0009/+.0003/+.0014; up+down x.5 +.0001/+.0009/-.0003; WR+TE same as WR. NOTHING -- not the lever.
+  steady risers skip the WR target trim: 6 g -.0006/+.0008/-.0020 (WR 26 -.004, wks 7-10 -.010); 5 g
+    -.0005/+.0009/-.0028 (WR 26 -.006, both halves better); 4 g -.0004/+.0012/-.0015; 66% -.0023/+.0021/-.0020;
+    85% +.0007/+.0001/-.0018; gap .05 -.0004/-.0002/-.0019. 2026 movers: Golden wks 6-10 7.3 -> 8.5 tgt
+    (actual 11.4), Vele, M. Washington. 2024: Jennings 6.5 -> 7.5 (8.2), Higgins, Shakir; 2025 M. Washington
+    5.7 -> 6.2 (3.6), JSN 9.3 -> 9.9 (7.5).
+  early-season curve (prior weight x M through week W, carries too): thru 4 x.67 (faster) +.0013/-.0003/+.0025
+    WORSE; thru 4 x1.5 -.0003/-.0001/-.0013; thru 6 x1.5 -.0002/-.0006/-.0015; thru 4 x2 -.0003/+.0002/-.0033;
+    thru 3 x2 -.0008/-.0008/-.0027 (weeks 2-3 ALL better every season; by position RB/TE/WR flip by season).
+ADOPTED together: KT_EARLY 3/2 + KT_STEADY 5/.75/.03/1.0 + TRIM_EXEMPT_STEADY: guard ALL -.002/+.001/-.005,
+net -.006 (2026 halves -.0063/-.0044). Passes the old rule too. Judge live wks 11-13 (wk11: GB bye; moves Hutchinson only).
+Answer to "when to adapt in early weeks": lean MORE on last season in weeks 1-3, then the normal curve.
