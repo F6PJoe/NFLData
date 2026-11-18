@@ -434,6 +434,8 @@ KT_STEADY_POS = ("WR",)
 KT_STEADY_DOWN = False
 TRIM_EXEMPT_STEADY = True
 KT_EARLY = (3.0, 2.0)
+KT_STEADY_FAST_YPT = None   # ...only if his yards per target this season are at least this (2026-11-18 test: risers whose efficiency fell were the ones who fell back)
+KT_STEADY_FAST = None   # (gap, kt mult): a steady riser whose share beat his prior by THIS gap in KT_STEADY's share of games -> prior weight x mult (test 2026-11-18)
 # ...and the receivers' change in yards / TDs passed to their QB(s), so the
 # team still adds up (2026-11-05, Joe: "go ahead and test the QBs"). None = off.
 # ADOPTED 2026-11-05: ALL .000 / .000 / -.001, QB .000 / -.001 / -.005; 2026 wks 3-8 QBs
@@ -3482,6 +3484,17 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 kt *= mu_s
                 if up_ >= fr_s:
                     _steady_up.add(pid)
+                if KT_STEADY_FAST and sum(v >= pri_t + KT_STEADY_FAST[0] for v in past_t) / len(past_t) >= fr_s:
+                    ok_eff = True
+                    if KT_STEADY_FAST_YPT:
+                        cs_ = [c_ for w_, c_ in (player_eff.get(pid) or {}).items() if 0 < w_ < week]
+                        tg_ = sum(c_.get("tgt", 0.0) for c_ in cs_)
+                        ypt_ = sum(c_.get("rec_yds", 0.0) for c_ in cs_) / tg_ if tg_ else 0.0
+                        ok_eff = ypt_ >= KT_STEADY_FAST_YPT
+                        if _DEBUG_PIDS and pid in _DEBUG_PIDS:
+                            print(f"  [debug {pid}] steady fast: {ypt_:.2f} yds/target this season (need {KT_STEADY_FAST_YPT})")
+                    if ok_eff:
+                        kt *= KT_STEADY_FAST[1]
                 if _DEBUG_PIDS and pid in _DEBUG_PIDS:
                     print(f"  [debug {pid}] steady change: up {up_:.2f} down {dn_:.2f} of {len(past_t)} g -> kt x {mu_s}")
         if RISER_KT and pos.get(pid) in RISER_POS and len(past_t) >= 3 and pri_t > 0 \
@@ -4499,7 +4512,7 @@ def main():
         if k == "MATCHUP_QB_USE":    # yds/td/int
             globals()[k] = tuple(x for x in v.split("/") if x and x != "None")
             continue
-        if k in ("QB_CARRY_TRIM", "RISER_KT", "KT_STEADY", "KT_EARLY"):     # 0.5/4 | 3/0.04
+        if k in ("QB_CARRY_TRIM", "RISER_KT", "KT_STEADY", "KT_EARLY", "KT_STEADY_FAST"):     # 0.5/4 | 3/0.04
             globals()[k] = None if v == "None" else tuple(float(x) for x in v.split("/"))
             continue
         if k == "MATCHUP_EPA_BETA_POS":   # TE:0.5,WR:0.3

@@ -1487,3 +1487,24 @@ vs 5.363/5.254/5.192; also 2026 wks 2-6 / 7-10 and WR (Joe's 2026 rule, 11-18):
 ADOPTED together: KT_EARLY 3/2 + KT_STEADY 5/.75/.03/1.0 + TRIM_EXEMPT_STEADY: guard ALL -.002/+.001/-.005,
 net -.006 (2026 halves -.0063/-.0044). Passes the old rule too. Judge live wks 11-13 (wk11: GB bye; moves Hutchinson only).
 Answer to "when to adapt in early weeks": lean MORE on last season in weeks 1-3, then the normal curve.
+
+## GOLDEN FOLLOW-UP (2026-11-18, Joe: "that not adjusting golden more is strange")
+Golden wk10: share 30.2% this season, prior 16.6% counted as 4.5 games -> 25.6%; route model + team total ->
+26.4% of GB's 32.2 = 8.5 targets (actual 10.1/g). On top of the adopted trim exemption (vs 5.361/5.255/5.187):
+KT_STEADY_FAST (gap, x) -- big steady risers trust this season faster: .03 x.5 +.0008/.0000/-.0003;
+  .03 x0 +.0022/-.0002/-.0008; .06 x0 +.0030/+.0001/-.0005 (WR 26 wks 7-10 +.004); .08 x.25, .10 x0 worse.
+WHY: the lookalikes' targets come up closer to actual, but their efficiency was already projected too high
+(2024 lifted: yds/tgt 7.55 proj vs 6.24 actual, TD/tgt .049 vs .019) so points get worse. Golden is the
+exception (8.34 proj vs 8.52 actual yds/tgt).
++ KT_STEADY_FAST_YPT (only if his yds/target this season >= 7/7.5/8/8.5): still +.0014 to +.0027 2024, WR 26
+  wks 7-10 +.004. FAILS. Off (code kept).
+EXCEPTION LIST (Joe: "the model could look at the players in the exception list each week and see if they
+still need to be there. and then look at other players to see if anybody needs to be added"), on the dumps:
+add = missed same way in 75%+ of 6+ games, avg 1+ target; while on, + A x his avg target miss over the last
+N games (points via his projected pts/target); off after a game missed the other way (rem1) or 2 (rem2).
+  points-based: worse every season at almost every setting.
+  targets, both ways: 2024/25 +.002 to +.012, 2026 -.000 to -.003.
+  targets, LOW only, .33 x last 6, rem1: +.0016/+.0011/-.0030 (WR +.001/+.003/-.006) -- best balance;
+  .75 x last 3: +.006/+.0055/-.0042. 2024/25 list members fell back (Shakir, Downs, Pickens, Jefferson, Rice);
+  2026 list caught Golden, Burden, Hutchinson, Watson, Higgins, Lemon (misses: Boston, Raridon, A. Williams).
+  Not built into project.py (needs the model's own past projections in-run). Waits on Joe's 2026-rule cap.
