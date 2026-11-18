@@ -1408,3 +1408,28 @@ plain proportional hand-out: 3+ games 87.3 -> 75.8. In the model:
   without him 3.47/3.44, 3.80/3.91, 4.28/4.39; the K2 blend 2.209 vs model 2.208 RMSE. Recency (HALF_LIFE 4)
   + VAC_EQ / VAC_TPRR + same-lineup deflate already use the games without him. The study's baseline was weak.
 All four settings left in the code, off.
+
+## 2026-11-18 SEASON-AVERAGE PULL (Joe: "JSN, Golden, etc. all being under projected for targets is a huge problem
+## and should not have to be adjusted manually. There needs to be a way for the model to figure that out.")
+Calibration by season-to-date targets a game (WR, 4+ games; proj/actual next week): 7-8.5 7.43/7.51, 8.5-10
+8.56/8.81 (8.32/8.63, 8.92/9.00, 8.17/8.77), 10+ 9.92/9.65 (9.35/9.39, 10.12/9.58, 10.33/10.00) -- the high-volume
+group is NOT low as a group. Residual slopes (actual - proj targets) per season: WR season avg - proj +.14/+.06/+.14,
+TE +.30/+.20/+.16, TE season share - proj share +10.6/+11.9/+14.4 (t 1.6-2.4); air-yards share, share volatility,
+last season's share, last-3, team volume gap -- mixed signs.
+SEASON_PULL {pos: (a, min games)} (projected receiving line moves a of the way to his own targets a game this
+season, exit games skipped), vs baseline (ALL 2024/2025/2026; WR; TE):
+  WR .15 + TE .25           +.002/+.004/-.006 even  (WR +.002/+.008/-.005, TE +.004/.000/-.020)
+  WR .1 + TE .2             +.001/+.002/-.005 net -.002 (WR worse 2024-25)
+  TE .25                    +.001/.000/-.004 net -.003 (TE +.005/.000/-.020)
+  up only, WR .15 + TE .25  -.001/+.003/-.001 FAILS (WR 2025 +.008)
+  up only, TE .25           -.001/-.001/.000 net -.002 (TE -.006/-.007/-.004)
+  up only, TE .4            -.001/-.002/-.001 net -.004 (TE -.007/-.009/-.005)  <- ADOPTED (TE better every season)
+  up only, TE .6 net -.002; TE .4 at 3 games FAILS (TE 2026 +.007); TE .25 at 6 games net -.001
+  + WR .15 lineup-matched average (SEASON_PULL_LINEUP) up only: WR +.000/+.006/-.001; both ways WR +.001/+.005/-.005
+  + WR .3 only when 1.5+ apart (SEASON_PULL_MIN_GAP): WR +.007/+.012/-.004 FAILS; 2.5+ apart +.004/+.003/-.003;
+    WR .5 at 2.0+ apart +.016/+.009/-.004 FAILS.
+WR pull lifted ~800 WR-weeks a season (mostly 4-5 target WRs): 2024 4.72->4.83 vs 5.00 actual, 2025 4.58->4.69
+vs 4.52, 2026 4.96->5.06 vs 5.06 -- the group bias flips by season (league volume), so WR pull only fits 2026.
+Biggest 2026 gain Golden (+30 sq-err); 2025 losses Puka, Shaheed, Egbuka, Keenan Allen. WR pull off.
+TE adopted, 2026 per week (TE RMSE change): wk5 -.016 6 -.023 7 +.033 8 -.010 9 -.001 10 -.027 (better 5, worse 1);
+2024 better 8 / worse 6 weeks, 2025 8 / 5. Likely wk5-10 6.9->7.7, 8.2->8.8, 7.9->8.7, 6.7->7.6, 6.0->7.1 (act 13/11/4/6/11).

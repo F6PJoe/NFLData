@@ -1214,6 +1214,20 @@ TGT_TRIM_EXEMPT = None
 TGT_TRIM_OWN = {"WR": (6.0, 1.0, 5.0)}   # ADOPTED 2026-11-17, see TESTED_SETTINGS.md
 CARRY_TRIM_OWN = None
 TRIM_OWN_PRIOR_W = 1.0   # weight on last season's games in the own level
+# SEASON-AVERAGE PULL (2026-11-18, Joe: "JSN, Golden, etc. all being under projected for targets is a
+# huge problem and should not have to be adjusted manually"; earlier: "mix the projection with the yearly
+# average for that player once they hit a certain number of targets"). {pos: (a, min games)}: with min
+# games this season, his projected receiving line moves a x the way from our projected targets to his own
+# targets a game this season (exit games skipped) -- volume and share together, so a team that throws
+# more than we project shows up too. Residual study 2024-26 (actual - projected targets vs season avg -
+# projected, 4+ games, projected 4+): WR slope +.14 / +.06 / +.14, TE +.30 / +.20 / +.16 -- same sign every
+# season. SEASON_PULL_UP: only pull UP (never below the model). None = off.
+SEASON_PULL = {"TE": (0.4, 4.0)}   # ADOPTED 2026-11-18 (TE, up only), see TESTED_SETTINGS.md
+SEASON_PULL_UP = True
+# his games WITHOUT this week's bigger-role teammates are marked down the same-lineup way (lineup_keep)
+SEASON_PULL_LINEUP = False
+# {pos: targets}: pull only when his season average and our projection are this far apart
+SEASON_PULL_MIN_GAP = {}
 QB_PASS_TD_HIST_W = 1.0   # TESTED 2026-11-03: 0.5/0.25/0 all worse in 2026; TESTED_SETTINGS.md
 K_RB_RUSH_TD = 150.0   # carries; fit 150-300 flat, 150 best calibrated
 QB_RUSH_TD_MIN_SEASONS = 2   # qualifying SEASONS, not weeks -- picks out Allen and Hurts
@@ -4160,6 +4174,31 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 for q in rest:
                     _rec_scale(q, 1 + TGT_TRIM_REST * cut / pool)
 
+    if SEASON_PULL:
+        for pid, v in list(out.items()):
+            sp_ = SEASON_PULL.get(pos.get(pid))
+            if not sp_ or pid not in raw or v["targets"] <= 0:
+                continue
+            a_, mg_ = sp_
+            fac_ = lineup_keep.get(pid, ("", {}))[1] if SEASON_PULL_LINEUP else {}
+            gw_ = [c_.get("tgt", 0.0) * fac_.get(w_, 1.0) for w_, c_ in (player_eff.get(pid) or {}).items()
+                   if 0 < w_ < week and (pid, w_) not in _EXITS]
+            if len(gw_) < mg_:
+                continue
+            tpg_ = sum(gw_) / len(gw_)
+            t_ = v["targets"]
+            nt_ = t_ + a_ * (tpg_ - t_)
+            if SEASON_PULL_UP and nt_ < t_:
+                continue
+            if abs(tpg_ - t_) < SEASON_PULL_MIN_GAP.get(pos.get(pid), 0.0):
+                continue
+            f_ = nt_ / t_
+            if _DEBUG_PIDS and pid in _DEBUG_PIDS:
+                print(f"  [debug {pid}] season pull: {t_:.2f} tgt -> {nt_:.2f} (his {tpg_:.2f} a game over {len(gw_)})")
+            fum_c = v["rec"] * lg.get("fum_skill", 0.0) * (f_ - 1) if PROJECT_FUMBLES else 0.0
+            out[pid] = dict(v, targets=t_ * f_, rec=v["rec"] * f_, rec_yds=v["rec_yds"] * f_,
+                            rec_td=v["rec_td"] * f_, fum=v["fum"] + fum_c)
+
     if qb_patt is not None:
         lg_qb_ypa, lg_qb_cmp = qb_eff["ypa"], qb_eff["comp_pct"]
         if LG_QB_EFF_K and qb_pass:
@@ -4367,12 +4406,12 @@ def main():
         if k == "MATCHUP_EPA_BETA_POS":   # TE:0.5,WR:0.3
             globals()[k] = {a.split(":")[0]: float(a.split(":")[1]) for a in v.split(",") if a}
             continue
-        if k in ("TGT_TRIM", "TOP_SHRINK", "TOP_RANK_BOOST", "TGT_TRIM_OWN"):           # WR:0.85/8,TE:0.85/5.5 | WR:14/0.85
+        if k in ("TGT_TRIM", "TOP_SHRINK", "TOP_RANK_BOOST", "TGT_TRIM_OWN", "SEASON_PULL"):           # WR:0.85/8,TE:0.85/5.5 | WR:14/0.85
             globals()[k] = None if v == "None" else {
                 a.split(":")[0]: tuple(float(x) for x in a.split(":")[1].split("/")) for a in v.split(",") if a}
             continue
         if k in ("POS_KT_MULT", "POS_KEFF_MULT", "ROUTE_MODEL_W_POS", "DEPTH_DEMOTE", "EXIT_KEEP_W",
-                 "REC_TD_OWN_K", "POS_SPREAD", "HALF_LIFE_TGT_POS", "VAC_EQ_POS", "CHANGED_KT_POS", "SHARE_PRIOR_FADE", "FADE_GROUPS"):
+                 "REC_TD_OWN_K", "SEASON_PULL_MIN_GAP", "POS_SPREAD", "HALF_LIFE_TGT_POS", "VAC_EQ_POS", "CHANGED_KT_POS", "SHARE_PRIOR_FADE", "FADE_GROUPS"):
             globals()[k] = None if v == "None" else {
                 a.split(":")[0]: float(a.split(":")[1]) for a in v.split(",") if a}
             continue
