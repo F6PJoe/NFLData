@@ -1352,3 +1352,18 @@ calibrated in every bin all 3 seasons (17-20: 18.4/18.9, 18.3/15.9, 18.4/17.6), 
   (+.003, 2026 RB +.009), K .8 AT 14 FAILS (+.003). Current trim stays.
 late_news: an ESPN Out before the game-day list is posted no longer switches a player whose report is
 BLANK either (only Out / Doubtful on the report does).
+
+## 2026-11-17 JSN / top-WR tests (Joe: "we didn't really fix the fact that we are off on JSN")
+JSN backtest 2026 wks 2-10: raw share 36.5% (actual ~34-36%) -- the share is right; TGT_TRIM takes him from
+~10.1 to ~9.6 targets every week (actual avg 10.9). Live wk10 was 8.7 (team volume/sheet), backtest 9.66.
+Published wks 3-10, top-12 WRs each week (by avg of ours+consensus): WR1-4 ours 16.9 / cons 17.0 / actual
+17.4; WR5-8 13.8/13.9/14.1; WR9-12 11.8/12.9/12.6. Low on Chase (-4.3), JSN (-3.3), Puka (-2.2), Lamb (-2.0);
+high on Jefferson (+3.2), St. Brown (+2.5), Olave (+2.1), London (+1.6) -- consensus misses the same way.
+Raw (untrimmed) WR targets by raw bucket, proj/actual: 9.5-10.5 9.87/9.64, 9.98/9.24, 10.07/8.79 (too high
+all 3 seasons -> trim is right); 10.5-11.5 10.85/11.50, 10.88/10.64, 10.92/10.30 (mixed).
+PERSISTENCE: WRs we were 3+ pts low on over their prior 4+ games, next-week miss -0.48 / +0.07 / +0.84
+(corr .11/.00/.06) -- being low on a WR for weeks does NOT predict being low next week (targets slightly:
++0.3/+0.5/+1.0). No player-specific correction.
+POS_KT_MULT WR 1.0 (more weight on this season): ALL +.002/+.002/+.002 FAILS (WR +.005/+.005/+.007).
+POS_KT_MULT WR 2.25 (more weight on last season): ALL +.001/+.001/-.001 net +.001 FAILS. WR 1.5 stays.
+(TD own rate REC_TD_OWN_K and TGT_TRIM_EXEMPT already failed 11-05 / 11-12.)
