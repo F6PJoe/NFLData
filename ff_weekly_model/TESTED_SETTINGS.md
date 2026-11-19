@@ -1564,3 +1564,6 @@ qualifies goes right back on -- one bad game only drops a player whose record wa
 targets 7 of 9 games but by +0.8 on average (wk4 3 targets on 6.8 projected), under the 1-target line at any game
 count; his points were not undershot (wk6 14.7 proj / 7.9, wk7 13.1 / 8.2). Golden goes on at wk7 with 5 games.
 baseline_guard -> saved (2024 5.363, 2025 5.255, 2026 5.183).
+2026-11-18 later: EXLIST raised to .5 (Joe: "I would be fine with the half if it helps 2026"). 5 games, WR/RB:
+vs .33 +.0015/+.0004/-.0016; baseline_guard 2024 +.001, 2025 .000, 2026 -.002 (WR -.003) -> saved.
+Live wk11 list: Lemon +1.2, Burden +1.2, A. Mitchell +1.2 (new), Kamara +1.0 (new), Hutchinson +1.0 pts.

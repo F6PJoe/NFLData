@@ -464,7 +464,7 @@ ROLE_PROMO_WHO = "active"   # who can stay ahead of him: "active" = active this 
 #   .5  WR/RB    +.0018/+.0019/-.0046   add at 70% of games: +.0020/+.0028/-.0031
 # ADOPTED .33 WR/RB 2026-11-18 under Joe's 2026 rule (Joe: "the exception list would only be for 2026"): it can only
 # fire from week 8, so there is no early-2026 half to check -- judged live wks 11-13; re-test in the offseason.
-EXLIST = 0.33
+EXLIST = 0.5   # 2026-11-18 Joe: "I would be fine with the half if it helps 2026" (5 games: vs .33 +.0015/+.0004/-.0016)
 EXLIST_ADD = (5, 0.75, 1.0)   # 5 games, 2026-11-18 (Joe: "is 6+ games too many?"): vs 6, +.0005/-.0011/-.0009
 EXLIST_N = 6
 EXLIST_REM = 1
