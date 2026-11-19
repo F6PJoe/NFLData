@@ -1508,3 +1508,27 @@ N games (points via his projected pts/target); off after a game missed the other
   .75 x last 3: +.006/+.0055/-.0042. 2024/25 list members fell back (Shakir, Downs, Pickens, Jefferson, Rice);
   2026 list caught Golden, Burden, Hutchinson, Watson, Higgins, Lemon (misses: Boston, Raridon, A. Williams).
   Not built into project.py (needs the model's own past projections in-run). Waits on Joe's 2026-rule cap.
+
+## 2026-11-18 ROLE PROMOTION BY PERSONNEL (Joe on Golden: "his new role is not being counted enough. Doubs is gone,
+## Wicks gone, Reed hurt" / "make sure another player didn't come in and keep them at their place ... RB and TE the same")
+Place = rank at his position by LAST season's share (carries for RBs) among the players who can stand ahead of him
+this week; newcomers count by their own last-season share (no-history players by their prior), so a signing stays
+ahead. Moved up from last season's place -> share prior + ROLE_PROMO x (league avg share at new place - old place).
+STUDY (current model, holdovers, proj vs actual pts): promoted TEs beat the model ~+0.4 pts more than other TEs in all
+three seasons (Kraft 24, Barner/Strange 25); WRs only in 2026 (Golden, Burden, M. Washington); RBs no.
+IN THE MODEL -- every version fails (ALL 2024/2025/2026, own position in brackets):
+  who = active this week   x1   WR+TE +.008/+.004/+.001 (WR +.014/+.009/+.004)   TE only +.005/-.001/+.005 (TE +.016/+.002/+.017)
+                           x.5  WR+TE +.004/+.002/+.001   RB x1 +.002/.000/+.003 (RB +.007/.000/+.011)
+  who = recent (active or in last 3 team games: a long injury promotes, a one-week one does not)
+                           x1   WR+TE +.006/+.004/+.001   WR +.003/+.004/-.002 (WR +.008/+.009/+.002)   TE +.003/.000/+.003
+                           x.5  WR+TE +.003/+.002/+.001   RB +.001/.000/+.001
+  who = roster (offseason departures only)
+                           x1   WR+TE +.003/+.003/+.003   x.5 +.002/+.001/+.001   TE x.5 .000/.000/+.001 (TE +.001/+.001/+.004)
+Why: when starters leave, the WHOLE room moves up a place (GB 2026: Watson, Golden, Melton, Savion Williams all
+promoted). Team targets are fixed, so the lifts get normalized back down and the depth players -- whose place gap is
+largest relative to their share -- gain most. Golden went DOWN, 10.7 -> 10.3 pts (actual 14.7); Melton 1.9 -> 2.6
+(actual 0.5). apply_vacated (departed shares to holdovers by their old share, x.5) + this season's games already do
+the room-level job; what the model misses is WHICH holdover takes the departed starter's role, and the place order
+from last season cannot tell that (Golden was GB's WR5 by share in 2025). GB team targets are fine (288/318, 23 of
+the 30 in wk3's 51-target game); the miss is the split -- Golden 7.4/9.9 tgt, Watson 7.1/7.9, Kraft 6.4/5.6.
+ROLE_PROMO / ROLE_PROMO_POS / ROLE_PROMO_WHO left in the code, off.

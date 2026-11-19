@@ -436,6 +436,21 @@ TRIM_EXEMPT_STEADY = True
 KT_EARLY = (3.0, 2.0)
 KT_STEADY_FAST_YPT = None   # ...only if his yards per target this season are at least this (2026-11-18 test: risers whose efficiency fell were the ones who fell back)
 KT_STEADY_FAST = None   # (gap, kt mult): a steady riser whose share beat his prior by THIS gap in KT_STEADY's share of games -> prior weight x mult (test 2026-11-18)
+# ROLE PROMOTION BY PERSONNEL (2026-11-18, Joe on Golden: "his new role is not being counted enough.
+# Doubs is gone, Wicks gone, Reed hurt" / "make sure another player didn't come in and keep them at their
+# place on the depth chart ... RB and TE would need to work the same way"). Per game: his place = his rank
+# at his position, by LAST season's share (targets; carries for RBs), among the players active for his
+# team that week -- a newcomer counts by his own last-season share (a no-history player by his prior), so
+# a signing who out-earned him elsewhere stays ahead of him. Last season's place = his rank on last
+# season's team. Moved up -> his share prior + ROLE_PROMO x (league-average share at the new place -
+# at the old place), last season's averages by place. Holdovers only. None = off.
+ROLE_PROMO = None
+ROLE_PROMO_POS = ("WR", "TE")
+ROLE_PROMO_WHO = "active"   # who can stay ahead of him: "active" = active this week; "roster" = on his team
+                            # this season (only offseason departures promote); "recent" = active this week or
+                            # in any of his team's last 3 games (a long injury promotes, a one-week one does not)
+_ROLE_TEAM_CUR = {}        # pid -> his team this season (ROLE_PROMO_WHO)
+_ROLE_PREV = ({}, {}, {})   # (pid -> last-season rank on his team, pid -> last-season share, (pos, rank) -> avg share)
 # ...and the receivers' change in yards / TDs passed to their QB(s), so the
 # team still adds up (2026-11-05, Joe: "go ahead and test the QBs"). None = off.
 # ADOPTED 2026-11-05: ALL .000 / .000 / -.001, QB .000 / -.001 / -.005; 2026 wks 3-8 QBs
@@ -2891,6 +2906,27 @@ def team_turnover(tgt_prev, car_prev, team_prev, team_cur, chart, pos, pos_prev)
             for tm, t in tot.items()}
 
 
+def role_prev(tgt_prev, car_prev, team_prev, pos_prev, pos):
+    """ROLE_PROMO: last season's place at his position on his team (by target share; carry share
+    for RBs, 4+ games), his share, and the league-average share at each place."""
+    rank, share, slot = {}, {}, collections.defaultdict(list)
+    groups = collections.defaultdict(list)
+    for pid in set(tgt_prev) | set(car_prev):
+        p = pos_prev.get(pid) or pos.get(pid)
+        if p not in POSITIONS or p == "QB":
+            continue
+        wks = (car_prev if p == "RB" else tgt_prev).get(pid, {})
+        if len(wks) < 4 or not team_prev.get(pid):
+            continue
+        share[pid] = sum(wks.values()) / len(wks)
+        groups[(team_prev[pid], p)].append(pid)
+    for (tm, p), ids in groups.items():
+        for k, pid in enumerate(sorted(ids, key=lambda q: -share[q]), 1):
+            rank[pid] = min(k, 6)
+            slot[(p, min(k, 6))].append(share[pid])
+    return rank, share, {k: sum(v) / len(v) for k, v in slot.items()}
+
+
 def preseason_rates(pre, pos):
     """pid -> preseason {ypt, catch} for receivers with a real target projection."""
     return {pid: {"ypt": v["rec_yds"] / v["tgt"], "catch": v["rec"] / v["tgt"]}
@@ -3420,6 +3456,36 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             continue
         group, pri_t, pri_c, n_pt, n_pc = priors.get(
             pid, ("no history", 0.0, 0.0, 0, 0))
+        po_r = pos.get(pid)
+        if ROLE_PROMO and group == "same team" and po_r in ROLE_PROMO_POS and pid in _ROLE_PREV[0]:
+            rk_, sh_, sl_ = _ROLE_PREV
+            mine_ = sh_[pid]
+            def _key(q):
+                if q in sh_:
+                    return sh_[q]
+                v_ = priors.get(q)
+                return (v_[2] if po_r == "RB" else v_[1]) if v_ else 0.0
+            if ROLE_PROMO_WHO == "roster":
+                pool_ = {q for q, t2 in _ROLE_TEAM_CUR.items() if t2 == tm} | {q for q, t2 in active.items() if t2 == tm}
+            elif ROLE_PROMO_WHO == "recent":
+                pool_ = {q for q, t2 in active.items() if t2 == tm}
+                pool_ |= {q for q, t2 in _ROLE_TEAM_CUR.items() if t2 == tm and any(
+                    week - 3 <= w_ < week for w_ in set(tgt_cur.get(q, {})) | set(car_cur.get(q, {})))}
+            else:
+                pool_ = {q for q, t2 in active.items() if t2 == tm}
+            new_rk = 1 + sum(1 for q in pool_
+                             if q != pid and pos.get(q) == po_r and _key(q) > mine_)
+            new_rk = min(new_rk, 6)
+            old_rk = rk_[pid]
+            if new_rk < old_rk and (po_r, new_rk) in sl_ and (po_r, old_rk) in sl_:
+                add_ = ROLE_PROMO * max(0.0, sl_[(po_r, new_rk)] - sl_[(po_r, old_rk)])
+                if po_r == "RB":
+                    pri_c += add_
+                else:
+                    pri_t += add_
+                if _DEBUG_PIDS and pid in _DEBUG_PIDS:
+                    print(f"  [debug {pid}] role promotion: {po_r}{old_rk} last season -> {po_r}{new_rk} "
+                          f"this week, prior +{add_:.3f}")
         past_t = [v for w, v in tgt_cur.get(pid, {}).items() if w < week]
         past_c = [v for w, v in car_cur.get(pid, {}).items() if w < week]
         kt = _k_tgt(group) * POS_KT_MULT.get(pos.get(pid), 1.0)
@@ -4531,7 +4597,7 @@ def main():
             globals()[k] = float(v)
         except ValueError:
             globals()[k] = (None if v == "None" else v if k in ("MATCHUP_MODE", "PRESEASON_ABSENT", "SLOT_MONOTONIC",
-                                                                "INLINE_TEAM", "PRESEASON_FADE_WHO",
+                                                                "INLINE_TEAM", "PRESEASON_FADE_WHO", "ROLE_PROMO_WHO",
                                                                 "ROUTE_VAC")
                             else tuple(float(x) if x.replace(".", "", 1).isdigit() else x
                                        for x in v.split(",") if x))
@@ -4623,6 +4689,8 @@ def main():
     if VAC_PRIOR_W:
         priors = apply_vacated(priors, tgt_prev, car_prev, team_prev, team_cur, chart, pos, pos_prev)
     globals()["_TURNOVER"] = team_turnover(tgt_prev, car_prev, team_prev, team_cur, chart, pos, pos_prev)
+    globals()["_ROLE_PREV"] = role_prev(tgt_prev, car_prev, team_prev, pos_prev, pos)
+    globals()["_ROLE_TEAM_CUR"] = dict(team_cur)
     if os.environ.get("PROJ_TURNOVER"):
         for tm_, (a_, b_) in sorted(_TURNOVER.items(), key=lambda kv: -kv[1][0]):
             print(f"  turnover {tm_}: targets {a_:.0%} carries {b_:.0%}")
@@ -4793,6 +4861,8 @@ def main():
                                    {**roster, **team_cur}, chart, pos, pos_prev)
         globals()["_TURNOVER"] = team_turnover(tgt_prev, car_prev, team_prev,
                                                {**roster, **team_cur}, chart, pos, pos_prev)
+        globals()["_ROLE_PREV"] = role_prev(tgt_prev, car_prev, team_prev, pos_prev, pos)
+        globals()["_ROLE_TEAM_CUR"] = {**roster, **team_cur}
         if pre_now and PRESEASON_W:
             tm_all = {**roster, **team_cur}
             priors = apply_preseason(priors, pre_now, tm_all, pos,
