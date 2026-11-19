@@ -128,6 +128,14 @@ _EXIT_W = {}   # pid -> {week: weight} for kept exit games under 1, set in main(
 # better; baseline_guard net -.008. All positions -.0031/-.0001/-.0019 (WR/TE worse 2025-26); "weight" no better.
 GARBAGE = "share"
 GARBAGE_POS = ("RB",)   # whose shares it changes
+# TEAM PASS RATE WITHOUT THE GAME SCRIPT (2026-11-19, Joe: "the team being blown out will pass heavily so the rate
+# is way higher than it normally is"). A team's pass-rate history came from every play, so a game it trailed big
+# (or led big) moved its rate for next week. TEAM_RATE_SRC: "neutral" = competitive plays only (win prob .2-.8,
+# outside the last 2 minutes of each half; research/neutral.py), "pregarbage" = all plays before garbage time
+# (4th quarter, 17+ apart; build_garbage.py). Rescaled to the season's overall league rate; TEAM_RATE_SRC_W of it
+# mixed with the raw rate. The spread's game script (GS_RUSH) is unchanged. None = off.
+TEAM_RATE_SRC = None
+TEAM_RATE_SRC_W = 1.0
 # AUDIT FIXES 2026-09-25. Team TD split now follows the team's projected pass
 # rate (the documented behaviour; the code had used one league ratio for every
 # team): slope 1.0 best, ALL 5.343 -> 5.341, QB 6.899 -> 6.886. Fumbles are
@@ -2415,6 +2423,30 @@ def drop_pbp_exits(tgt, car, year, min_secs=None, collect=None):
                     del d[pid][wk]; hit = True
             n += hit
     return n
+
+
+def team_rate_src(teams, year):
+    """TEAM_RATE_SRC: each team-game's pass_rate from neutral / pre-garbage plays, level-matched (in place)."""
+    if TEAM_RATE_SRC == "neutral":
+        path, dbk, plk, mn = os.path.join(DATA, f"neutral_{year}.csv"), "db", "plays", 15
+    else:
+        path, dbk, plk, mn = os.path.join(DATA, f"team_pregarbage_{year}.csv"), "db_pre", "plays_pre", 15
+    if not os.path.exists(path):
+        return
+    src = {}
+    for r in csv.DictReader(open(path, newline="", encoding="utf-8")):
+        if num(r[plk]) >= mn:
+            src[(r["team"], int(r["week"]))] = num(r[dbk]) / num(r[plk])
+    keys = [k for k in teams if k in src]
+    if not keys:
+        return
+    raw_m = sum(float(teams[k]["pass_rate"]) for k in keys) / len(keys)
+    src_m = sum(src[k] for k in keys) / len(keys)
+    f_ = raw_m / src_m if src_m else 1.0
+    for k in keys:
+        r = dict(teams[k])
+        r["pass_rate"] = str(TEAM_RATE_SRC_W * src[k] * f_ + (1 - TEAM_RATE_SRC_W) * float(r["pass_rate"]))
+        teams[k] = r
 
 
 def apply_garbage(tgt, car, year, pos=None):
@@ -4830,7 +4862,7 @@ def main():
             globals()[k] = float(v)
         except ValueError:
             globals()[k] = (None if v == "None" else v if k in ("MATCHUP_MODE", "PRESEASON_ABSENT", "SLOT_MONOTONIC",
-                                                                "INLINE_TEAM", "PRESEASON_FADE_WHO", "ROLE_PROMO_WHO", "EXLIST_REM_MODE", "GARBAGE",
+                                                                "INLINE_TEAM", "PRESEASON_FADE_WHO", "ROLE_PROMO_WHO", "EXLIST_REM_MODE", "GARBAGE", "TEAM_RATE_SRC",
                                                                 "ROUTE_VAC")
                             else tuple(float(x) if x.replace(".", "", 1).isdigit() else x
                                        for x in v.split(",") if x))
@@ -4838,6 +4870,9 @@ def main():
 
     cur_rows, prev_rows = load_players(args.year), load_players(prev_year)
     teams_cur, teams_prev = load_teams(args.year), load_teams(prev_year)
+    if TEAM_RATE_SRC:
+        team_rate_src(teams_cur, args.year)
+        team_rate_src(teams_prev, prev_year)
     cur_rows_real = cur_rows            # the real stat lines -- what the backtest grades
     if KNEELS_OUT:
         cur_rows, k_cur = strip_kneels(cur_rows, args.year)

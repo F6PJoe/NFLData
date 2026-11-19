@@ -64,11 +64,19 @@ def build(year):
             acc[r["player_id"]].append((num(r["carries"]) / t[0] if t[0] else 0.0,
                                         num(r["targets"]) / t[1] if t[1] else 0.0))
         last = {pid: (sum(v[0] for v in a) / len(a), sum(v[1] for v in a) / len(a)) for pid, a in acc.items()}
+    team_db = collections.defaultdict(lambda: [0, 0, 0, 0])   # (team, week) -> [db pre-garbage, plays pre, db all, plays all]
     plays = collections.defaultdict(list)    # (team, week) -> [(garbage?, rusher, receiver)]
     with open(PBP.format(year), newline="", encoding="utf-8") as fh:
         for r in csv.DictReader(fh):
             if r["season_type"] != "REG" or not r["posteam"]:
                 continue
+            if r["two_point_attempt"] != "1" and r["play_type"] in ("pass", "run") and r["qb_kneel"] != "1"                     and r.get("qb_spike") != "1":
+                g_ = num(r["qtr"]) >= 4 and abs(num(r["score_differential"])) >= GARBAGE_MARGIN
+                td_ = team_db[(r["posteam"], int(r["week"]))]
+                db_ = r["qb_dropback"] == "1"
+                td_[2] += db_; td_[3] += 1
+                if not g_:
+                    td_[0] += db_; td_[1] += 1
             rush = r["rush_attempt"] == "1" and r["two_point_attempt"] != "1" and r["qb_kneel"] != "1"
             pas = r["pass_attempt"] == "1" and r["two_point_attempt"] != "1" and r["sack"] != "1"
             if not (rush or pas):
@@ -122,6 +130,11 @@ def build(year):
             out.append({"team": tm, "week": wk, "player_id": pid, "car_pre": pre[(pid, "c")],
                         "tgt_pre": pre[(pid, "t")], "team_car_pre": tc, "team_tgt_pre": tg,
                         "plays_pre": start, "plays": len(pl), "flagged_by": flag})
+    with open(os.path.join(DATA, f"team_pregarbage_{year}.csv"), "w", newline="", encoding="utf-8") as fh:
+        w = csv.writer(fh)
+        w.writerow(["team", "week", "db_pre", "plays_pre", "db", "plays"])
+        for (tm, wk), v in sorted(team_db.items()):
+            w.writerow([tm, wk] + v)
     dest = os.path.join(DATA, f"garbage_{year}.csv")
     with open(dest, "w", newline="", encoding="utf-8") as fh:
         w = csv.DictWriter(fh, fieldnames=list(out[0].keys()) if out else ["team", "week", "player_id"])

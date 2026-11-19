@@ -1633,3 +1633,15 @@ game shares = shares before garbage time (PIT wk10: Warren 7 of 11 carries at pl
   RB only, weight -.0027/-.0016/-.0026
 2026 RB by week: wk2 -.031 wk3 -.013 wk4 -.022 wk5 -.012 wk6 +.001 wk7 +.016 wk8 -.027 wk9 +.044 wk10 -.038.
 build_garbage.py runs in the daily refresh (refresh_inputs.py).
+
+## 2026-11-19 TEAM PASS RATE WITHOUT THE GAME SCRIPT (TEAM_RATE_SRC) -- Joe: "for the team being blown out, they will
+## pass heavily so the rate is way higher than it normally is"
+Already in the model: GS_RUSH (run side, ~1%/pt of spread, adopted); pass-side shift by spread tested 2026-10-31,
+even-to-worse (7-pt dog -> 7-pt favorite moves dropbacks 1-2 plays; pass-first teams 40.4 -> 41.5).
+Team pass-rate HISTORY from every play vs (level-matched to the league's overall rate), ALL / WR:
+  neutral (wp .2-.8, not last 2 min)  -.0072/+.0039/+.0054 (WR -.009/+.004/+.006)   x.5 -.0044/+.0010/+.0022
+  pre-garbage (drop 4th q 17+ apart)  -.0033/+.0034/+.0043 (WR .000/+.005/+.003)    x.5 -.0020/+.0011/+.0018
+ALL FAIL (2024 only). Likely why: a team that trails big tends to keep trailing -- its blowout passing is partly its
+real profile, which the spread captures only in part. TEAM_RATE_SRC left in the code, off.
+SF wk11: 4 of 10 sites (draftsharks, 4for4, fftoday, fantasysharks) + ETR have no Evans projection -- their
+McCaffrey / Kittle / Allen run higher, so SF consensus is partly an Evans-out view (Joe has him in).
