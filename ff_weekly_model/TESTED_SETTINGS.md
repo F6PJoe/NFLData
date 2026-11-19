@@ -1645,3 +1645,16 @@ ALL FAIL (2024 only). Likely why: a team that trails big tends to keep trailing 
 real profile, which the spread captures only in part. TEAM_RATE_SRC left in the code, off.
 SF wk11: 4 of 10 sites (draftsharks, 4for4, fftoday, fantasysharks) + ETR have no Evans projection -- their
 McCaffrey / Kittle / Allen run higher, so SF consensus is partly an Evans-out view (Joe has him in).
+
+## 2026-11-19 GAME TOTAL -> PLAYS (PLAYS_TOTAL_W) and FAVORITE RUN BOOST (GS_RUSH) re-swept on full 2026
+Joe wk11: Brown / Javonte / Monangai above every site. Their teams' volume is the main reason: TEN@DAL 54.5 and
+CIN@WAS 53.5 vs a 45.0 slate average -> plays x1.14 / x1.12; DAL -8.5, CIN -6.5, CHI -11.5 -> runs +8.5/6.5/11.5%.
+Our DAL/CIN/WAS pass att and CIN non-QB runs sit above every site. PLAYS_TOTAL_W was fit on 2026 wks 2-3 only.
+vs current (.65 / .01), ALL 2024/2025/2026 (RB):
+  PLAYS_TOTAL_W 0    +.0051/+.0068/+.0160 (RB +.026/+.008/+.022)   .25 +.0017/+.0021/+.0067   .4 +.0004/+.0002/+.0023
+  PLAYS_TOTAL_W .9   +.0017/+.0027/+.0020
+  GS_RUSH 0          +.0068/+.0019/+.0041 (RB +.021/+.007/+.011)   .005 +.0031/+.0005/+.0018 (RB +.010/+.002/+.005)
+ALL WORSE -- .65 and .01 stand. Brown is a CIN problem, not a rule problem: CIN non-QB runs +3.5 a game over
+projection in 2026 (proj 22.4, actual 18.9, over 6 of 8; most of any team) -- they keep throwing with a lead (wk7 won
+by 22 with 18 runs; wk8 -13.5 favorite, 48 passes). Brown over in 7 of 8 weeks (+3.6 pts/g, carries 15-18 vs 9-13).
+Live wk11 at PLAYS_TOTAL_W 0 Brown is still 14.7 (sites 12.2-14.2 pts, ETR 15.6). Fix for CIN = a team-sheet pass rate.
