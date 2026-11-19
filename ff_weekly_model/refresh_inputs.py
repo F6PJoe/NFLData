@@ -213,6 +213,7 @@ def main():
     run("build_team_qb_features.py", "--year", str(y))
     run("build_qb_kneels.py", "--year", str(y))      # KNEELS_OUT (2026-11-04)
     run("build_injury_exits.py", "--year", str(y))
+    run("build_garbage.py", "--year", str(y))       # GARBAGE blowout games (2026-11-19)
     run("news.py", "--year", str(y))
     if not args.week:
         run("player_log.py", "--year", str(y))

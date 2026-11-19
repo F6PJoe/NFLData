@@ -1612,3 +1612,24 @@ Why (2024-26, rate so far this season vs the NEXT game): backs 1.5x+ league on 6
 next 4.1 per 100 carries; under .5x: 1.0 / 3.2 / 2.9. TEs 1.5x+ on 25+ targets: 11.3 / 5.3 / 7.5 per 100 targets;
 under .5x (Okonkwo, 0 TDs): 1.0 / 5.3 / 4.9 -- a zero means almost nothing; a third of a high rate carries over, and
 the red-zone role (RZ_EXP) + team implied total already give the model part of it.
+
+## 2026-11-19 SAME LINEUP FOR TARGETS ACROSS POSITIONS (SAME_LINEUP_XTGT) -- Joe: "it should be utilizing numbers from
+## when the lineups match or at least the closest we can get"
+SF wk11: Evans back after wks 7-10; SAME_LINEUP_POS only deflates a WR/TE's weeks without a BIGGER same-position
+teammate, so Kittle (TE, 28% recent > Evans) and McCaffrey (RB) were untouched. Trace: matching barely moves CMC
+(3.7 -> 3.8 tgt) -- SF's oversubscription (raw 122%) comes from newcomers' old-team priors (Allen 1 game, Deebo, Evans).
+vs current, ALL (2026 halves):  match .12 w.25 -.0011/+.0007/+.0001   match .12 w.5 -.0007/-.0001/.0000
+  match .18 w.25 -.0011/+.0009/+.0006   bigger .15 -.0003/+.0007/-.0003   all .15 +.0018/+.0022/-.0021 (RB worse)
+  all .15 WR/TE only +.0013/+.0016/-.0024 (-.0011/-.0042; WR -.0049 2026) -- 2026-only, net +.0005: left OFF, Joe to decide
+  all .20 WR/TE +.0014/+.0007/-.0016   all .15 WR only +.0030/+.0006/-.0023
+
+## 2026-11-19 BLOWOUT GARBAGE TIME (GARBAGE, build_garbage.py) -- ADOPTED for RBs
+Joe: "only ... if the backup got significant work late in the game and he usually is not used that much or at all."
+Flag: after the first 4th-quarter play 17+ apart, a player usually under 10% of his team's carries/targets (earlier
+games; last season if none) got 4+ touches (RB) / 3+ targets (WR/TE). 2023-26: 40/51/48/27 team-games. In a flagged
+game shares = shares before garbage time (PIT wk10: Warren 7 of 11 carries at play 29 of 54).
+  all positions, share  -.0031/-.0001/-.0019 (RB -.009/-.005/-.011; WR +.0025 2025, +.0012 2026)   weight -.0029/+.0001/-.0014
+  RB only, share  -.0027/-.0018/-.0028 (RB -.0095/-.0060/-.0104; 2026 halves -.0038/-.0016)  ADOPTED, guard net -.008
+  RB only, weight -.0027/-.0016/-.0026
+2026 RB by week: wk2 -.031 wk3 -.013 wk4 -.022 wk5 -.012 wk6 +.001 wk7 +.016 wk8 -.027 wk9 +.044 wk10 -.038.
+build_garbage.py runs in the daily refresh (refresh_inputs.py).

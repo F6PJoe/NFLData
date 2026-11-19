@@ -119,6 +119,15 @@ PBP_EXIT_DROP = True    # neutral in RMSE (77 exit games in 2025), logically rig
 # Last season's play-by-play exits are still dropped from the prior.
 EXIT_KEEP_W = {"RB": 1.0, "WR": 0.5, "TE": 0.5}
 _EXIT_W = {}   # pid -> {week: weight} for kept exit games under 1, set in main()
+# BLOWOUT GARBAGE TIME (2026-11-19, Joe on PIT wk10: "I would only consider this a thing if the backup got
+# significant work late in the game and he usually is not used that much or at all"). data/garbage_<yr>.csv
+# (build_garbage.py): team-games where a usually-unused player got real work after garbage time started (4th
+# quarter, 17+ apart). GARBAGE: every player's share in those games = his share BEFORE garbage time; "weight"
+# also counts the game as the fraction of plays run before it (like a partial game). None = off.
+# ADOPTED 2026-11-19 for backs ("share", RB): ALL -.0027/-.0018/-.0028, RB -.0095/-.0060/-.0104, both 2026 halves
+# better; baseline_guard net -.008. All positions -.0031/-.0001/-.0019 (WR/TE worse 2025-26); "weight" no better.
+GARBAGE = "share"
+GARBAGE_POS = ("RB",)   # whose shares it changes
 # AUDIT FIXES 2026-09-25. Team TD split now follows the team's projected pass
 # rate (the documented behaviour; the code had used one league ratio for every
 # team): slope 1.0 best, ALL 5.343 -> 5.341, QB 6.899 -> 6.886. Fumbles are
@@ -563,6 +572,16 @@ QB_CARRY_TRIM = (0.7, 6.0)
 # (2026 pocket QBs under-projected on passing; kneel yards were covering it).
 KNEELS_OUT = None
 SAME_LINEUP_MIN = 0.20   # a teammate "has a role" at this share or more
+# SAME LINEUP FOR TARGETS, ACROSS POSITIONS (2026-11-19, Joe: "it should be utilizing numbers from when the lineups
+# match or at least the closest we can get" -- SF wk11: Evans back after wks 7-10, Kittle's 26-32% without him,
+# McCaffrey squeezed when SF's raw target shares summed to 122%). (min target role, "bigger" | "all"): a WR/TE/RB's
+# TARGET share in a week a pass-catching teammate (any of WR/TE/RB, target role at min+, active this week) missed is
+# x (1 - that teammate's role), floor .2. "bigger" = only teammates with a bigger target role than his; "all" = every
+# one. Same-position bigger teammates already covered by SAME_LINEUP_POS are skipped. Carries untouched.
+# (min, "match", w): instead of shrinking his share in those weeks, they COUNT as w of a game (target share
+# only) -- his projection leans on the games where the lineup matched; fewer of them -> more prior. None = off.
+SAME_LINEUP_XTGT = None
+SAME_LINEUP_XTGT_POS = ("WR", "TE", "RB")   # whose target shares it adjusts (teammates counted: always WR/TE/RB)
 # Named test versions, run alongside the current model each week and scored
 # against it (--version NAME writes projections_<yr>_wk<NN>_<NAME>.csv).
 # Backtest 2026-09-26 (QB RMSE, 2024 / 2025; current 7.261 / 6.881):
@@ -2398,6 +2417,32 @@ def drop_pbp_exits(tgt, car, year, min_secs=None, collect=None):
     return n
 
 
+def apply_garbage(tgt, car, year, pos=None):
+    """GARBAGE: shares in flagged blowout games -> shares before garbage time (in place).
+    Returns {pid: {week: fraction of the team's plays run before garbage time}}."""
+    path = os.path.join(DATA, f"garbage_{year}.csv")
+    frac = collections.defaultdict(dict)
+    if not os.path.exists(path):
+        return frac
+    games = collections.defaultdict(dict)
+    for r in csv.DictReader(open(path, newline="", encoding="utf-8")):
+        games[(r["team"], int(r["week"]))][r["player_id"]] = r
+    for (tm, wk), ps in games.items():
+        any_ = next(iter(ps.values()))
+        tc, tg = num(any_["team_car_pre"]), num(any_["team_tgt_pre"])
+        f_ = num(any_["plays_pre"]) / num(any_["plays"]) if num(any_["plays"]) else 1.0
+        for pid, r in ps.items():
+            if pos is not None and pos.get(pid) not in GARBAGE_POS:
+                continue
+            if wk in tgt.get(pid, {}) and tg:
+                tgt[pid][wk] = num(r["tgt_pre"]) / tg
+            if wk in car.get(pid, {}) and tc:
+                car[pid][wk] = num(r["car_pre"]) / tc
+            if wk in tgt.get(pid, {}) or wk in car.get(pid, {}):
+                frac[pid][wk] = f_
+    return frac
+
+
 def full_dropped_weeks(snaps, week):
     """FULL on the review sheet: his games before `week` under FULL_FRAC of
     his best game this season -- the ones he played hurt."""
@@ -3501,6 +3546,42 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             if fac:
                 lineup_keep[pid] = ("deflate", fac)
 
+    tgt_keep = {}
+    if SAME_LINEUP_XTGT:
+        mn_x, mode_x = SAME_LINEUP_XTGT[0], SAME_LINEUP_XTGT[1]
+        w_x = SAME_LINEUP_XTGT[2] if len(SAME_LINEUP_XTGT) > 2 else 0.25
+        trole = {}
+        for pid, tm in active.items():
+            po = pos.get(pid)
+            if po not in ("WR", "TE", "RB") or tm not in team_proj:
+                continue
+            if avail is not None and avail.get(pid, 1.0) <= 0:
+                continue
+            g_, p_t, _, _, _ = priors.get(pid, ("no history", 0.0, 0.0, 0, 0))
+            o_, n_ = recent_mean(tgt_cur.get(pid, {}), week, half_life, _EXIT_W.get(pid))
+            trole[pid] = (tm, po, blend(o_, n_, p_t, _k_tgt(g_)))
+        for pid, (tm, po, r_) in trole.items():
+            if po not in SAME_LINEUP_XTGT_POS:
+                continue
+            mates = [q for q, (t2, p2, r2) in trole.items() if q != pid and t2 == tm and r2 >= mn_x
+                     and (mode_x in ("all", "match") or r2 >= r_)]
+            mates = [q for q in mates if not (po in SAME_LINEUP_POS and trole[q][1] == po and trole[q][2] >= r_
+                                              and pid in lineup_keep)]
+            fac = {}
+            for w in tgt_cur.get(pid, {}):
+                if w >= week:
+                    continue
+                m_ = 1.0
+                for q in mates:
+                    if not (w in tgt_cur.get(q, {}) or w in car_cur.get(q, {})):
+                        m_ *= w_x if mode_x == "match" else max(1.0 - trole[q][2], 0.2)
+                if m_ < 1.0:
+                    fac[w] = max(m_, w_x) if mode_x == "match" else m_
+            if fac:
+                tgt_keep[pid] = (mode_x, fac)
+                if _DEBUG_PIDS and pid in _DEBUG_PIDS:
+                    print(f"  [debug {pid}] same lineup (targets): " + ", ".join(f"wk{w} x{f:.2f}" for w, f in sorted(fac.items())))
+
     # --- returning players (RETURN_DEFLATE): teammates' games without him.
     # Zero games this season (Jacobs wk7 2026): every teammate week. With
     # RETURN_MIN_MISSED, also a MID-season absence of that many straight team
@@ -3738,6 +3819,8 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             fac = lineup_keep[pid][1]
             st_ = {w: v * fac.get(w, 1.0) for w, v in st_.items()}
             sc_ = {w: v * fac.get(w, 1.0) for w, v in sc_.items()}
+        if pid in tgt_keep and tgt_keep[pid][0] != "match":
+            st_ = {w: v * tgt_keep[pid][1].get(w, 1.0) for w, v in st_.items()}
         if DUD_FLOOR:
             # One dud week from an established player should not drag him down
             # as if it were his new role. With a prior backed by DUD_MIN_GAMES+
@@ -3760,7 +3843,11 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             if n_pc >= DUD_MIN_GAMES and pri_c >= DUD_MIN_SHARE_CAR:
                 sc_ = floored(sc_, pri_c)
         gw_ = _EXIT_W.get(pid)
-        ot, nt = recent_mean(st_, week, (HALF_LIFE_TGT_POS or {}).get(pos.get(pid), half_life), gw_)
+        gwt_ = gw_
+        if pid in tgt_keep and tgt_keep[pid][0] == "match":
+            gwt_ = {w: (gw_ or {}).get(w, 1.0) * tgt_keep[pid][1].get(w, 1.0)
+                    for w in set(st_) | set(gw_ or {})}
+        ot, nt = recent_mean(st_, week, (HALF_LIFE_TGT_POS or {}).get(pos.get(pid), half_life), gwt_)
         oc, nc = recent_mean(sc_, week, half_life, gw_)
         part_ = _PRE_PART.get(pid) if PRESEASON_FADE is not None else None
         if part_ and (PRESEASON_FADE_WHO == "all" or group == "no history") and (
@@ -4721,6 +4808,9 @@ def main():
         if k == "MATCHUP_QB_USE":    # yds/td/int
             globals()[k] = tuple(x for x in v.split("/") if x and x != "None")
             continue
+        if k == "SAME_LINEUP_XTGT":
+            globals()[k] = None if v == "None" else tuple(float(x) if i != 1 else x for i, x in enumerate(v.split("/")))
+            continue
         if k in ("QB_CARRY_TRIM", "RISER_KT", "KT_STEADY", "KT_EARLY", "KT_STEADY_FAST", "EXLIST_ADD", "RB_TD_CUR"):     # 0.5/4 | 3/0.04
             globals()[k] = None if v == "None" else tuple(float(x) for x in v.split("/"))
             continue
@@ -4740,7 +4830,7 @@ def main():
             globals()[k] = float(v)
         except ValueError:
             globals()[k] = (None if v == "None" else v if k in ("MATCHUP_MODE", "PRESEASON_ABSENT", "SLOT_MONOTONIC",
-                                                                "INLINE_TEAM", "PRESEASON_FADE_WHO", "ROLE_PROMO_WHO", "EXLIST_REM_MODE",
+                                                                "INLINE_TEAM", "PRESEASON_FADE_WHO", "ROLE_PROMO_WHO", "EXLIST_REM_MODE", "GARBAGE",
                                                                 "ROUTE_VAC")
                             else tuple(float(x) if x.replace(".", "", 1).isdigit() else x
                                        for x in v.split(",") if x))
@@ -4812,6 +4902,17 @@ def main():
     if exits:
         globals()["_EXIT_W"] = keep_exit_games(tgt_cur, car_cur, exits, pos)
         globals()["_EXITS"] = set(exits)
+    if GARBAGE:
+        gw_ = apply_garbage(tgt_cur, car_cur, args.year, pos)
+        apply_garbage(tgt_prev, car_prev, args.year - 1, {**pos, **pos_prev})
+        if GARBAGE == "weight":
+            ew_ = dict(_EXIT_W)
+            for pid_, wd_ in gw_.items():
+                d_ = dict(ew_.get(pid_, {}))
+                for w_, f_ in wd_.items():
+                    d_[w_] = min(d_.get(w_, 1.0), f_)
+                ew_[pid_] = d_
+            globals()["_EXIT_W"] = ew_
     # shares_by_week only walks skill positions (they define the denominators),
     # so quarterbacks are absent from `pos` until we add them explicitly.
     for r in cur_rows:
