@@ -187,6 +187,27 @@ LG_VOL_K = 32   # ADOPTED 2026-10-22 (net-gain standard): ALL 2024 -.002, 2025 -
 # 2026 5.189 -> 5.188; QB 7.239 -> 7.220 / 6.921 -> 6.914 / 6.417 -> 6.405.
 # QB-only (1.0) was worst; receivers-only (0) nearly as good as 0.25.
 PASS_RECON_W = 0.25
+# A NEW QB'S OWN PASSING (2026-11-19, test; Joe on Cousins back in MIN: "we need to readjust Minn so the
+# model is built for Cousins being QB and not the other three"). The receivers' yards per target and catch
+# rates were earned with whoever threw to them; PASS_RECON_W gives this week's QB only 25% of the team's
+# passing yards / completions. With W set, that weight rises toward W as this week's starter's share of
+# the team's earlier pass attempts (this season before this week + last season x NEW_QB_HIST_W) falls:
+# weight = PASS_RECON_W + (W - PASS_RECON_W) x (1 - his share). Works both ways -- a better QB coming in
+# lifts the receivers, a backup taking over lowers them. NEW_QB_CMP: completions too (else yards only).
+# NEW_QB_MIN_ATT: only QBs with this many attempts of their own on record (last 4 seasons). None = off.
+# TESTED 2026-11-19 -- all FAIL (help 2024, hurt 2025-26), ALL / QB:
+#   W 1 -.0069/+.0021/+.0082 (QB -.009/+.001/+.022)   .75 -.0049/+.0012/+.0053   .5 -.0022/+.0003/+.0030
+#   W 1 last season 0 -.0066/+.0046/+.0069   .75 yards only -.0045/+.0008/+.0049   W 1 min 500 att -.0029/+.0016/+.0017
+#   upgrades only: W 1 -.0064/+.0033/+.0060   .5 -.0020/+.0006/+.0024   W 1 + min 500 -.0049/+.0008/+.0024
+# 2026 QB-weeks moved 8+ yds by W 1: closer in 16 of 35 -- Cousins (LV wk2/4, MIN wk10 187 -> 211, actual 207)
+# and Purdy closer; Malik Willis (6 weeks), backups worse. For one team: team sheet column qb_own.
+NEW_QB_W = None
+NEW_QB_HIST_W = 0.5
+NEW_QB_CMP = True
+NEW_QB_MIN_ATT = None
+NEW_QB_UP_ONLY = None   # 1 = only when the QB's own yards beat the receivers' (an upgrade, e.g. Cousins for Wentz)
+_NEWQB_PREV = {}    # team -> (last season's team pass attempts, {QB: his attempts for that team})
+_NEWQB_CAREER = {}  # QB -> attempts on record (prior seasons loaded + this season)
 # WEATHER ON PASSING EFFICIENCY (2026-10-07). WR yards per target 2023-25:
 # wind under 10 mph 7.94, 10-14 mph 7.45 (-6%), 15+ mph 7.27 (-8.5%); outdoor
 # under 40F 7.59 vs 7.70 at 40-69F (-1.5%). Passing yards (QB and receivers)
@@ -992,7 +1013,8 @@ BYE_AWARE = True
 MISS_TD = None
 # TEAM SHEET (2026-10-15, Joe: ATL is run-first whoever plays QB). Live runs
 # read data/team_adjust_<yr>_wk<NN>.csv -- team, pass_rate (47 or 0.47),
-# plays, qb_rush_share (the QB's share of the team's runs), note -- and a
+# plays, qb_rush_share (the QB's share of the team's runs), qb_own (share of the team's passing
+# yards / completions built on this week's starter's own efficiency; model 25%), note -- and a
 # filled cell REPLACES the model's team number before
 # wind and game script. The QB, backs and receivers all follow from it.
 _TEAM_ADJ = {}
@@ -1696,6 +1718,13 @@ def load_team_adjust(year, week):
             if qr:
                 v = float(qr)
                 a["qb_rush_share"] = v / 100 if v > 1 else v
+            # qb_own: how much of the team's passing yards / completions come from this week's
+            # starter's OWN efficiency instead of his receivers' (model default PASS_RECON_W = 25%).
+            # 100 = built entirely on the QB (Joe 11/19, MIN: "built for Cousins ... not the other three")
+            qo = (r.get("qb_own") or "").strip().rstrip("%")
+            if qo:
+                v = float(qo)
+                a["qb_own"] = v / 100 if v > 1 else v
             if tm and a:
                 out[tm] = a
     return out
@@ -2515,6 +2544,23 @@ def keep_exit_games(tgt, car, exits, pos):
 # 2026) started his weeks for another team; his new backups must not be judged on those weeks --
 # Kyler was MIN's starter then, so he kept 21% of the attempts behind Cousins' START.
 _QB_TEAM_WK = {}
+
+
+def newqb_share(qb, tm, week, teams_cur, qb_patt):
+    """NEW_QB_W: this QB's share of team `tm`'s pass attempts before `week` (this season) plus last
+    season's at NEW_QB_HIST_W. No earlier attempts at all -> 1.0 (nothing to re-base)."""
+    n_ = d_ = 0.0
+    for (t, w), r in teams_cur.items():
+        if t != tm or w >= week:
+            continue
+        pa = num(r["pass_att"])
+        d_ += pa
+        if _QB_TEAM_WK.get((qb, w), tm) == tm:
+            n_ += qb_patt.get(qb, {}).get(w, 0.0) * pa
+    pt, pq = _NEWQB_PREV.get(tm, (0.0, {}))
+    n_ += NEW_QB_HIST_W * pq.get(qb, 0.0)
+    d_ += NEW_QB_HIST_W * pt
+    return n_ / d_ if d_ else 1.0
 
 
 def qb_shares_by_week(rows, teams, record_team=False):
@@ -4721,12 +4767,27 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
         for tm, pids in by_t.items():
             qbs = [p for p in pids if pos.get(p) == "QB" or p in qraw]
             rec = [p for p in pids if p not in qbs]
+            wn_ = PASS_RECON_W
+            if _TEAM_ADJ.get(tm, {}).get("qb_own") is not None:      # team sheet call wins
+                wn_ = _TEAM_ADJ[tm]["qb_own"]
+            elif NEW_QB_W is not None and qbs:
+                st_ = max(qbs, key=lambda p: out[p].get("pass_att", 0.0))
+                if not NEW_QB_MIN_ATT or _NEWQB_CAREER.get(st_, 0.0) >= NEW_QB_MIN_ATT:
+                    f_ = newqb_share(st_, tm, week, teams_cur, qb_patt)
+                    wn_ = PASS_RECON_W + (NEW_QB_W - PASS_RECON_W) * (1 - f_)
+                    if os.environ.get("PROJ_NEWQB") and f_ < 0.9:
+                        print(f"  [new QB] {tm} {st_}: {f_:.0%} of the team's earlier attempts -> his own passing "
+                              f"weight {wn_:.2f} (QB {sum(out[p].get('pass_yds', 0.0) for p in qbs):.0f} yds "
+                              f"vs receivers {sum(out[p].get('rec_yds', 0.0) for p in rec):.0f})")
             for qk, rk in (("pass_yds", "rec_yds"), ("pass_cmp", "rec")):
                 q_ = sum(out[p].get(qk, 0.0) for p in qbs)
                 r_ = sum(out[p].get(rk, 0.0) for p in rec)
                 if q_ <= 0 or r_ <= 0:
                     continue
-                t_ = PASS_RECON_W * q_ + (1 - PASS_RECON_W) * r_
+                w_ = wn_ if (qk == "pass_yds" or NEW_QB_CMP) else PASS_RECON_W
+                if NEW_QB_UP_ONLY and q_ <= r_ and _TEAM_ADJ.get(tm, {}).get("qb_own") is None:
+                    w_ = PASS_RECON_W
+                t_ = w_ * q_ + (1 - w_) * r_
                 for p in qbs:
                     out[p][qk] = out[p].get(qk, 0.0) * t_ / q_
                 for p in rec:
@@ -5044,6 +5105,24 @@ def main():
     # --- quarterback layer
     qb_patt, qb_ratt = qb_shares_by_week(cur_rows, teams_cur, record_team=True)
     qb_patt_p, qb_ratt_p = qb_shares_by_week(prev_rows, teams_prev)
+    if NEW_QB_W is not None:
+        _NEWQB_PREV.clear(); _NEWQB_CAREER.clear()
+        for (tm_, wk_), r_ in teams_prev.items():
+            t_, q_ = _NEWQB_PREV.get(tm_, (0.0, {}))
+            _NEWQB_PREV[tm_] = (t_ + num(r_["pass_att"]), q_)
+        for r_ in prev_rows:
+            if r_["position"] == "QB" and r_["team"] in _NEWQB_PREV:
+                q_ = _NEWQB_PREV[r_["team"]][1]
+                q_[r_["player_id"]] = q_.get(r_["player_id"], 0.0) + num(r_["attempts"])
+        if NEW_QB_MIN_ATT:
+            for y_ in range(args.year - 4, args.year + 1):
+                fp_ = os.path.join(DATA, f"stats_player_week_{y_}.csv")
+                if not os.path.exists(fp_):
+                    continue
+                for r_ in csv.DictReader(open(fp_, encoding="utf-8")):
+                    if r_["position"] == "QB" and r_.get("season_type", "REG") == "REG" and (
+                            y_ < args.year or not args.live or int(r_["week"]) < args.week):
+                        _NEWQB_CAREER[r_["player_id"]] = _NEWQB_CAREER.get(r_["player_id"], 0.0) + num(r_["attempts"])
     qb_eff = qb_efficiency_means(prev_rows)
     # (QB priors are no longer built here: the starter is decided inside
     # project_week from the depth chart, after availability filtering.)

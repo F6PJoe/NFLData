@@ -1658,3 +1658,20 @@ ALL WORSE -- .65 and .01 stand. Brown is a CIN problem, not a rule problem: CIN 
 projection in 2026 (proj 22.4, actual 18.9, over 6 of 8; most of any team) -- they keep throwing with a lead (wk7 won
 by 22 with 18 runs; wk8 -13.5 favorite, 48 passes). Brown over in 7 of 8 weeks (+3.6 pts/g, carries 15-18 vs 9-13).
 Live wk11 at PLAYS_TOTAL_W 0 Brown is still 14.7 (sites 12.2-14.2 pts, ETR 15.6). Fix for CIN = a team-sheet pass rate.
+
+## 2026-11-19 A NEW QB'S OWN PASSING (NEW_QB_W) -- Joe: "readjust Minn so the model is built for Cousins being QB
+## and not the other three. Cousins is far better."
+Team passing yards / completions = PASS_RECON_W (25%) x the QB's own figure + 75% x the receivers' (their yards per
+target were earned with whoever threw to them). Test: the QB weight rises toward W as this week's starter's share of
+the team's earlier attempts (this season + last x NEW_QB_HIST_W .5) falls. MIN wk11: Cousins 6% -> weight .95.
+vs current, ALL 2024/2025/2026 (QB):
+  W 1     -.0069/+.0021/+.0082 (QB -.009/+.001/+.022)   W .75 -.0049/+.0012/+.0053 (QB -.007/.000/+.014)
+  W .5    -.0022/+.0003/+.0030   W 1, last season 0  -.0066/+.0046/+.0069   W .75 yards only -.0045/+.0008/+.0049
+  W 1, QBs with 500+ attempts on record  -.0029/+.0016/+.0017
+  upgrades only (QB's own yards above the receivers'): W 1 -.0064/+.0033/+.0060   W .5 -.0020/+.0006/+.0024
+                                                       W 1 + 500 att -.0049/+.0008/+.0024
+ALL FAIL (2024 only; 2026 both halves worse). 2026 QB-weeks moved 8+ yds by W 1: closer in 16 of 35. Cousins every
+time (LV wk2 218 -> 231, actual 253; wk4 227 -> 236, 365; MIN wk10 187 -> 211, 207) and Purdy; Malik Willis (6 weeks,
+own ypa from little data), Wentz wk9, Brissett/Huntley/Beck worse. NEW_QB_* left in the code, off.
+For one team: team sheet column qb_own (0-100, model 25). wk11 MIN: qb_own 100 + pass_rate 60 (Joe's wk10 call carried
+over) -> Cousins 14.0 -> 15.3 (196 -> 228 yds; sites mostly 227-251), Jefferson 15.2 -> 16.9, Hockenson 7.4 -> 8.2.
