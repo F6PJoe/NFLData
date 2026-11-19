@@ -1532,3 +1532,19 @@ the room-level job; what the model misses is WHICH holdover takes the departed s
 from last season cannot tell that (Golden was GB's WR5 by share in 2025). GB team targets are fine (288/318, 23 of
 the 30 in wk3's 51-target game); the miss is the split -- Golden 7.4/9.9 tgt, Watson 7.1/7.9, Kraft 6.4/5.6.
 ROLE_PROMO / ROLE_PROMO_POS / ROLE_PROMO_WHO left in the code, off.
+
+## 2026-11-18 EXCEPTION LIST BUILT INTO THE MODEL (EXLIST) -- ADOPTED .33 WR/RB
+Joe: "the model could look at the players in the exception list each week and see if they still need to be there. and
+then look at other players to see if anybody needs to be added" / "the exception list would only be for 2026".
+Built in project.py (backtest walk-forward; live replays the season's backtest with the list off, cached in
+data/exlist_cache). Reproduces the exlist.py study exactly (.33 all three positions +.0015/+.0011/-.0030).
+  .33 RB/WR/TE  +.0015/+.0011/-.0030   TE +.0045/+.0002/+.0012 -- TEs worse every season, so TEs are out
+  .33 WR/RB     +.0008/+.0010/-.0033   WR +.0015/+.0028/-.0065  RB +.0009/-.0002/-.0025  (2026 wks 7-10 -.0075)  ADOPTED
+  .33 WR only   +.0006/+.0011/-.0026   .5 WR/RB +.0018/+.0019/-.0046   .33 add at 70% +.0020/+.0028/-.0031
+Week by week (.33 WR/RB, ALL RMSE change): 2026 wk8 -.010, wk9 -.023, wk10 +.003. 2024/25 mixed week to week (+.014
+worst, 2024 wk10). 2026 moves: Golden wk8-10 12.1/12.9/12.6 -> 13.5/14.6/13.8 (actual 17.4/27.4/9.5); Burden 9.5/9.8
+-> 10.2/10.7 (15.1/17.2); Hutchinson, Lemon, Higgins, Corum, Swift up and right; Boston wk10 7.8 -> 8.7 (2.1),
+A. Williams, Jeanty wrong. baseline_guard: -.001 net (2024 +.001, 2025 +.001, 2026 -.003; WR 2026 -.006) -> saved.
+Live wk11 list: Lemon, Burden, Kamara (new), Hutchinson (GB on bye -- Golden/Watson not projected).
+Review workbook: Flag column note ("LIST since wkN ...") + EXCEPTION LIST table on the Calls tab. A call on the sheet
+for a listed player wins -- the list skips him and the Flag says so.

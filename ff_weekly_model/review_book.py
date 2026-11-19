@@ -240,6 +240,11 @@ def _read_csv(path, enc="utf-8"):
         return list(csv.DictReader(fh))
 
 
+def exlist_rows(year, week):
+    """This week's exception list as the last live run wrote it (project.py EXLIST)."""
+    return _read_csv(os.path.join(DATA, f"exlist_{year}_wk{week:02d}.csv"))
+
+
 def _num(v):
     try:
         return float(v)
@@ -471,6 +476,17 @@ def build(year, week, run_model=True):
     if os.path.exists(_wl):
         for w_ in csv.DictReader(open(_wl, encoding="utf-8")):
             flags_[w_["player_id"]] = f"WATCH: suggest {w_['suggested']} -- {w_['why']}"
+    # EXCEPTION LIST (project.py EXLIST, 2026-11-18): the model's own repeated target misses, applied by the model
+    for x_ in exlist_rows(year, week):
+        if x_.get("skipped_for_call") == "yes":
+            txt = (f"LIST: low on targets {x_['games_low']} of {x_['games']} games (avg {float(x_['avg_tgt_miss']):+.1f}) "
+                   f"-- not applied, your call wins")
+        else:
+            txt = (f"LIST since wk{x_['on_since_wk']}: low on targets {x_['games_low']} of {x_['games']} games "
+                   f"(avg {float(x_['avg_tgt_miss']):+.1f}) -- model adds +{float(x_['added_tgt']):.1f} targets, "
+                   f"+{float(x_['added_pts']):.1f} pts; comes off after a game under his projected targets")
+        pid_ = x_["player_id"]
+        flags_[pid_] = (flags_[pid_] + " | " + txt) if pid_ in flags_ else txt
     _gp = os.path.join(DATA, f"gap_report_{year}_wk{w2}.csv")
     if os.path.exists(_gp):
         _pid_by = {}
@@ -803,6 +819,21 @@ def build(year, week, run_model=True):
                        fv(c_, "consensus"), call_, w_["suggested"], w_["why"]))
         r0 = table(r0, "WATCH LIST -- the model is routinely wrong on these the same way; suggested call (yours to use)",
                    ["Team", "Player", "Pos", "Model pts", "With calls", "Consensus", "Your call", "Suggested", "Why"], wl)
+
+    # EXCEPTION LIST (project.py EXLIST, 2026-11-18) -- applied by the model itself, re-checked every week
+    ex_ = exlist_rows(year, week)
+    if ex_:
+        pj_ = {r["player_id"]: r for r in _read_csv(os.path.join(DATA, f"projections_{year}_wk{week:02d}.csv"), "utf-8-sig")}
+        rows_ = []
+        for x_ in ex_:
+            p_ = pj_.get(x_["player_id"], {})
+            skip_ = x_.get("skipped_for_call") == "yes"
+            rows_.append((p_.get("team", ""), x_["player"], p_.get("pos", ""), "" if skip_ else f"wk{x_['on_since_wk']}",
+                          f"{x_['games_low']} of {x_['games']}", round(float(x_["avg_tgt_miss"]), 1),
+                          "not applied (your call)" if skip_ else f"+{float(x_['added_tgt']):.1f} tgt / +{float(x_['added_pts']):.1f} pts"))
+        r0 = table(r0, "EXCEPTION LIST -- players the model keeps under-projecting on targets; the model adds the "
+                       "difference itself (off after a game under his projected targets)",
+                   ["Team", "Player", "Pos", "On since", "Games low", "Avg target miss", "Added this week"], rows_)
 
     def qb_rushing(v):
         parts = [f"{v['QB carries']} carries" if v.get("QB carries") is not None else "",

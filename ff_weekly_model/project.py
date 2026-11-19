@@ -449,6 +449,28 @@ ROLE_PROMO_POS = ("WR", "TE")
 ROLE_PROMO_WHO = "active"   # who can stay ahead of him: "active" = active this week; "roster" = on his team
                             # this season (only offseason departures promote); "recent" = active this week or
                             # in any of his team's last 3 games (a long injury promotes, a one-week one does not)
+# EXCEPTION LIST (2026-11-18, Joe: "players individual exceptions could be kept and then the model could look at
+# the players in the exception list each week and see if they still need to be there. and then look at other
+# players to see if anybody needs to be added"). Walk-forward on the model's OWN target misses this season (its
+# raw projection, before this list): ADD a player when, over his EXLIST_ADD[0]+ games (projected EXLIST_MIN_PTS+
+# pts), he beat his projected targets in EXLIST_ADD[1]+ of them by EXLIST_ADD[2]+ targets on average. ON the list:
+# + EXLIST x his average target miss over his last EXLIST_N games (when still positive), at his own projected
+# points per target. REMOVED after EXLIST_REM straight games under his projected targets (re-added the same week
+# if his full-season record still qualifies). Low misses only: the HIGH side failed. Live runs replay the
+# season's backtest first (the model's own past misses; cached). A call on the review sheet for him wins: the
+# list skips him. None = off. In the model (vs the adopted baseline, ALL 2024/2025/2026):
+#   .33 RB/WR/TE +.0015/+.0011/-.0030 (TE +.0045/+.0002/+.0012 -- worse every season)   .5 +.0030/+.0020/-.0043
+#   .33 WR/RB    +.0008/+.0010/-.0033 (WR +.0015/+.0028/-.0065, RB +.0009/-.0002/-.0025; 2026 wks 7-10 -.0075)
+#   .5  WR/RB    +.0018/+.0019/-.0046   add at 70% of games: +.0020/+.0028/-.0031
+# ADOPTED .33 WR/RB 2026-11-18 under Joe's 2026 rule (Joe: "the exception list would only be for 2026"): it can only
+# fire from week 8, so there is no early-2026 half to check -- judged live wks 11-13; re-test in the offseason.
+EXLIST = 0.33
+EXLIST_ADD = (6, 0.75, 1.0)
+EXLIST_N = 6
+EXLIST_REM = 1
+EXLIST_MIN_PTS = 3.0
+EXLIST_POS = ("WR", "RB")
+_EXLIST_LAST = []          # live: [(pid, games, low, avg miss, added targets, added pts, since week)]
 _ROLE_TEAM_CUR = {}        # pid -> his team this season (ROLE_PROMO_WHO)
 _ROLE_PREV = ({}, {}, {})   # (pid -> last-season rank on his team, pid -> last-season share, (pos, rank) -> avg share)
 # ...and the receivers' change in yards / TDs passed to their QB(s), so the
@@ -2906,6 +2928,98 @@ def team_turnover(tgt_prev, car_prev, team_prev, team_cur, chart, pos, pos_prev)
             for tm, t in tot.items()}
 
 
+def exlist_new():
+    return {"hist": collections.defaultdict(list), "on": {}, "since": {}}
+
+
+def exlist_check(st, week, cand):
+    """EXLIST: remove / add for this week. cand = {pid: (position, raw projected pts)}.
+    Returns {pid: targets to add} for the players on the list with a positive recent miss."""
+    hist, on, since = st["hist"], st["on"], st["since"]
+    out = {}
+    for pid, (po, pr) in cand.items():
+        if po not in EXLIST_POS or pr < EXLIST_MIN_PTS:
+            continue
+        h = [m for _, m in hist.get(pid, [])]
+        if pid in on and len(h) >= EXLIST_REM and all(m < 0 for m in h[-int(EXLIST_REM):]):
+            del on[pid]
+        if pid not in on and len(h) >= EXLIST_ADD[0]:
+            if (sum(m > 0 for m in h) / len(h) >= EXLIST_ADD[1]
+                    and sum(h) / len(h) >= EXLIST_ADD[2]):
+                on[pid] = week
+                since.setdefault(pid, week)
+        if pid not in on:
+            since.pop(pid, None)
+        if pid in on:
+            last = h[-int(EXLIST_N):]
+            mean = sum(last) / len(last)
+            if mean > 0:
+                out[pid] = EXLIST * mean
+    return out
+
+
+def exlist_record(st, week, misses):
+    """misses = {pid: (raw projected pts, raw projected targets, actual targets)}"""
+    for pid, (pr, tp, ta) in misses.items():
+        if pr >= EXLIST_MIN_PTS:
+            st["hist"][pid].append((week, ta - tp))
+
+
+def exlist_apply(proj, adds):
+    """Add targets at his own projected catch rate / yards / TDs per target. Returns {pid: (tgt, pts) added}."""
+    done = {}
+    for pid, add in adds.items():
+        v = proj.get(pid)
+        t = (v or {}).get("targets", 0.0)
+        if not v or t <= 0:
+            continue
+        before = points(v, None)
+        f_ = (t + add) / t
+        v = dict(v)
+        for k in ("targets", "rec", "rec_yds", "rec_td"):
+            if k in v:
+                v[k] = v[k] * f_
+        proj[pid] = v
+        done[pid] = (add, points(v, None) - before)
+    return done
+
+
+def exlist_replay(year, week, sets, version):
+    """Live: the model's own past misses this season -- a backtest of the season (list off), cached
+    on project.py + settings + the stats file. Returns the list state as of `week`."""
+    import hashlib, subprocess
+    stats = os.path.join(DATA, f"stats_player_week_{year}.csv")
+    key = hashlib.sha1(open(os.path.abspath(__file__), "rb").read()
+                       + repr((sorted(sets), version, os.path.getsize(stats) if os.path.exists(stats) else 0,
+                               os.path.getmtime(stats) if os.path.exists(stats) else 0)).encode()).hexdigest()[:12]
+    cdir = os.path.join(DATA, "exlist_cache")
+    os.makedirs(cdir, exist_ok=True)
+    fp = os.path.join(cdir, f"replay_{year}_{key}.csv")
+    if not os.path.exists(fp):
+        print("  exception list: replaying this season's backtest for the model's own misses (~40 s) ...")
+        cmd = [sys.executable, os.path.abspath(__file__), "--year", str(year), "--dump", fp + ".tmp",
+               "--version", version]
+        for s_ in sets:
+            cmd += ["--set", s_]
+        cmd += ["--set", "EXLIST=None"]
+        r = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True)
+        if r.returncode != 0 or not os.path.exists(fp + ".tmp"):
+            print("  exception list: replay FAILED -- list not applied this run")
+            print(r.stderr[-1500:])
+            return None
+        os.replace(fp + ".tmp", fp)
+    byw = collections.defaultdict(dict)
+    for r in csv.DictReader(open(fp, encoding="utf-8")):
+        w = int(r["week"])
+        if w < week:
+            byw[w][r["player_id"]] = (r["pos"], float(r["proj"]), float(r["tgt_p"]), float(r["tgt_a"]))
+    st = exlist_new()
+    for w in sorted(byw):
+        exlist_check(st, w, {pid: (po, pr) for pid, (po, pr, _, _) in byw[w].items()})
+        exlist_record(st, w, {pid: (pr, tp, ta) for pid, (po, pr, tp, ta) in byw[w].items()})
+    return st
+
+
 def role_prev(tgt_prev, car_prev, team_prev, pos_prev, pos):
     """ROLE_PROMO: last season's place at his position on his team (by target share; carry share
     for RBs, 4+ games), his share, and the league-average share at each place."""
@@ -4578,7 +4692,7 @@ def main():
         if k == "MATCHUP_QB_USE":    # yds/td/int
             globals()[k] = tuple(x for x in v.split("/") if x and x != "None")
             continue
-        if k in ("QB_CARRY_TRIM", "RISER_KT", "KT_STEADY", "KT_EARLY", "KT_STEADY_FAST"):     # 0.5/4 | 3/0.04
+        if k in ("QB_CARRY_TRIM", "RISER_KT", "KT_STEADY", "KT_EARLY", "KT_STEADY_FAST", "EXLIST_ADD"):     # 0.5/4 | 3/0.04
             globals()[k] = None if v == "None" else tuple(float(x) for x in v.split("/"))
             continue
         if k == "MATCHUP_EPA_BETA_POS":   # TE:0.5,WR:0.3
@@ -5341,6 +5455,42 @@ def main():
                                       positions=MATCHUP_POS or None, half_life=MATCHUP_EPA_HL)
             opp = {k: g["opp"] for k, g in games_cur.items() if "opp" in g}
             proj = mu.apply(proj, args.week, active, pos, opp)
+        # EXCEPTION LIST: the model's own repeated target misses this season (replayed)
+        if EXLIST:
+            st_ = exlist_replay(args.year, args.week, args.set, args.version)
+            if st_ is not None:
+                called_ = set(review) | set(roles) | set(sheet_only) | set(sheet_chances) | set(goal_)
+                cand_ = {pid_: (pos.get(pid_), points(v_, pos.get(pid_))) for pid_, v_ in proj.items()
+                         if pid_ not in called_}
+                adds_ = exlist_check(st_, args.week, cand_)
+                done_ = exlist_apply(proj, adds_)
+                globals()["_EXLIST_LAST"] = []
+                for pid_ in sorted(st_["on"], key=lambda q: -done_.get(q, (0, 0))[1]):
+                    if pid_ not in cand_:
+                        continue
+                    h_ = [m for _, m in st_["hist"].get(pid_, [])]
+                    a_, b_ = done_.get(pid_, (0.0, 0.0))
+                    _EXLIST_LAST.append((pid_, len(h_), sum(m > 0 for m in h_), sum(h_) / len(h_),
+                                         a_, b_, st_["since"].get(pid_, st_["on"][pid_])))
+                    print(f"  exception list: {name.get(pid_, pid_)} -- low on targets {sum(m > 0 for m in h_)} of "
+                          f"{len(h_)} games (avg {sum(h_) / len(h_):+.1f}), on since wk{st_['since'].get(pid_, st_['on'][pid_])}: "
+                          f"+{a_:.1f} targets, +{b_:.1f} pts")
+                skipped_ = [q for q in st_["on"] if q in called_ and q in proj]
+                for q in skipped_:
+                    print(f"  exception list: {name.get(q, q)} qualifies but has a call on the sheet -- your call wins")
+                if not args.out:
+                    with open(os.path.join(DATA, f"exlist_{args.year}_wk{args.week:02d}{'' if args.version == 'current' else '_' + args.version}.csv"),
+                              "w", newline="", encoding="utf-8") as fh:
+                        w_ = csv.writer(fh)
+                        w_.writerow(["player_id", "player", "games", "games_low", "avg_tgt_miss",
+                                     "added_tgt", "added_pts", "on_since_wk", "skipped_for_call"])
+                        for row_ in _EXLIST_LAST:
+                            w_.writerow([row_[0], name.get(row_[0], "")] + [round(x, 2) if isinstance(x, float) else x
+                                                                            for x in row_[1:]] + [""])
+                        for q in skipped_:
+                            h_ = [m for _, m in st_["hist"].get(q, [])]
+                            w_.writerow([q, name.get(q, ""), len(h_), sum(m > 0 for m in h_),
+                                         round(sum(h_) / len(h_), 2), 0, 0, st_["since"].get(q, ""), "yes"])
         # "85 only" on the sheet: his own line scaled, teammates untouched
         for pid_, f_ in sheet_only.items():
             if pid_ in proj:
@@ -5524,6 +5674,15 @@ def main():
                     f_ = max(0.5, (base + adj) / base)
                     proj[pid] = {k: v * f_ if isinstance(v, (int, float)) else v
                                  for k, v in proj[pid].items()}
+        if EXLIST:
+            if w == weeks[0]:
+                _exst = exlist_new()
+            raw_x = {r["player_id"]: (r["position"], points(proj[r["player_id"]], r["position"]),
+                                      proj[r["player_id"]].get("targets", 0.0), num(r["targets"]))
+                     for r in by_week[w] if r["player_id"] in proj}
+            proj = dict(proj)
+            exlist_apply(proj, exlist_check(_exst, w, {k: (v[0], v[1]) for k, v in raw_x.items()}))
+            exlist_record(_exst, w, {k: (v[1], v[2], v[3]) for k, v in raw_x.items()})
         for r in by_week[w]:
             pid = r["player_id"]
             if pid not in proj:
