@@ -1548,3 +1548,19 @@ A. Williams, Jeanty wrong. baseline_guard: -.001 net (2024 +.001, 2025 +.001, 20
 Live wk11 list: Lemon, Burden, Kamara (new), Hutchinson (GB on bye -- Golden/Watson not projected).
 Review workbook: Flag column note ("LIST since wkN ...") + EXCEPTION LIST table on the Calls tab. A call on the sheet
 for a listed player wins -- the list skips him and the Flag says so.
+
+## 2026-11-18 EXCEPTION LIST FOLLOW-UP (Joe: "does it make sense to remove them after one bad game? maybe that was a
+## fluke or an injury game? is 6+ games too many? That would have undershot Watson for six weeks. should this only be WR?")
+Vs the adopted list (.33 WR/RB, 6 games, off after 1 game under), ALL 2024/2025/2026 (minus = better):
+  off after 2 straight games under          .0000/+.0003/+.0005   off when last-6 avg miss <= 0   +.0003/.0000/+.0004
+  skip games he was knocked out of (pbp)    .0000/+.0006/.0000    skip exits + avg-based removal  +.0003/+.0004/+.0004
+  add at 5 games                            +.0005/-.0011/-.0009  ADOPTED (WR +.0009/-.0022/-.0013, RB +.0003/-.0009/-.0014)
+  add at 4 games                            +.0026/+.0008/+.0013 (2026 wks 2-6 +.0042)   3 games +.0034/+.0007/+.0044
+  5 games + avg-based removal               +.0002/-.0010/+.0015   5 games at 70%  +.0015/+.0005/-.0010
+  5 games x.5 strength                      +.0020/-.0007/-.0025   5 games WR only +.0001/-.0008/+.0001 (RB +.0025 in 2026)
+  5 games + TEs                             +.0012/-.0010/.0000 (TE +.0048/+.0006/+.0048 -- TEs still out)
+Why one game is enough: removal is followed by the add check the same week, so a player whose season record still
+qualifies goes right back on -- one bad game only drops a player whose record was borderline. Watson 2026: low on
+targets 7 of 9 games but by +0.8 on average (wk4 3 targets on 6.8 projected), under the 1-target line at any game
+count; his points were not undershot (wk6 14.7 proj / 7.9, wk7 13.1 / 8.2). Golden goes on at wk7 with 5 games.
+baseline_guard -> saved (2024 5.363, 2025 5.255, 2026 5.183).

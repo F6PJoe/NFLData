@@ -465,11 +465,14 @@ ROLE_PROMO_WHO = "active"   # who can stay ahead of him: "active" = active this 
 # ADOPTED .33 WR/RB 2026-11-18 under Joe's 2026 rule (Joe: "the exception list would only be for 2026"): it can only
 # fire from week 8, so there is no early-2026 half to check -- judged live wks 11-13; re-test in the offseason.
 EXLIST = 0.33
-EXLIST_ADD = (6, 0.75, 1.0)
+EXLIST_ADD = (5, 0.75, 1.0)   # 5 games, 2026-11-18 (Joe: "is 6+ games too many?"): vs 6, +.0005/-.0011/-.0009
 EXLIST_N = 6
 EXLIST_REM = 1
 EXLIST_MIN_PTS = 3.0
 EXLIST_POS = ("WR", "RB")
+EXLIST_SKIP_EXITS = False   # games he was knocked out of (pbp injury exits) do not count toward add / remove
+EXLIST_REM_MODE = "streak"  # "streak" = off after EXLIST_REM straight games under; "mean" = off when his average
+                            # miss over his last EXLIST_N games is no longer positive (one bad game rarely does it)
 _EXLIST_LAST = []          # live: [(pid, games, low, avg miss, added targets, added pts, since week)]
 _ROLE_TEAM_CUR = {}        # pid -> his team this season (ROLE_PROMO_WHO)
 _ROLE_PREV = ({}, {}, {})   # (pid -> last-season rank on his team, pid -> last-season share, (pos, rank) -> avg share)
@@ -2928,8 +2931,15 @@ def team_turnover(tgt_prev, car_prev, team_prev, team_cur, chart, pos, pos_prev)
             for tm, t in tot.items()}
 
 
-def exlist_new():
-    return {"hist": collections.defaultdict(list), "on": {}, "since": {}}
+def exlist_new(year=None):
+    st = {"hist": collections.defaultdict(list), "on": {}, "since": {}, "exits": set()}
+    if EXLIST_SKIP_EXITS and year:
+        path = os.path.join(DATA, f"injury_exits_{year}.csv")
+        if os.path.exists(path):
+            for r in csv.DictReader(open(path, newline="", encoding="utf-8")):
+                if r.get("exited") == "1" and num(r.get("secs_remaining")) >= PBP_EXIT_MIN_SECS:
+                    st["exits"].add((r["player_id"], int(r["week"])))
+    return st
 
 
 def exlist_check(st, week, cand):
@@ -2941,7 +2951,11 @@ def exlist_check(st, week, cand):
         if po not in EXLIST_POS or pr < EXLIST_MIN_PTS:
             continue
         h = [m for _, m in hist.get(pid, [])]
-        if pid in on and len(h) >= EXLIST_REM and all(m < 0 for m in h[-int(EXLIST_REM):]):
+        if pid in on and EXLIST_REM_MODE == "mean":
+            last = h[-int(EXLIST_N):]
+            if last and sum(last) / len(last) <= 0:
+                del on[pid]
+        elif pid in on and len(h) >= EXLIST_REM and all(m < 0 for m in h[-int(EXLIST_REM):]):
             del on[pid]
         if pid not in on and len(h) >= EXLIST_ADD[0]:
             if (sum(m > 0 for m in h) / len(h) >= EXLIST_ADD[1]
@@ -2961,7 +2975,7 @@ def exlist_check(st, week, cand):
 def exlist_record(st, week, misses):
     """misses = {pid: (raw projected pts, raw projected targets, actual targets)}"""
     for pid, (pr, tp, ta) in misses.items():
-        if pr >= EXLIST_MIN_PTS:
+        if pr >= EXLIST_MIN_PTS and (pid, week) not in st["exits"]:
             st["hist"][pid].append((week, ta - tp))
 
 
@@ -3013,7 +3027,7 @@ def exlist_replay(year, week, sets, version):
         w = int(r["week"])
         if w < week:
             byw[w][r["player_id"]] = (r["pos"], float(r["proj"]), float(r["tgt_p"]), float(r["tgt_a"]))
-    st = exlist_new()
+    st = exlist_new(year)
     for w in sorted(byw):
         exlist_check(st, w, {pid: (po, pr) for pid, (po, pr, _, _) in byw[w].items()})
         exlist_record(st, w, {pid: (pr, tp, ta) for pid, (po, pr, tp, ta) in byw[w].items()})
@@ -4711,7 +4725,7 @@ def main():
             globals()[k] = float(v)
         except ValueError:
             globals()[k] = (None if v == "None" else v if k in ("MATCHUP_MODE", "PRESEASON_ABSENT", "SLOT_MONOTONIC",
-                                                                "INLINE_TEAM", "PRESEASON_FADE_WHO", "ROLE_PROMO_WHO",
+                                                                "INLINE_TEAM", "PRESEASON_FADE_WHO", "ROLE_PROMO_WHO", "EXLIST_REM_MODE",
                                                                 "ROUTE_VAC")
                             else tuple(float(x) if x.replace(".", "", 1).isdigit() else x
                                        for x in v.split(",") if x))
@@ -5676,7 +5690,7 @@ def main():
                                  for k, v in proj[pid].items()}
         if EXLIST:
             if w == weeks[0]:
-                _exst = exlist_new()
+                _exst = exlist_new(args.year)
             raw_x = {r["player_id"]: (r["position"], points(proj[r["player_id"]], r["position"]),
                                       proj[r["player_id"]].get("targets", 0.0), num(r["targets"]))
                      for r in by_week[w] if r["player_id"] in proj}
