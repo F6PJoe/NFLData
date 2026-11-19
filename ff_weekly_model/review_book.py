@@ -72,6 +72,10 @@ C = {name: i + 1 for i, name in enumerate(COLS)}      # column numbers
 HEADER_ROW = 4
 CALLS_TAB = "Calls"
 KEY_TAB = "Key"
+TEAMS_TAB = "Teams"
+# Teams tab (2026-11-19, Joe: "yes add it") -- the team sheet, data/team_adjust_<yr>_wk<NN>.csv
+TEAM_INPUTS = [("Pass rate", "pass_rate"), ("Plays", "plays"), ("QB run share", "qb_rush_share"),
+               ("QB own passing", "qb_own"), ("Note", "note")]
 # what Joe edits, in the order kept in the sync state (older state files hold
 # only the first three -- padded with blanks)
 EDIT_KEYS = ("role", "call", "note", "rush", "ypc")
@@ -137,7 +141,7 @@ def read_edits(year, week):
         return None
     out = {}
     for ws in wb.worksheets:
-        if ws.title in (CALLS_TAB, KEY_TAB):
+        if ws.title in (CALLS_TAB, KEY_TAB, TEAMS_TAB):
             continue
         rows = ws.iter_rows(values_only=True)
         first = next(rows, None)
@@ -172,6 +176,132 @@ def _describe(e):
     return "/".join(x for x in parts if x) or "cleared"
 
 
+def team_adjust_path(year, week):
+    return os.path.join(DATA, f"team_adjust_{year}_wk{week:02d}.csv")
+
+
+def read_team_edits(year, week):
+    """{team: {pass_rate, plays, qb_rush_share, qb_own, note}} from the Teams tab; None if the workbook
+    can't be read or has no Teams tab (built before 2026-11-19). Locked rows are skipped."""
+    from openpyxl import load_workbook
+    try:
+        wb = load_workbook(book_path(year, week), read_only=True, data_only=True)
+    except (PermissionError, OSError):
+        return None
+    if TEAMS_TAB not in wb.sheetnames:
+        wb.close()
+        return None
+    out, col = {}, {}
+    for row in wb[TEAMS_TAB].iter_rows(values_only=True):
+        if not col:
+            names = [_cell(x) for x in row]
+            if "Team" in names and "Pass rate" in names:
+                col = {n: i for i, n in enumerate(names) if n}
+            continue
+
+        def get(name):
+            i = col.get(name)
+            return _num_cell(row[i]) if i is not None and i < len(row) else ""
+        tm = get("Team").upper()
+        if not tm or get("Locked"):
+            continue
+        out[tm] = {k: get(name) for name, k in TEAM_INPUTS}
+    wb.close()
+    return out
+
+
+def sync_teams(year, week):
+    """Teams tab -> data/team_adjust csv. The tab is the whole team sheet: rows with any number filled are
+    written; locked games keep what the csv already had. -> number of teams with a line, or None."""
+    edits = read_team_edits(year, week)
+    if edits is None:
+        return None
+    path = team_adjust_path(year, week)
+    old = {r["team"]: r for r in _read_csv(path)} if os.path.exists(path) else {}
+    rows = {tm: r for tm, r in old.items() if tm not in edits}         # locked / not on the tab: kept
+    for tm, e in edits.items():
+        if any(e[k] for _, k in TEAM_INPUTS if k != "note"):
+            rows[tm] = dict(team=tm, **e)
+    fields = ["team"] + [k for _, k in TEAM_INPUTS]
+    new = sorted(rows.values(), key=lambda r: r["team"])
+    if [[r.get(k, "") for k in fields] for r in new] == \
+            [[r.get(k, "") for k in fields] for r in sorted(old.values(), key=lambda r: r["team"])]:
+        return len(new)
+    with open(path, "w", newline="", encoding="utf-8") as fh:
+        w = csv.DictWriter(fh, fieldnames=fields)
+        w.writeheader()
+        w.writerows({k: r.get(k, "") for k in fields} for r in new)
+    desc = "; ".join(f"{r['team']} " + ", ".join(f"{n.lower()} {r.get(k)}" for n, k in TEAM_INPUTS
+                                                  if k != "note" and r.get(k)) for r in new) or "none"
+    print(f"  review workbook: Teams tab copied into the team sheet -- {desc}")
+    return len(new)
+
+
+def write_teams(ws, year, week, order, games, now, sty):
+    """The Teams tab: one row per team this week; green cells = the team sheet."""
+    Font, PatternFill, Alignment, Border, Side = sty
+    adj = {r["team"]: r for r in _read_csv(team_adjust_path(year, week))}
+    vol = {r["team"]: r for r in _read_csv(os.path.join(DATA, f"team_volume_{year}_wk{week:02d}.csv"))}
+    season = {}
+    for r in _read_csv(os.path.join(DATA, f"team_weekly_{year}.csv")):
+        if int(r["week"]) < week:
+            a_ = season.setdefault(r["team"], [0.0, 0.0])
+            a_[0] += _num(r.get("dropbacks")) or 0.0
+            a_[1] += _num(r.get("plays")) or 0.0
+    BB, BF = Font(name="Arial", size=10, bold=True), Font(name="Arial", size=10)
+    INPUT = PatternFill("solid", fgColor="E2EFDA")
+    BOX = Border(*(Side(style="thin", color="A9D08E"),) * 4)
+    LOCK = PatternFill("solid", fgColor="D9D9D9")
+    ws.cell(1, 1, "TEAMS -- whole-team adjustments (the team sheet). Fill a green cell to REPLACE the model's "
+                  "number for that team; leave blank for the model's.").font = Font(name="Arial", size=13, bold=True)
+    lines = ("Pass rate: % of plays that are dropbacks (passes + sacks + scrambles) -- compare 'Season pass rate'. "
+             "Plays: plays per game. QB run share: % of the team's runs the QB takes.",
+             "QB own passing: % of the team's passing yards and catches built on THIS week's QB's own passing "
+             "instead of what his receivers did with earlier QBs (model 25%; 100 = all him -- a new, better QB).",
+             "Lines do NOT carry to next week -- each week's tab starts from that week's sheet.")
+    for i, t in enumerate(lines):
+        ws.cell(2 + i, 1, t).font = BF
+    hdr = ["Team", "Opp", "Pass rate", "Plays", "QB run share", "QB own passing", "Note",
+           "Season pass rate", "Model plays", "Model pass att", "Model runs", "Locked"]
+    HR = 6
+    for j, h in enumerate(hdr, 1):
+        c = ws.cell(HR, j, h)
+        c.font = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+        c.fill = PatternFill("solid", fgColor="375623" if h in [n for n, _ in TEAM_INPUTS] else "1F3864")
+        c.alignment = Alignment(wrap_text=True, vertical="top")
+    for i, tm in enumerate(order):
+        r = HR + 1 + i
+        gm = games[tm]
+        locked = bool(gm["kickoff"] and gm["kickoff"] <= now)
+        a_ = adj.get(tm, {})
+        v_ = vol.get(tm, {})
+        sp = season.get(tm)
+        vals = [tm, gm.get("opp", "")] + [_sheet_num_safe(a_.get(k, "")) for _, k in TEAM_INPUTS] + [
+            round(100 * sp[0] / sp[1]) if sp and sp[1] else None,
+            round(_num(v_.get("plays")), 1) if v_.get("plays") else None,
+            round(_num(v_.get("pass_att")), 1) if v_.get("pass_att") else None,
+            round(_num(v_.get("nonqb_rush")) + _num(v_.get("qb_rush")), 1) if v_.get("plays") else None,
+            "yes" if locked else ""]
+        for j, x in enumerate(vals, 1):
+            c = ws.cell(r, j, x)
+            c.font = BB if j == 1 else BF
+            if locked:
+                c.fill = LOCK
+            elif hdr[j - 1] in [n for n, _ in TEAM_INPUTS]:
+                c.fill, c.border = INPUT, BOX
+    for col, wd in zip("ABCDEFGHIJKL", (7, 6, 10, 8, 11, 13, 60, 11, 10, 11, 10, 7)):
+        ws.column_dimensions[col].width = wd
+    ws.freeze_panes = ws.cell(HR + 1, 2)
+    ws.sheet_properties.tabColor = "375623"
+
+
+def _sheet_num_safe(x):
+    try:
+        return _sheet_num(str(x).strip())
+    except Exception:
+        return x or None
+
+
 def sync(year, week):
     """Copy calls changed in the workbook into the CSV sheet. -> number copied
     (0 if no workbook or nothing changed), None if it could not be done.
@@ -185,6 +315,7 @@ def sync(year, week):
     edits = read_edits(year, week)
     if edits is None:
         return None
+    sync_teams(year, week)
     sp = state_path(year, week)
     state = json.load(open(sp, encoding="utf-8")) if os.path.exists(sp) else {}
     changed = {pid: e for pid, e in edits.items() if _edit_tuple(state.get(pid)) != _edit_tuple(e)}
@@ -356,6 +487,11 @@ KEY_FILL_IN = [   # (column, what to type, what it does, example)
      "for that) and not his TDs. Blank = the model's rate.",
      "7  =  7 yards a run"),
     ("Note", "anything", "For you only -- the model ignores it.", ""),
+    ("Teams tab: Pass rate / Plays / QB run share / QB own passing", "a number (60 = 60%)",
+     "Replaces the model's number for the WHOLE team (the team sheet). QB own passing = how much of the "
+     "team's passing yards and catches come from this week's QB's own passing (model 25%) -- 100 for a new, "
+     "better QB whose receivers' numbers were earned with worse ones. Blank = the model's. Weekly: nothing "
+     "carries over.", "MIN: pass rate 60, QB own passing 100 (Cousins)"),
 ]
 KEY_CALLS = [     # (type this in Call, what it does)
     ("(blank)  or  PLAY", "Plays normally -- no change."),
@@ -604,6 +740,8 @@ def build(year, week, run_model=True):
     state, calls, todo, problems = {}, [], [], []
     order = sorted(games, key=lambda t: (games[t]["kickoff"] or datetime.datetime.max,
                                          min(t, games[t]["opp"]), games[t]["home"]))
+    write_teams(wb.create_sheet(TEAMS_TAB, 2), year, week, order, games, now,
+                (Font, PatternFill, Alignment, Border, Side))
     for tm in order:
         gm = games[tm]
         locked = bool(gm["kickoff"] and gm["kickoff"] <= now)
