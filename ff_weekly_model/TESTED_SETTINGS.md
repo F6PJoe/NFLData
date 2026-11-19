@@ -1567,3 +1567,22 @@ baseline_guard -> saved (2024 5.363, 2025 5.255, 2026 5.183).
 2026-11-18 later: EXLIST raised to .5 (Joe: "I would be fine with the half if it helps 2026"). 5 games, WR/RB:
 vs .33 +.0015/+.0004/-.0016; baseline_guard 2024 +.001, 2025 .000, 2026 -.002 (WR -.003) -> saved.
 Live wk11 list: Lemon +1.2, Burden +1.2, A. Mitchell +1.2 (new), Kamara +1.0 (new), Hutchinson +1.0 pts.
+
+## 2026-11-18 LEAD-BACK TRIM / RB RECEIVING / TE TARGETS + TDs (Joe: "test the lead back trim. I do worry its going to
+## really over project guys like David Montgomery" / "what is there for TE that we are above on?" / RB receiving)
+Context, 2026 wks 2-10 vs that week's archived site projections (sites avg 5+): outside every site's range, ours vs
+site avg vs ours-clamped RMSE -- above 6.74/6.83/6.73, below 6.72/6.84/6.67; RB below 6.93/6.85/6.75 (ours 9.90,
+sites 11.82, actual 10.67), TE above 5.96/5.88/5.85 (ours 9.55, sites 7.85, actual 8.37). Clamping = consensus-dependent, not used.
+All lead backs (sites 10+): car 15.9 ours / 14.2 sites / 15.9 actual, rec yds 20.1 / 20.7 / 22.1 (2026 only; 2024-25 level).
+vs current (ALL 2024/2025/2026; 2026 halves wks 2-6 / 7-10):
+  CARRY_TRIM_K off   -.0011/+.0018/-.0001 (-.0021/+.0026), RB -.004/+.006/.000  FAILS (2025, late 2026) -- trim stays
+  CARRY_TRIM_K .925  -.0007/+.0008/-.0003   CARRY_TRIM_AT 18  -.0008/+.0009/+.0003   both fail
+  SEASON_PULL off (TE)  +.0015/+.0014/+.0011, TE +.007/+.008/+.005 -- the TE pull is helping
+  RB own receiving efficiency (POS_KEFF_MULT RB) .5  -.0015/+.0012/-.0011   .25 -.0023/+.0024/-.0019 (-.0022/-.0014)   .1 -.0028/+.0041/-.0021
+  TE matchup beta .5  -.0007/-.0008/+.0007   .25 -.0010/-.0010/+.0022 (2026 worse -- matchup stays .75)
+  RZ_EXP .35  +.0001/+.0002/-.0011 (wks 2-6 +.0006)
+  TE target trim .85>5.5 -.0007/.0000/-.0019 (+.0003/-.0048)  .85>6 -.0008/+.0001/-.0016  .75>6.5 -.0010/+.0003/-.0018
+                 .7>6 -.0012/+.0006/-.0023 (+.0010/-.0067)  .6>7 -.0012/+.0004/-.0020 (.0000/-.0045)
+TE TDs by projected targets mixed by season (7+: .41/.26 2024, .38/.54 2025, .51/.48 2026) -- no TD-rate rule; the
+target trim does the job (2026 5-7 target TEs 5.8 proj / 5.2 actual).
+ADOPTED together, RB .25 + TE .6>7: baseline_guard -.003/+.003/-.004 (RB -.009/+.007/-.007, TE -.007/+.002/-.008), net -.004 -> saved.

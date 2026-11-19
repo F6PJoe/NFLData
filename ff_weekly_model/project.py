@@ -216,7 +216,7 @@ RZ_HIST_W = 0.5
 # (n is the game count, so this season's weight already grows: 57% of the
 # target share at 6 games, 74% at 13). RBs a hair better lighter (<0.005).
 POS_KT_MULT = {"WR": 1.5, "TE": 2.0, "RB": 1.5}   # 1.5 with PRESEASON_W, 2026-10-13; TE 2.0 ADOPTED 2026-11-12 (Joe): ALL .000/.000/-.001, TE +.002/+.002/-.008 -- a 2026 signal, RE-TEST wks 10-12
-POS_KEFF_MULT = {"TE": 0.5, "WR": 0.5}
+POS_KEFF_MULT = {"TE": 0.5, "WR": 0.5, "RB": 0.25}   # RB 0.25 ADOPTED 2026-11-18 (Joe: "what else are we wrong on for RB? you said receiving maybe?"): lead backs' rec yds 20.1 proj / 22.1 actual in 2026; RB .5 -.0015/+.0012/-.0011, .25 -.0023/+.0024/-.0019 (RB -.009/+.007/-.008, both 2026 halves better), .1 -.0028/+.0041/-.0021
 # ROUTE PARTICIPATION (fl_routes.py, 2026-10-01): the same rescale as the snap
 # version, but by ROUTE % -- the share of dropbacks a player actually ran a
 # route on -- which separates a receiving TE from a blocking one in a way
@@ -1269,7 +1269,7 @@ CARRY_TRIM_TD = True
 # ADOPTED 2026-11-04 (Joe): WRs keep 60% of targets above 9, the rest dropped
 # (a WR1's team threw -1.3/-0.7/-1.5 fewer passes, teammates not up): ALL
 # +.001 / -.001 / -.006 (net -.006; WR +.003/-.003/-.015). TE trims fail.
-TGT_TRIM = {"WR": (0.6, 9.0)}
+TGT_TRIM = {"WR": (0.6, 9.0), "TE": (0.6, 7.0)}   # TE ADOPTED 2026-11-18 (TEs above every site: 9.55 proj / 8.37 actual, tgt 6.11/5.48): TE .6/7 -.0012/+.0004/-.0020 (TE -.007/+.003/-.009, 2026 wks 2-6 .000, 7-10 -.0045); .85/5.5 -.0007/.0000/-.0019 (wks 2-6 +.0003); .75/6.5 -.0010/+.0003/-.0018
 TGT_TRIM_REST = 0.0
 # PROVEN ALPHAS skip the trim (2026-11-12, Joe: "way lower on top tier WR projections"; Puka projected
 # 11.0 vs 14.0 actual, Lamb 9.3 vs 13.0 wks 3-9). (min games, min targets a game THIS season): a WR
