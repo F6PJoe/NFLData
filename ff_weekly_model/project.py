@@ -1280,7 +1280,7 @@ TGT_TRIM_EXEMPT = None
 # max(floor, mult x his own targets a game) instead of the fixed line -- a WR averaging 10.9 is not trimmed
 # at 10.1; with floor under the fixed line a WR projected well above his own level is trimmed even below
 # it. Fewer games keep the fixed line. CARRY_TRIM_OWN is the same for RB carries. None = off.
-TGT_TRIM_OWN = {"WR": (6.0, 1.0, 5.0)}   # ADOPTED 2026-11-17, see TESTED_SETTINGS.md
+TGT_TRIM_OWN = {"WR": (6.0, 1.0, 5.0), "TE": (6.0, 1.1, 7.0)}   # WR ADOPTED 2026-11-17; TE 2026-11-19 (Joe: "you sure the TE trim needs to happen for player like McBride/Bowers who usually get a ton of targets"): TE line = max(7, 1.1 x his own targets a game), +.0007/-.0008/-.0001 vs the fixed .6>7 trim (a tie; McBride/Bowers closer to actual every season)
 CARRY_TRIM_OWN = None
 TRIM_OWN_PRIOR_W = 1.0   # weight on last season's games in the own level
 # SEASON-AVERAGE PULL (2026-11-18, Joe: "JSN, Golden, etc. all being under projected for targets is a

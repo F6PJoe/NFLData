@@ -1586,3 +1586,16 @@ vs current (ALL 2024/2025/2026; 2026 halves wks 2-6 / 7-10):
 TE TDs by projected targets mixed by season (7+: .41/.26 2024, .38/.54 2025, .51/.48 2026) -- no TD-rate rule; the
 target trim does the job (2026 5-7 target TEs 5.8 proj / 5.2 actual).
 ADOPTED together, RB .25 + TE .6>7: baseline_guard -.003/+.003/-.004 (RB -.009/+.007/-.007, TE -.007/+.002/-.008), net -.004 -> saved.
+
+## 2026-11-19 TE TRIM EXEMPTION (Joe: "you sure the TE trim needs to happen for player like McBride/Bowers?")
+Trimmed TEs by player (fixed .6>7 vs no trim): McBride 2024 11.4->10.9 (act 12.5), 2025 13.2->12.0 (15.2), 2026 13.0->11.7
+(12.5); Bowers 11.4->10.8 (12.8), 10.7->10.1 (9.6), 13.1->12.2 (15.6) -- the gain came from T. Warren, Kittle, Engram, Kelce.
+TGT_TRIM_OWN TE (min games, mult, floor) vs the fixed trim: 6/1/7 +.0005/-.0006/-.0001 (TE 2026 wks 2-6 +.0022)
+  6/1.1/7 +.0007/-.0008/-.0001 (TE +.0036/-.0046/-.0015; 2026 halves -.0001/-.0002)  4/1/7 = 6/1/7   6/1/5 +.0014/-.0007/-.0017
+  no TE trim at all +.0012/-.0004/+.0020.  ADOPTED 6/1.1/7 (a tie; McBride/Bowers move toward actual every season).
+Week 11 traces (no change made): HOU 12.5-pt favorite (implied ~28) and WAS (implied ~30.5, week's highest) carry
+Montgomery's 0.70 rush TDs / 14.7 carries and Schultz's 0.41 / Okonkwo's 0.33 TDs -- team TDs split by role at the
+position's league rate, not the player's own (Schultz .020 TD/tgt 2026, Okonkwo 0; REC_TD_OWN_K failed 2026-11-05).
+McCaffrey: SF raw target shares sum to 122% (Evans, Kittle, Deebo, Allen) so his 14.9% is cut to 3.7 targets (5.4 a
+game this season), Kaelon Black 9.1 carries, TD rate league-based (his 2026 .087/carry). Warren: wk10 committee
+(Warren 7, Nichols 6, Dowdle 5 carries) + PIT 16.5 implied, 21 non-QB carries projected (sites ~26).
