@@ -511,6 +511,27 @@ EXLIST_POS = ("WR", "RB")
 EXLIST_SKIP_EXITS = False   # games he was knocked out of (pbp injury exits) do not count toward add / remove
 EXLIST_REM_MODE = "streak"  # "streak" = off after EXLIST_REM straight games under; "mean" = off when his average
                             # miss over his last EXLIST_N games is no longer positive (one bad game rarely does it)
+# TEAM EXCEPTION LIST (2026-11-19, test; Joe on CIN: "would the Cincy pass game rate be an exception that
+# would get reevaluated each week? Should we do the same for other teams like that?"). The player list's idea
+# for a team's PASS SHARE of its plays (pass attempts / (pass attempts + runs)): walk-forward on the model's
+# OWN team projections this season (before this list). ADD a team when, over TEAMX_ADD[0]+ games, its
+# actual share missed ours in the same direction in TEAMX_ADD[1]+ of them by TEAMX_ADD[2]+ on average
+# (high or low). ON: share + TEAMX x its average miss over its last TEAMX_N games (plays, TDs unchanged;
+# runs and passes trade). REMOVED after TEAMX_REM straight games the other way (re-added the same week if
+# its season record still qualifies). A team-sheet pass_rate wins. Live runs replay the season. None = off.
+# TESTED 2026-11-19 -- all FAIL, ALL 2024/2025/2026 (QB slightly better, WR/RB worse, 2026 wks 7-10 worst):
+#   .5 +.0002/+.0008/+.0024   1 +.0014/+.0022/+.0053   .5 vs league miss +.0027/+.0020/+.0011   1 lg +.0058/+.0037/+.0027
+#   .5 add after 4 games +.0009/+.0019/+.0046   .5 add 70% / 2 pts +.0005/+.0001/+.0006
+# Why: a team's miss does not carry over -- 2026 team misses wks 2-6 vs 7-10 correlate -.11 (pass share), -.02
+# (runs), +.02 (plays). CIN never qualified (share misses -9 to +19, game flow). TEAMX* left in the code, off.
+TEAMX = None
+TEAMX_ADD = (5, 0.75, 0.03)
+TEAMX_N = 6
+TEAMX_REM = 1
+TEAMX_LG = None      # 1 = measure each miss against that week's league-average miss
+_TEAMX_ADJ = {}      # team -> pass-share change applied this week
+_TEAMX_RAW = {}      # team -> the model's own pass share this week (before the list)
+_TEAMX_LAST = []     # live: [(team, games, same-direction games, avg miss, change, since week)]
 _EXLIST_LAST = []          # live: [(pid, games, low, avg miss, added targets, added pts, since week)]
 _ROLE_TEAM_CUR = {}        # pid -> his team this season (ROLE_PROMO_WHO)
 _ROLE_PREV = ({}, {}, {})   # (pid -> last-season rank on his team, pid -> last-season share, (pos, rank) -> avg share)
@@ -3060,6 +3081,95 @@ def team_turnover(tgt_prev, car_prev, team_prev, team_cur, chart, pos, pos_prev)
             for tm, t in tot.items()}
 
 
+def teamx_new():
+    return {"hist": collections.defaultdict(list), "on": {}, "since": {}}
+
+
+def teamx_check(st, week, teams):
+    """TEAMX: remove / add for this week; returns {team: pass-share change}."""
+    out = {}
+    on = st["on"]
+    for tm in teams:
+        h = [m for _, m in st["hist"].get(tm, [])]
+        if tm in on and len(h) >= TEAMX_REM:
+            sg = on[tm]
+            if all(m * sg < 0 for m in h[-int(TEAMX_REM):]):
+                del on[tm]
+        if tm not in on and len(h) >= TEAMX_ADD[0]:
+            mean = sum(h) / len(h)
+            sg = 1 if mean > 0 else -1
+            if sum(m * sg > 0 for m in h) / len(h) >= TEAMX_ADD[1] and abs(mean) >= TEAMX_ADD[2]:
+                on[tm] = sg
+                st["since"].setdefault(tm, week)
+        if tm not in on:
+            st["since"].pop(tm, None)
+            continue
+        last = h[-int(TEAMX_N):]
+        mean = sum(last) / len(last)
+        if mean * on[tm] > 0:
+            out[tm] = TEAMX * mean
+    return out
+
+
+def teamx_record(st, week, misses):
+    """misses = {team: actual pass share - the model's own}"""
+    if TEAMX_LG and misses:
+        lg_ = sum(misses.values()) / len(misses)
+        misses = {k: v - lg_ for k, v in misses.items()}
+    for tm, m in misses.items():
+        st["hist"][tm].append((week, m))
+
+
+def teamx_misses(raw, teams_cur, week):
+    out = {}
+    for tm, s_ in raw.items():
+        a_ = teams_cur.get((tm, week))
+        if not a_:
+            continue
+        pa, ra = num(a_["pass_att"]), num(a_["rush_att"])
+        if pa + ra > 0:
+            out[tm] = pa / (pa + ra) - s_
+    return out
+
+
+def teamx_replay(year, week, sets, version):
+    """Live: the model's own team projections this season (list off), cached like exlist_replay."""
+    import hashlib, subprocess
+    stats = os.path.join(DATA, f"stats_player_week_{year}.csv")
+    key = hashlib.sha1(open(os.path.abspath(__file__), "rb").read()
+                       + repr((sorted(sets), version, os.path.getsize(stats) if os.path.exists(stats) else 0,
+                               os.path.getmtime(stats) if os.path.exists(stats) else 0)).encode()).hexdigest()[:12]
+    cdir = os.path.join(DATA, "exlist_cache")
+    os.makedirs(cdir, exist_ok=True)
+    fp = os.path.join(cdir, f"teamx_{year}_{key}.csv")
+    if not os.path.exists(fp):
+        print("  team exception list: replaying this season's team projections (~40 s) ...")
+        cmd = [sys.executable, os.path.abspath(__file__), "--year", str(year), "--team-dump", fp + ".tmp",
+               "--version", version]
+        for s_ in sets:
+            cmd += ["--set", s_]
+        cmd += ["--set", "TEAMX=None", "--set", "EXLIST=None"]
+        r = subprocess.run(cmd, cwd=HERE, capture_output=True, text=True)
+        if r.returncode != 0 or not os.path.exists(fp + ".tmp"):
+            print("  team exception list: replay FAILED -- list not applied this run")
+            print(r.stderr[-1500:])
+            return None
+        os.replace(fp + ".tmp", fp)
+    byw = collections.defaultdict(dict)
+    for r in csv.DictReader(open(fp, encoding="utf-8")):
+        w = int(r["week"])
+        if w >= week:
+            continue
+        pp, rp, pa, ra = (float(r[k]) for k in ("patt_p", "rush_p", "patt_a", "rush_a"))
+        if pp + rp > 0 and pa + ra > 0:
+            byw[w][r["team"]] = pa / (pa + ra) - pp / (pp + rp)
+    st = teamx_new()
+    for w in sorted(byw):
+        teamx_check(st, w, list(byw[w]))
+        teamx_record(st, w, byw[w])
+    return st
+
+
 def exlist_new(year=None):
     st = {"hist": collections.defaultdict(list), "on": {}, "since": {}, "exits": set()}
     if EXLIST_SKIP_EXITS and year:
@@ -3587,6 +3697,25 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             f_ = new / base[tm]
             for k in ("plays", "targets", "pass_att", "nonqb_rush", "qb_rush"):
                 tp[k] *= f_
+
+    # --- TEAM EXCEPTION LIST (TEAMX): pass share moved by the team's repeated misses
+    _TEAMX_RAW.clear()
+    for tm, tp in team_proj.items():
+        r_ = tp["nonqb_rush"] + tp["qb_rush"]
+        n_ = tp["pass_att"] + r_
+        if n_ <= 0 or tp["pass_att"] <= 0:
+            continue
+        s_ = tp["pass_att"] / n_
+        _TEAMX_RAW[tm] = s_
+        d_ = _TEAMX_ADJ.get(tm)
+        if d_ and not _TEAM_ADJ.get(tm, {}).get("pass_rate") and r_ > 0:
+            s2 = min(max(s_ + d_, 0.35), 0.80)
+            fp_ = s2 / s_
+            fr_ = (1 - s2) * n_ / r_
+            for k in ("pass_att", "targets"):
+                tp[k] *= fp_
+            for k in ("nonqb_rush", "qb_rush"):
+                tp[k] *= fr_
 
     # --- same-lineup weeks (SAME_LINEUP_POS): which past weeks of each player
     # were played with this week's bigger-role teammates on the field
@@ -4904,7 +5033,7 @@ def main():
         if k == "SAME_LINEUP_XTGT":
             globals()[k] = None if v == "None" else tuple(float(x) if i != 1 else x for i, x in enumerate(v.split("/")))
             continue
-        if k in ("QB_CARRY_TRIM", "RISER_KT", "KT_STEADY", "KT_EARLY", "KT_STEADY_FAST", "EXLIST_ADD", "RB_TD_CUR"):     # 0.5/4 | 3/0.04
+        if k in ("QB_CARRY_TRIM", "RISER_KT", "KT_STEADY", "KT_EARLY", "KT_STEADY_FAST", "EXLIST_ADD", "RB_TD_CUR", "TEAMX_ADD"):     # 0.5/4 | 3/0.04
             globals()[k] = None if v == "None" else tuple(float(x) for x in v.split("/"))
             continue
         if k == "MATCHUP_EPA_BETA_POS":   # TE:0.5,WR:0.3
@@ -5419,6 +5548,32 @@ def main():
                 for r in csv.DictReader(fh):
                     if r.get("gsis_id") and r.get("player_name"):
                         name.setdefault(r["gsis_id"], r["player_name"])
+        if TEAMX:
+            st_ = teamx_replay(args.year, args.week, args.set, args.version)
+            if st_ is not None:
+                tms_ = sorted(set(active.values()))
+                globals()["_TEAMX_ADJ"] = teamx_check(st_, args.week, tms_)
+                globals()["_TEAMX_LAST"] = []
+                for tm_ in sorted(st_["on"]):
+                    if tm_ not in tms_:
+                        continue
+                    h_ = [m for _, m in st_["hist"].get(tm_, [])]
+                    sg_ = st_["on"][tm_]
+                    d_ = _TEAMX_ADJ.get(tm_, 0.0)
+                    _TEAMX_LAST.append((tm_, len(h_), sum(m * sg_ > 0 for m in h_), sum(h_) / len(h_), d_,
+                                        st_["since"].get(tm_)))
+                    print(f"  team exception list: {tm_} -- passed {'MORE' if sg_ > 0 else 'LESS'} than projected in "
+                          f"{sum(m * sg_ > 0 for m in h_)} of {len(h_)} games (avg {100 * sum(h_) / len(h_):+.1f} pts of "
+                          f"pass share), on since wk{st_['since'].get(tm_)}: share {100 * d_:+.1f} pts"
+                          + (" -- team sheet pass rate wins" if _TEAM_ADJ.get(tm_, {}).get("pass_rate") else ""))
+                if not args.out:
+                    sfx_ = "" if args.version == "current" else "_" + args.version
+                    with open(os.path.join(DATA, f"teamx_{args.year}_wk{args.week:02d}{sfx_}.csv"),
+                              "w", newline="", encoding="utf-8") as fh:
+                        w_ = csv.writer(fh)
+                        w_.writerow(["team", "games", "games_same_way", "avg_share_miss", "share_change", "on_since_wk"])
+                        for row_ in _TEAMX_LAST:
+                            w_.writerow([row_[0], row_[1], row_[2], round(row_[3], 4), round(row_[4], 4), row_[5]])
         # one projection with a given availability (the hedges below run two)
         def _run(av):
             return project_week(args.week, teams_cur=teams_cur, games=games_cur,
@@ -5882,8 +6037,11 @@ def main():
                               **qb_kw)
             mu.update(1, p1, by_week[1])
     qb_form = collections.defaultdict(list)   # QB_FORM: pid -> his misses so far
+    _txst = teamx_new()
     for w in weeks:
         active = {r["player_id"]: r["team"] for r in by_week[w]}
+        if TEAMX:
+            globals()["_TEAMX_ADJ"] = teamx_check(_txst, w, sorted({t for (t, w_) in teams_cur if w_ == w}))
         proj = project_week(w, teams_cur=teams_cur, games=games_cur, tgt_cur=tgt_cur,
                             car_cur=car_cur, pos=pos, priors=priors, eff=eff, lg=lg,
                             imp_to_td=imp_to_td, tgt_per_att=tgt_per_att,
@@ -5894,6 +6052,8 @@ def main():
                             qb_td_proven=bt_prov, rb_td_proven=bt_rbp,
                             rz_use=rz_now,
                             route_pct=route_now, route_full=route_full_now, **qb_kw)
+        if TEAMX:
+            teamx_record(_txst, w, teamx_misses(_TEAMX_RAW, teams_cur, w))
         if args.team_dump:
             for tm_, tp_ in globals().get("_LAST_TEAM", {}).items():
                 a_ = teams_cur.get((tm_, w))

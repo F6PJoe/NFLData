@@ -1675,3 +1675,18 @@ time (LV wk2 218 -> 231, actual 253; wk4 227 -> 236, 365; MIN wk10 187 -> 211, 2
 own ypa from little data), Wentz wk9, Brissett/Huntley/Beck worse. NEW_QB_* left in the code, off.
 For one team: team sheet column qb_own (0-100, model 25). wk11 MIN: qb_own 100 + pass_rate 60 (Joe's wk10 call carried
 over) -> Cousins 14.0 -> 15.3 (196 -> 228 yds; sites mostly 227-251), Jefferson 15.2 -> 16.9, Hockenson 7.4 -> 8.2.
+
+## 2026-11-19 TEAM EXCEPTION LIST (TEAMX) -- Joe: "would the Cincy pass game rate be an exception that would get
+## reevaluated each week? Should we do the same for other teams like that?"
+The player exception list's rules for a team's PASS SHARE (pass att / (pass att + runs)), walk-forward on the model's own
+team projections: add after 5+ games missed the same way in 75%+ by 3+ pts on average (either direction); share +
+TEAMX x avg miss over the last 6; off after 1 game the other way; a team-sheet pass rate wins. Live replays the season.
+vs current, ALL 2024/2025/2026 (QB):
+  TEAMX .5   +.0002/+.0008/+.0024 (QB -.002/-.004/.000; WR +.001/+.004/+.003; RB 2026 wks 7-10 +.009)
+  TEAMX 1    +.0014/+.0022/+.0053   .5 vs that week's league miss +.0027/+.0020/+.0011   1 vs league +.0058/+.0037/+.0027
+  .5 add after 4 games +.0009/+.0019/+.0046   .5 add at 70% / 2 pts +.0005/+.0001/+.0006
+ALL FAIL. Why: team misses do not carry over. 2026 team miss wks 2-6 vs wks 7-10, correlation across teams: pass share
+-.11, runs -.02, plays +.02 -- what is persistent the model's team rates already hold; the rest is game flow.
+CIN never qualified: share misses -2/+10/+19/-9/0/+14/-6/+9 (5 of 8 more). Its run overshoot (Brown) is plays and game
+flow, not a steady pass lean. Wk11 the list would have moved CAR +0.7, DET -2.4, LAC -2.9, PHI +3.3 pts of pass share.
+TEAMX* left in the code, off. Withdrew the CIN pass_rate 68 suggestion; Brown stays a player-level watch-list item.
