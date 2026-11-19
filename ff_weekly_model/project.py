@@ -1313,6 +1313,12 @@ SEASON_PULL_MATCH_IN_ONLY = False  # no pull at all in a week one of those teamm
 SEASON_PULL_MATCH_FOR = ("WR", "TE")   # positions whose average is lineup-matched
 QB_PASS_TD_HIST_W = 1.0   # TESTED 2026-11-03: 0.5/0.25/0 all worse in 2026; TESTED_SETTINGS.md
 K_RB_RUSH_TD = 150.0   # carries; fit 150-300 flat, 150 best calibrated
+# THIS SEASON'S GOAL-LINE ROLE (2026-11-19, Joe on McCaffrey: "why are we not using his TD rate, or at least getting
+# him much closer to it?" -- 10 rushing TDs on 115 carries in 2026, 2025 rate ordinary so not "proven").
+# (min carries this season, ratio): a back NOT proven on last season with that many carries this season at
+# ratio x the position rate or more gets his own rate (this season, shrunk by RB_TD_CUR_K carries). None = off.
+RB_TD_CUR = None
+RB_TD_CUR_K = 150.0
 QB_RUSH_TD_MIN_SEASONS = 2   # qualifying SEASONS, not weeks -- picks out Allen and Hurts
 K_TGT = {"same team": 3.0, "changed team": 1.0, "no history": 2.0}
 K_CAR = {"same team": 0.5, "changed team": 0.5, "no history": 0.5}
@@ -4239,6 +4245,15 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 if 0 < wk < week:          # this season, on top of history
                     hc += c["car"]; ht += c["rush_td"]
             mc = blend(ht / hc, hc, lg_rate, K_RB_RUSH_TD) / lg_rate if hc else 1.0
+        elif RB_TD_CUR and lg_rate and pos[pid] == "RB":
+            hc = ht = 0.0
+            for wk, c in (player_eff.get(pid) or {}).items():
+                if 0 < wk < week:
+                    hc += c["car"]; ht += c["rush_td"]
+            if hc >= RB_TD_CUR[0] and ht / hc >= RB_TD_CUR[1] * lg_rate:
+                mc = blend(ht / hc, hc, lg_rate, RB_TD_CUR_K) / lg_rate
+                if _DEBUG_PIDS and pid in _DEBUG_PIDS:
+                    print(f"  [debug {pid}] this season's TD rate: {ht:.0f} TD / {hc:.0f} car -> x{mc:.2f} league")
         # Receiving TDs CONCENTRATE on a team's top targets beyond their
         # share -- red-zone looks go to the WR1/TE1. Straight proportion
         # left top WRs at 0.44 TDs a game against 0.51 actual (2024-25),
@@ -4706,7 +4721,7 @@ def main():
         if k == "MATCHUP_QB_USE":    # yds/td/int
             globals()[k] = tuple(x for x in v.split("/") if x and x != "None")
             continue
-        if k in ("QB_CARRY_TRIM", "RISER_KT", "KT_STEADY", "KT_EARLY", "KT_STEADY_FAST", "EXLIST_ADD"):     # 0.5/4 | 3/0.04
+        if k in ("QB_CARRY_TRIM", "RISER_KT", "KT_STEADY", "KT_EARLY", "KT_STEADY_FAST", "EXLIST_ADD", "RB_TD_CUR"):     # 0.5/4 | 3/0.04
             globals()[k] = None if v == "None" else tuple(float(x) for x in v.split("/"))
             continue
         if k == "MATCHUP_EPA_BETA_POS":   # TE:0.5,WR:0.3

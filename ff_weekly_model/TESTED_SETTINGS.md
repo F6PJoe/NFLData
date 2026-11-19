@@ -1599,3 +1599,16 @@ position's league rate, not the player's own (Schultz .020 TD/tgt 2026, Okonkwo 
 McCaffrey: SF raw target shares sum to 122% (Evans, Kittle, Deebo, Allen) so his 14.9% is cut to 3.7 targets (5.4 a
 game this season), Kaelon Black 9.1 carries, TD rate league-based (his 2026 .087/carry). Warren: wk10 committee
 (Warren 7, Nichols 6, Dowdle 5 carries) + PIT 16.5 implied, 21 non-QB carries projected (sites ~26).
+
+## 2026-11-19 TOUCHDOWN RATES AGAIN (Joe: "why are we not using his TD rate" -- McCaffrey, Schultz, Okonkwo)
+Rushing TDs: own rate only for PROVEN backs (last season 100+ carries at 1.5x the position rate, rb_rush_td_proven);
+McCaffrey's 2025 (.032/carry) did not qualify, so his 2026 .087 is unused. RB_TD_CUR (this season's rate once he has
+min carries at ratio x league, shrunk by RB_TD_CUR_K) vs current, ALL / RB:
+  40/1.5 .000/+.0007/+.0008 (RB +.0002/+.0027/+.0027)   60/1.5 +.0002/+.0005/+.0005   60/1.3 -.0002/+.0012/+.0004
+  60/1.5 K75 +.0003/+.0006/+.0007 -- ALL FAIL. Left in the code, off.
+Receiving TDs, this season only (REC_TD_OWN_HIST_W 0): TE 150 -.0021/+.0027/+.0020 (TE -.006/+.009/+.007)
+  TE 300 -.0015/+.0011/+.0010   TE 600 -.0010/+.0006/+.0005   TE/WR/RB 300 -.0025/+.0024/+.0029 -- ALL FAIL (2024 only).
+Why (2024-26, rate so far this season vs the NEXT game): backs 1.5x+ league on 60+ carries: own 6.1 / league 3.2 /
+next 4.1 per 100 carries; under .5x: 1.0 / 3.2 / 2.9. TEs 1.5x+ on 25+ targets: 11.3 / 5.3 / 7.5 per 100 targets;
+under .5x (Okonkwo, 0 TDs): 1.0 / 5.3 / 4.9 -- a zero means almost nothing; a third of a high rate carries over, and
+the red-zone role (RZ_EXP) + team implied total already give the model part of it.
