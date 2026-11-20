@@ -147,6 +147,7 @@ def main():
                    ("gap report", [py, "gap_report.py", "--year", y, "--week", w])], fatal=False)
     step("review workbook", py, "review_book.py", "--year", y, "--week", w, "--no-model-run", fatal=False)
     step("rankings files", py, "site_rankings_export.py", "--year", y, "--week", w, fatal=False)
+    step("customer sheet", py, "customer_sheet.py", "--year", y, "--week", w, fatal=False)
     print("\n  " + ("TEST RUN DONE (not frozen)." if args.no_freeze else "LOCKED.") + "\n")
 
 

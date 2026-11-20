@@ -5916,7 +5916,7 @@ def main():
                         "consensus", "diff",
                         "pass_att", "pass_cmp", "pass_yds", "pass_td", "pass_int",
                         "rush_att", "rush_yds", "rush_td",
-                        "targets", "rec", "rec_yds", "rec_td"])
+                        "targets", "rec", "rec_yds", "rec_td", "fum"])
             for pts, pid in rows:
                 v = proj[pid]
                 # Blank rather than 0 when the market has no number for him --
@@ -5944,7 +5944,9 @@ def main():
                             round(v.get("rush_yds", 0.0), 1),
                             round(v.get("rush_td", 0.0), 2),
                             col("targets"), col("rec"), col("rec_yds"),
-                            col("rec_td", 2)])
+                            col("rec_td", 2),
+                            # fumbles lost (customer sheet, 2026-11-20); already in half_ppr
+                            round(v.get("fum", 0.0), 2)])
         print()
         print(f"  {args.year} week {args.week} projections  "
               f"(depth chart as of {asof})")

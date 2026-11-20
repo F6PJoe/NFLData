@@ -164,6 +164,8 @@ def main():
     ok = run("review workbook", "review_book.py", "--year", ys, "--week", ws, "--no-model-run") and ok
     # the three site rankings files, every run (Joe 2026-11-12); a failure here never fails the run
     run("rankings files", "site_rankings_export.py", "--year", ys, "--week", ws)
+    # the customer projections workbook (Joe 2026-11-20); a failure here never fails the run
+    run("customer sheet", "customer_sheet.py", "--year", ys, "--week", ws)
     print("\n  " + ("DONE -- open " + os.path.basename(book) + " to see the new numbers."
                     if ok else "FINISHED WITH PROBLEMS -- see above.") + "\n")
     sys.exit(0 if ok else 1)
