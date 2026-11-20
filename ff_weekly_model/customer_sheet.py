@@ -5,13 +5,13 @@
 
 Joe 2026-11-20: "can I also get a projection spreadsheet created that I would be able to share with
 customers? I think I would want it to mimic this setup" (a Google Sheet with tabs LIVE PROJECTIONS QB / RB /
-WR / TE and Update Date). Writes customer_sheets/F6P Week <N> Projections.xlsx from
+WR / TE). Writes customer_sheets/F6P Week <N> Projections.xlsx from
 data/projections_<yr>_wk<NN>.csv (the run with Joe's calls). Only the stat lines and points go out:
 no consensus, no diff, no model internals. rerun.py and lock.py call it at the end of every run.
+No Update Date tab (Joe 2026-11-20). Not pushed to the Google Sheet yet -- Joe is still testing.
 """
 import argparse
 import csv
-import datetime
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -91,17 +91,6 @@ def build(year, week):
             ws.column_dimensions[get_column_letter(j)].width = 13 if hdr[j - 1].startswith(("Fantasy", "TE Prem")) else 9
         ws.freeze_panes = "B2"
         ws.auto_filter.ref = f"A1:{get_column_letter(len(hdr))}{max(2, len(recs) + 1)}"
-    ws = wb.create_sheet("Update Date")
-    now = datetime.datetime.now()
-    for i, (a, b) in enumerate((("Updated", f"{now:%B} {now.day}, {now:%I:%M %p}".replace(" 0", " ")),
-                                ("Week", f"{year} Week {week}"),
-                                ("Scoring", "4 pt pass TD, 0.04 per pass yd, -2 INT, 0.1 per rush/rec yd, "
-                                            "6 pt rush/rec TD, -2 fumble lost"),
-                                ("Opp", "@ = road game")), 1):
-        ws.cell(i, 1, a).font = BOLD
-        ws.cell(i, 2, b).font = BODY
-    ws.column_dimensions["A"].width = 12
-    ws.column_dimensions["B"].width = 80
     os.makedirs(OUT, exist_ok=True)
     dest = os.path.join(OUT, f"F6P Week {week} Projections.xlsx")
     try:
