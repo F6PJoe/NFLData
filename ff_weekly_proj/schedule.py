@@ -45,30 +45,26 @@ def _load_schedule_data(year, json_file=None):
 
 
 def _detect_week(teams_data):
-    """Find the scoring period whose games are closest to (but not yet past) today.
-    Falls back to the highest-numbered week with games if all are in the past."""
+    """The current week = the earliest scoring period that still has a game not yet over
+    (kickoff + 4 h still ahead). Rolls to the next week once the week's LAST game (MNF) is done.
+    Falls back to the highest-numbered week if every game is in the past.
+
+    Fixed 2026-11-22: the old rule took the highest week whose FIRST game started within the
+    next 4 days, so on Thanksgiving week (Thursday early game) it jumped to week 12 on the
+    Saturday night before week 11's Sunday games -- every source pulled the wrong week."""
     now_ms = datetime.datetime.now().timestamp() * 1000
-    # Build {period: earliest_game_date_ms}
-    period_dates = {}
+    last_game = {}      # period -> latest kickoff (ms)
     for team in teams_data:
         for period_str, games in team.get("proGamesByScoringPeriod", {}).items():
             period = int(period_str)
             for game in games:
                 date_ms = game.get("date", 0)
-                if not date_ms:
-                    continue
-                if period not in period_dates or date_ms < period_dates[period]:
-                    period_dates[period] = date_ms
-
-    if not period_dates:
+                if date_ms and date_ms > last_game.get(period, 0):
+                    last_game[period] = date_ms
+    if not last_game:
         return 1
-
-    # Include periods whose first game starts within the next 4 days (Thu cutoff)
-    cutoff = now_ms + 4 * 86400 * 1000
-    candidates = {p: d for p, d in period_dates.items() if d <= cutoff}
-    if candidates:
-        return max(candidates.keys())
-    return min(period_dates.keys())
+    live = [p for p, d in last_game.items() if d + 4 * 3600 * 1000 > now_ms]
+    return min(live) if live else max(last_game)
 
 
 def get_schedule(year, week=None, json_file=None):

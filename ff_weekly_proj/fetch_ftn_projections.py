@@ -92,7 +92,10 @@ def parse(players, opponents):
             continue
         s = build_stat_line(p.get("projections") or [])
         name = p.get("name", "")
-        team = TEAM_ALIASES.get(p.get("team", ""), p.get("team", ""))
+        team = p.get("team", "")
+        if not isinstance(team, str):       # 2026-11-22: FTN sent a team as an object (Daniel Jones)
+            team = ""
+        team = TEAM_ALIASES.get(team, team)
         # FTN provides opp directly; fall back to schedule lookup
         opp = p.get("opp") or opponents.get(team, "")
 
