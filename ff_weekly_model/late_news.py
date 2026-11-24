@@ -119,6 +119,11 @@ def main():
     path = os.path.join(DATA, f"review_{args.year}_wk{args.week:02d}.csv")
     # "news since" goes by when JOE last saved the sheet, so read it before
     # the rebuild below touches the file
+    if not os.path.exists(path):
+        # first run of a new week (e.g. an unattended lock before anyone opened the week,
+        # 2026-11-24): build the week's sheet first instead of crashing
+        print(f"  no {os.path.basename(path)} yet -- building the week's status sheet")
+        refresh_inputs.refresh_sheet(args.year, args.week)
     saved = datetime.datetime.fromtimestamp(os.path.getmtime(path))
     since = min(saved, datetime.datetime.now() - datetime.timedelta(hours=args.hours))
     since_s = since.strftime("%Y-%m-%d %H:%M")
