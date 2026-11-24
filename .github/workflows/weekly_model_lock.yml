@@ -70,7 +70,13 @@ jobs:
 
       - name: Python packages
         if: steps.gate.outputs.what != 'skip'
-        run: pip install -q requests beautifulsoup4 openpyxl
+        run: |
+          pip install -q requests beautifulsoup4 openpyxl google-auth google-api-python-client
+          # service account for the calls Google Sheet (calls_gsheet.py) -- same secret the projections sheet uses
+          printf '%s' "$GSA" > "$RUNNER_TEMP/gsa.json"
+          echo "GOOGLE_SERVICE_ACCOUNT_FILE=$RUNNER_TEMP/gsa.json" >> "$GITHUB_ENV"
+        env:
+          GSA: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
 
       - name: Public data cache
         if: steps.gate.outputs.what != 'skip'

@@ -310,6 +310,16 @@ def sync(year, week):
     never write the sheet together."""
     if os.environ.get("REVIEW_SYNCED") == "1":
         return 0
+    # calls made on the Google Sheet (calls_gsheet.py, from week 13 of 2026): sheet -> workbook first
+    import calls_gsheet
+    calls_gsheet.pull(year, week)
+    n = _sync(year, week)
+    if n is not None:
+        calls_gsheet.after_sync(year, week)
+    return n
+
+
+def _sync(year, week):
     if not os.path.exists(book_path(year, week)):
         return 0
     edits = read_edits(year, week)
@@ -1007,6 +1017,8 @@ def build(year, week, run_model=True):
     print(f"  review workbook: {len(order)} team tabs, {len(calls)} calls, {len(todo)} listed with no call"
           + (f", {len(problems)} PROBLEM(S) -- see the Calls tab" if problems else "")
           + f" -> {os.path.basename(path)}")
+    import calls_gsheet
+    calls_gsheet.push(year, week)
 
 
 def main():
