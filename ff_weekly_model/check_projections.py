@@ -78,8 +78,15 @@ def output_checks(year, week):
     tvp = os.path.join(DATA, f"team_volume_{year}_wk{week:02d}.csv")
     team_rush = ({r["team"]: num(r["nonqb_rush"]) for r in csv.DictReader(open(tvp, encoding="utf-8"))}
                  if os.path.exists(tvp) else {})
+    try:
+        from project import RB_LONE_MIN as LONE_MIN
+    except Exception:
+        LONE_MIN = 0.02
     lone = [f"{t} ({max(c):.1f} of {team_rush[t]:.1f})" for t, c in rb.items()
-            if t in team_rush and team_rush[t] and sum(1 for x in c if x >= 1.0) == 1
+            # a backup = any other back at RB_LONE_MIN (2%) of the lead's carries, the model's own
+            # definition (project.rb_backup_need); 1.0 carry flagged TEN wk12 (Pollard 17.4, Chestnut
+            # 0.8 after Michael Carter was cut) and stopped a cloud lock for every team (2026-11-24)
+            if t in team_rush and team_rush[t] and sum(1 for x in c if x >= max(0.3, LONE_MIN * max(c))) == 1
             and max(c) / team_rush[t] > 0.85]
     res.append((bool(team_rush) and not lone,
                 "no lone back with every carry (one-back teams keep a backup's share)",
