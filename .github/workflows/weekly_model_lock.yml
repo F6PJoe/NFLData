@@ -1,0 +1,132 @@
+name: Weekly Model Lock
+#
+# Runs ff_weekly_model on GitHub so locks happen with the laptop off (Joe 2026-11-24).
+# Every 10 minutes a cheap GATE decides whether anything is due (ff_weekly_model/cloud_run.py):
+#   lock     -- a kickoff is 55-85 min away and has no lock yet (inactives post 90 min before):
+#               daily refresh, then lock.py (late news + inactives, projections, checks, FREEZE,
+#               workbook, rankings files, customer sheet)
+#   refresh  -- once each morning (9:00-10:30 ET) in season: daily refresh + lock.py --no-freeze
+#   skip     -- nothing due (most runs; ~20 s)
+# Joe's calls and every output live in the PRIVATE repo F6PJoe/NFLData-private (deploy key secret
+# PRIVATE_DEPLOY_KEY); this public repo only holds the code.
+# Manual run: Actions tab -> Weekly Model Lock -> Run workflow (mode lock / refresh / test).
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'lock = freeze now, refresh = no freeze, test = no freeze + no state saved'
+        required: true
+        default: refresh
+        type: choice
+        options: [refresh, lock, test]
+
+concurrency:
+  group: weekly-model
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read          # lock.py downloads the newest "Fetch Weekly Projections" artifact with gh
+
+env:
+  TZ: America/New_York   # the model reads the clock as Eastern, like the laptop
+  PYTHONIOENCODING: utf-8
+  GH_TOKEN: ${{ github.token }}
+  FANTASYPROS_API_KEY: ${{ secrets.FANTASYPROS_API_KEY }}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Private state
+        uses: actions/checkout@v4
+        with:
+          repository: F6PJoe/NFLData-private
+          ssh-key: ${{ secrets.PRIVATE_DEPLOY_KEY }}
+          path: _private
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Gate
+        id: gate
+        run: |
+          python ff_weekly_model/cloud_run.py bootstrap --only games.csv
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            G="${{ inputs.mode }}"
+          else
+            G=$(python ff_weekly_model/cloud_run.py gate --private _private)
+          fi
+          echo "gate: $G"
+          echo "what=$(echo $G | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "key=$(echo $G | cut -s -d' ' -f3-)" >> "$GITHUB_OUTPUT"
+
+      - name: Python packages
+        if: steps.gate.outputs.what != 'skip'
+        run: pip install -q requests beautifulsoup4 openpyxl
+
+      - name: Public data cache
+        if: steps.gate.outputs.what != 'skip'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ff_utilization/cached
+            ff_projections/cached
+            ff_weekly_model/data/exlist_cache
+            ff_weekly_model/data/stats_player_week_202[1-5].csv
+          key: public-data-${{ github.run_id }}
+          restore-keys: public-data-
+
+      - name: Restore private state + download public history
+        if: steps.gate.outputs.what != 'skip'
+        run: |
+          python ff_weekly_model/cloud_run.py restore --private _private
+          python ff_weekly_model/cloud_run.py bootstrap
+          # Sleeper snapshots: keep the last 10 days
+          find ff_projections/cached/sleeper -name 'players_nfl_*.json' -mtime +10 -delete 2>/dev/null || true
+
+      - name: Daily refresh
+        if: steps.gate.outputs.what != 'skip'
+        working-directory: ff_weekly_model
+        run: |
+          read Y W <<< "$(python cloud_run.py week)"
+          echo "Y=$Y" >> "$GITHUB_ENV"; echo "W=$W" >> "$GITHUB_ENV"
+          echo "season $Y week $W"
+          if [ ! -f "data/review_${Y}_wk$(printf %02d $W).csv" ]; then
+            python refresh_inputs.py --year $Y --week $W     # first run of a new week builds everything
+          else
+            python refresh_inputs.py --year $Y
+          fi
+
+      - name: Lock
+        if: steps.gate.outputs.what == 'lock'
+        working-directory: ff_weekly_model
+        run: python lock.py --year $Y --week $W
+
+      - name: Refresh (no freeze)
+        if: steps.gate.outputs.what == 'refresh' || steps.gate.outputs.what == 'test'
+        working-directory: ff_weekly_model
+        run: python lock.py --year $Y --week $W --no-freeze
+
+      - name: Save to the private repo
+        if: always() && (steps.gate.outputs.what == 'lock' || steps.gate.outputs.what == 'refresh')
+        run: |
+          python ff_weekly_model/cloud_run.py save --private _private
+          if [ "${{ job.status }}" = "success" ]; then
+            python ff_weekly_model/cloud_run.py mark --private _private --what "${{ steps.gate.outputs.what }}" --key "${{ steps.gate.outputs.key }}"
+          fi
+          cd _private
+          git config user.name "weekly-model-bot"
+          git config user.email "weekly-model-bot@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -q -m "cloud ${{ steps.gate.outputs.what }} wk${W} $(date '+%a %m-%d %H:%M ET')"
+          for i in 1 2 3; do git push -q && exit 0; git pull -q --rebase; done
+          exit 1

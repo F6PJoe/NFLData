@@ -114,6 +114,14 @@ def main():
     import project
     book = review_book.book_path(y, w)
     print(f"\n  rerunning week {w} projections ({datetime.datetime.now():%a %I:%M %p})\n")
+    # the cloud locks (GitHub, cloud_run.py) may have run while the laptop was off: take their
+    # state first; this run's calls and outputs go back up at the end (2026-11-24)
+    try:
+        import private_sync
+        private_sync.pull(quiet=True)
+    except Exception as e:
+        private_sync = None
+        print(f"  WARN  private repo         pull skipped ({type(e).__name__}: {str(e)[:120]})")
     if os.path.exists(book):
         try:
             open(book, "r+b").close()
@@ -170,6 +178,11 @@ def main():
     sab = os.path.join(os.path.dirname(os.path.dirname(HERE)), "SabotageFantasy", "weekly_stats", "project_stats.py")
     if os.path.exists(sab):
         run("sabotage stats", sab, "--year", ys, "--week", ws)
+    if private_sync:
+        try:
+            private_sync.push(f"laptop rerun wk{w} ({datetime.datetime.now():%a %I:%M %p})")
+        except Exception as e:
+            print(f"  WARN  private repo         push failed ({type(e).__name__}: {str(e)[:120]})")
     print("\n  " + ("DONE -- open " + os.path.basename(book) + " to see the new numbers."
                     if ok else "FINISHED WITH PROBLEMS -- see above.") + "\n")
     sys.exit(0 if ok else 1)
