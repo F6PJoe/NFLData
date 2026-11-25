@@ -903,6 +903,7 @@ _QB_RYD = {}       # QB -> {week: [carries, rushing yards]}, week 0 = weighted h
 _KNEEL_YDS_G = 0.0  # KNEELS_OUT: league kneel yards per team game (last season), back to the QBs
 _QB_YPC_CALL = {}  # pid -> yards per carry, a QB's "ypc 6.5" call on the review sheet
 _QB_RUSH = {}      # pid -> rushing attempts, a QB's "rush 6.5" call on the review sheet
+_QB_PTD = {}       # pid -> passing TDs, a QB's "QB pass TDs" cell on the review sheet (2026-11-25)
 _WH_FORCE = {}     # pid -> "FULL" (force the workhorse return) / "SPLIT" (no workhorse return), review sheet
 # NON-WORKHORSE RETURNS (2026-10-30, Joe: "now what about the non-workhorse
 # backs?"). Current model 2024-26: a lead back (45%+) whose fill-in OUTSCORED
@@ -4971,6 +4972,20 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 for q in q_by_t.get(tm_, ()):
                     if tot_ > 0:
                         out[q][qk_] = max(out[q][qk_] + d_ * out[q][qk_] / tot_, 0.0)
+    # QB PASS TDs (review sheet, 2026-11-25, Joe on Cam Ward: "maybe not enough of a TD rate" / "guys
+    # who have a higher rate should get more trickled down to them"): his passing TDs are set; the
+    # difference goes to his team's receivers (WR / TE / RB) in proportion to the receiving TDs each is
+    # already projected for. Rushing TDs, yards and volume are unchanged.
+    for pid, n_ in _QB_PTD.items():
+        if pid not in out or pos.get(pid) != "QB" or pid not in qraw:
+            continue
+        tm_ = qraw[pid][0]
+        d_ = n_ - out[pid].get("pass_td", 0.0)
+        out[pid]["pass_td"] = max(n_, 0.0)
+        rec_ = [p for p in out if p in raw and raw[p][0] == tm_ and out[p].get("rec_td", 0.0) > 0]
+        tot_ = sum(out[p]["rec_td"] for p in rec_)
+        for p in rec_:
+            out[p]["rec_td"] = max(out[p]["rec_td"] + d_ * out[p]["rec_td"] / tot_, 0.0)
     globals()["_LAST_TEAM"] = team_proj   # read by --team-dump (diagnostics)
     return out
 
@@ -5498,6 +5513,9 @@ def main():
             args.year, args.week, read_review.parse_ypc)
         for pid, y_ in _QB_YPC_CALL.items():
             print(f"  YPC: {pid} -- {y_:g} yards per carry (sheet)")
+        globals()["_QB_PTD"] = {} if args.ignore_sheet else read_review.load_ptd(args.year, args.week)
+        for pid, t_ in _QB_PTD.items():
+            print(f"  PASS TDs: {pid} -- {t_:g} (sheet)")
         globals()["_WH_FORCE"] = {pid: ("SPLIT" if fl == "EVEN" else fl) for pid, fl in flags.items()
                                   if fl in ("FULL", "SPLIT", "EVEN")}
         for pid, fl in flags.items():

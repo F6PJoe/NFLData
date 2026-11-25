@@ -167,11 +167,11 @@ def main():
         # would rename the player_id column and silently drop every call
         with open(dest, newline="", encoding="utf-8-sig") as fh:
             for r in csv.DictReader(fh):
-                if any(r.get(k) for k in ("decision", "note", "role", "rush", "ypc")):
+                if any(r.get(k) for k in ("decision", "note", "role", "rush", "ypc", "ptd")):
                     key = r.get("player_id") or f"~{norm(r.get('player'))}"
                     # rush / ypc: the review workbook's QB rushes / QB ypc (2026-11-04)
                     existing[key] = (r.get("decision", ""), r.get("note", ""), r.get("role", ""),
-                                     r.get("rush", "") or "", r.get("ypc", "") or "")
+                                     r.get("rush", "") or "", r.get("ypc", "") or "", r.get("ptd", "") or "")
                     kept.append(r)
     # A row YOU added by hand must survive the rebuild, or the sheet would
     # quietly undo your work every time it is regenerated.
@@ -192,22 +192,22 @@ def main():
     with open(tmp, "w", newline="", encoding="utf-8") as fh:
         w = csv.writer(fh)
         w.writerow(["player_id", "player", "pos", "team", "injury", "practice",
-                    "source", "proj", "decision", "role", "rush", "ypc", "note"])
+                    "source", "proj", "decision", "role", "rush", "ypc", "ptd", "note"])
         for e in q:
-            d, n, ro, ru, yp = existing.get(e["pid"] or f"~{norm(e['name'])}", ("",) * 5)
+            d, n, ro, ru, yp, pt = existing.get(e["pid"] or f"~{norm(e['name'])}", ("",) * 6)
             pr = (e["practice"] or "-").split(" (")[0]
             if days.get(e["pid"]):
                 pr = f"{pr} ({days[e['pid']]})"
             w.writerow([e["pid"], e["name"], e["pos"], e["team"], e["injury"],
                         pr, e["source"],
-                        round(proj.get(e["pid"], 0), 1), d, ro, ru, yp, n])
+                        round(proj.get(e["pid"], 0), 1), d, ro, ru, yp, pt, n])
     try:
         os.replace(tmp, dest)
     except PermissionError:
         os.remove(tmp)
         sys.exit(f"  SHEET NOT REBUILT -- {os.path.basename(dest)} is open (Excel?). "
                  f"Close it and run again; your calls are untouched.")
-    kept_calls = sum(1 for e in q if existing.get(e["pid"] or f"~{norm(e['name'])}", ("",) * 5)[0])
+    kept_calls = sum(1 for e in q if existing.get(e["pid"] or f"~{norm(e['name'])}", ("",) * 6)[0])
     made = sum(1 for v in existing.values() if v[0])
     if kept_calls != made:
         print(f"  WARNING: {made} calls on the old sheet, {kept_calls} on the new one")

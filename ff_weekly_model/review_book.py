@@ -63,11 +63,12 @@ CALLS = ("OUT,PLAY,FULL,SPLIT,EVEN,START,LIMITED,25,50,60,70,75,80,85,90,110,125
          "85 only,70 only,chance 50,chance 25")
 RUSHES = "3,4,5,6,7,8,9,10"            # QB carries dropdown (any number can be typed)
 YPCS = "4,4.5,5,5.5,6,6.5,7,7.5,8"     # QB yds/carry dropdown
-COLS = ["Pos", "Model role", "Player", "Your role", "Call", "QB carries", "QB yds/carry", "Note", "Flag",
+PTDS = "0.5,0.75,1,1.25,1.5,1.75,2,2.25,2.5"   # QB pass TDs dropdown (2026-11-25)
+COLS = ["Pos", "Model role", "Player", "Your role", "Call", "QB carries", "QB yds/carry", "QB pass TDs", "Note", "Flag",
         "Status", "Practice", "Injury", "Source", "Model pts", "With calls", "Change", "Carries",
         "Car chg", "Targets", "Tgt chg", "Pass att", "Consensus", "ETR", "Last 3 games", "News",
         "player_id"]
-WIDTH = [5, 7, 22, 9, 10, 9, 9, 18, 40, 16, 26, 14, 12, 8, 8, 7, 7, 7, 7, 7, 7, 9, 6, 70, 70, 12]
+WIDTH = [5, 7, 22, 9, 10, 9, 9, 9, 18, 40, 16, 26, 14, 12, 8, 8, 7, 7, 7, 7, 7, 7, 9, 6, 70, 70, 12]
 C = {name: i + 1 for i, name in enumerate(COLS)}      # column numbers
 HEADER_ROW = 4
 CALLS_TAB = "Calls"
@@ -78,11 +79,11 @@ TEAM_INPUTS = [("Pass rate", "pass_rate"), ("Plays", "plays"), ("QB run share", 
                ("QB own passing", "qb_own"), ("Note", "note")]
 # what Joe edits, in the order kept in the sync state (older state files hold
 # only the first three -- padded with blanks)
-EDIT_KEYS = ("role", "call", "note", "rush", "ypc")
+EDIT_KEYS = ("role", "call", "note", "rush", "ypc", "ptd")
 EDIT_COLS = {"role": "Your role", "call": "Call", "note": "Note", "rush": "QB carries",
-             "ypc": "QB yds/carry"}
+             "ypc": "QB yds/carry", "ptd": "QB pass TDs"}
 OLD_HEADERS = {"QB rushes": "QB carries", "QB ypc": "QB yds/carry"}   # a workbook built before the rename
-SHEET_COLS = {"role": "role", "call": "decision", "note": "note", "rush": "rush", "ypc": "ypc"}
+SHEET_COLS = {"role": "role", "call": "decision", "note": "note", "rush": "rush", "ypc": "ypc", "ptd": "ptd"}
 
 
 LAST_RUN = os.path.join(DATA, "last_run.json")
@@ -185,7 +186,7 @@ def read_edits(year, week):
 
 def _describe(e):
     """'START / rush 7 / ypc 6.5' -- one player's edits, for the sync message."""
-    parts = [e["role"], e["call"]] + [f"{k} {e[k]}" for k in ("rush", "ypc") if e.get(k)]
+    parts = [e["role"], e["call"]] + [f"{k} {e[k]}" for k in ("rush", "ypc", "ptd") if e.get(k)]
     return "/".join(x for x in parts if x) or "cleared"
 
 
@@ -346,13 +347,13 @@ def _sync(year, week):
         return 0
     path = sheet_path(year, week)
     rows, fields = [], ["player_id", "player", "pos", "team", "injury", "practice", "source",
-                        "proj", "decision", "role", "rush", "ypc", "note"]
+                        "proj", "decision", "role", "rush", "ypc", "ptd", "note"]
     if os.path.exists(path):
         with open(path, newline="", encoding="utf-8-sig") as fh:
             rd = csv.DictReader(fh)
             fields = list(rd.fieldnames or fields)
             rows = list(rd)
-    for col in ("decision", "note", "role", "rush", "ypc"):
+    for col in ("decision", "note", "role", "rush", "ypc", "ptd"):
         if col not in fields:
             fields.insert(fields.index("note") if col != "note" and "note" in fields else len(fields), col)
     by_pid = {r.get("player_id"): r for r in rows if r.get("player_id")}
@@ -492,6 +493,8 @@ HEADER_TIPS = {   # hover notes on the fill-in headers
                   "Blank = the model's. Extra carries come out of his running backs.",
     "QB yds/carry": "QBs only. His rushing YARDS PER CARRY -- e.g. 7. "
                     "Blank = the model's. Does not change how often he runs.",
+    "QB pass TDs": "QBs only. His PASSING TDs -- e.g. 1.5. Blank = the model's. The change goes to his "
+                   "receivers (WR / TE / RB) by their projected receiving TDs; rushing TDs unchanged.",
 }
 KEY_FILL_IN = [   # (column, what to type, what it does, example)
     ("Your role", "QB1-QB3, RB1-RB5, WR1-WR6, TE1-TE3",
@@ -509,6 +512,11 @@ KEY_FILL_IN = [   # (column, what to type, what it does, example)
      "His rushing YARDS PER CARRY. Changes his rushing yards only -- not how often he runs (fill QB carries "
      "for that) and not his TDs. Blank = the model's rate.",
      "7  =  7 yards a run"),
+    ("QB pass TDs", "a number -- QB rows only",
+     "His PASSING TDs. The difference goes to his receivers -- WRs, TEs and backs -- in proportion to the "
+     "receiving TDs the model already projects for each (so his red-zone targets get the most). Rushing TDs "
+     "and his yards do not change. Blank = the model's number.",
+     "1.5  =  a TD and a half"),
     ("Note", "anything", "For you only -- the model ignores it.", ""),
     ("Teams tab: Pass rate / Plays / QB run share / QB own passing", "a number (60 = 60%)",
      "Replaces the model's number for the WHOLE team (the team sheet). QB own passing = how much of the "
@@ -749,7 +757,7 @@ def build(year, week, run_model=True):
     INPUT, INHFILL = PatternFill("solid", fgColor="E2EFDA"), PatternFill("solid", fgColor="375623")
     BOX = Border(*(Side(style="thin", color="A9D08E"),) * 4)
     INPUT_COLS = ("Your role", "Call", "Note")
-    QB_COLS = ("QB carries", "QB yds/carry")          # input cells on QB rows only
+    QB_COLS = ("QB carries", "QB yds/carry", "QB pass TDs")   # input cells on QB rows only
     DROP_COLS = ("Your role", "Call") + QB_COLS
     BF, BB = Font(name="Arial", size=10), Font(name="Arial", size=10, bold=True)
     UP, DOWN = Font(name="Arial", size=10, color="007A33"), Font(name="Arial", size=10, color="C00000")
@@ -797,7 +805,9 @@ def build(year, week, run_model=True):
         dv_qb = {"QB carries": DataValidation(type="list", formula1=f'"{RUSHES}"', allow_blank=True,
                                              showErrorMessage=False),
                  "QB yds/carry": DataValidation(type="list", formula1=f'"{YPCS}"', allow_blank=True,
-                                          showErrorMessage=False)}
+                                          showErrorMessage=False),
+                 "QB pass TDs": DataValidation(type="list", formula1=f'"{PTDS}"', allow_blank=True,
+                                               showErrorMessage=False)}
         if not locked:
             for dv in list(dv_role.values()) + [dv_call] + list(dv_qb.values()):
                 ws.add_data_validation(dv)
@@ -819,11 +829,12 @@ def build(year, week, run_model=True):
                 qp = _num(q["half_ppr"]) if q else (0.0 if b else None)
                 role, call, note = (s_.get("role") or "").strip().upper(), (s_.get("decision") or "").strip(), \
                     (s_.get("note") or "").strip()
-                rush, ypc = ((s_.get(k) or "").strip() for k in ("rush", "ypc"))
-                rush_v, ypc_v = _sheet_num(rush), _sheet_num(ypc)
+                rush, ypc, ptd = ((s_.get(k) or "").strip() for k in ("rush", "ypc", "ptd"))
+                rush_v, ypc_v, ptd_v = _sheet_num(rush), _sheet_num(ypc), _sheet_num(ptd)
                 st = status_of(pid)
                 vals = {"Pos": g, "Model role": model_role.get(pid, "-"), "Player": name_of.get(pid, pid),
                         "Your role": role, "Call": call, "QB carries": rush_v, "QB yds/carry": ypc_v,
+                        "QB pass TDs": ptd_v,
                         "Note": note, "Flag": flags_.get(pid, ""), "Status": st,
                         "Practice": practice_of(pid),
                         "Injury": (s_.get("injury") or inj.get(pid, {}).get("report_primary_injury")
@@ -865,13 +876,13 @@ def build(year, week, run_model=True):
                         for name, dv in dv_qb.items():
                             dv.add(ws.cell(row, C[name]))
                     state[pid] = [role, call, note] + [_num_cell(ws.cell(row, C[n]).value) for n in QB_COLS]
-                if call or role or rush or ypc:
+                if call or role or rush or ypc or ptd:
                     has_call = True
                     calls.append((tm, pid, vals, locked))
                     if not locked:
                         if call and not read_review.parse_decision(call)[2]:
                             problems.append((tm, vals["Player"], f"call '{call}' not understood -- treated as PLAY"))
-                        for name, x in (("QB carries", rush), ("QB yds/carry", ypc)):
+                        for name, x in (("QB carries", rush), ("QB yds/carry", ypc), ("QB pass TDs", ptd)):
                             if x and g != "QB":
                                 problems.append((tm, vals["Player"], f"{name} {x} on a {g} -- QBs only, ignored"))
                             elif x and read_review.rush_number(x) is None:
@@ -1050,7 +1061,8 @@ def build(year, week, run_model=True):
 
     def qb_rushing(v):
         parts = [f"{v['QB carries']} carries" if v.get("QB carries") is not None else "",
-                 f"{v['QB yds/carry']} yds/carry" if v.get("QB yds/carry") is not None else ""]
+                 f"{v['QB yds/carry']} yds/carry" if v.get("QB yds/carry") is not None else "",
+                 f"{v['QB pass TDs']} pass TDs" if v.get("QB pass TDs") is not None else ""]
         return ", ".join(p for p in parts if p)
 
     r0 = table(r0, "Your calls", ["Team", "Player", "Pos", "Your role", "Call", "QB rushing", "Note",

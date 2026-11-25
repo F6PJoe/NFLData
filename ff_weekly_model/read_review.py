@@ -275,6 +275,22 @@ def load_rush(year, week, parse=None):
     return out
 
 
+def load_ptd(year, week):
+    """player_id -> a QB's passing TDs, from the sheet's `ptd` column (the review workbook's QB pass
+    TDs cell, 2026-11-25: Joe on Cam Ward, "maybe not enough of a TD rate")."""
+    path = os.path.join(DATA, f"review_{year}_wk{week:02d}.csv")
+    out = {}
+    if not os.path.exists(path):
+        return out
+    with open(path, newline="", encoding="utf-8-sig") as fh:
+        for r in csv.DictReader(fh):
+            n = rush_number(r.get("ptd"))
+            pid = (r.get("player_id") or "").strip()
+            if n is not None and pid:
+                out[pid] = n
+    return out
+
+
 def load_chances(year, week):
     """player_id -> chance he plays, for rows like "chance 25"."""
     path = os.path.join(DATA, f"review_{year}_wk{week:02d}.csv")
