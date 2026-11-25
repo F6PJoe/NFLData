@@ -169,6 +169,8 @@ def main():
     ok = run("output checks", "check_projections.py", "--year", ys, "--week", ws, "--output-only") and ok
     run_parallel([("comparison workbook", ["build_comparison_xlsx.py", "--year", ys, "--week", ws]),
                   ("gap report", ["gap_report.py", "--year", ys, "--week", ws])])
+    review_book.set_last_run("laptop rerun", "OK -- projections updated (not a lock)" if ok
+                             else "finished with problems -- see the laptop window")
     ok = run("review workbook", "review_book.py", "--year", ys, "--week", ws, "--no-model-run") and ok
     # the three site rankings files, every run (Joe 2026-11-12); a failure here never fails the run
     run("rankings files", "site_rankings_export.py", "--year", ys, "--week", ws)

@@ -43,7 +43,29 @@ def step(label, *cmd, cwd=HERE, fatal=True):
             print(f"\n  WARNING: {label} failed -- the projections ARE locked; re-run it when you can\n")
             return
         print(f"\n  LOCK STOPPED at: {label}\n")
+        _stopped(label)
         sys.exit(1)
+
+
+RUN = {}      # year / week / what, for the LAST RUN line on the Calls tab
+
+
+def _what():
+    return ("GitHub " if os.environ.get("GITHUB_ACTIONS") else "laptop ") + RUN.get("what", "lock")
+
+
+def _stopped(label):
+    """a stopped lock still says so on the sheet: status line, then the workbook rebuilt (non-fatal)."""
+    if not RUN:
+        return
+    try:
+        import review_book
+        review_book.set_last_run(_what(), f"STOPPED at {label} -- NOT frozen; the previous lock stands. "
+                                          f"The next run tries again.")
+        subprocess.run([sys.executable, "review_book.py", "--year", str(RUN["y"]), "--week", str(RUN["w"]),
+                        "--no-model-run"], cwd=HERE)
+    except Exception as e:
+        print(f"  (status line not written: {e})")
 
 
 def step_parallel(jobs, fatal=True):
@@ -69,6 +91,7 @@ def step_parallel(jobs, fatal=True):
             bad.append(label)
     if bad and fatal:
         print(f"\n  LOCK STOPPED at: {', '.join(bad)}\n")
+        _stopped(", ".join(bad))
         sys.exit(1)
     for label in bad:
         print(f"\n  WARNING: {label} failed -- the projections ARE locked; re-run it when you can\n")
@@ -117,6 +140,7 @@ def main():
     args = ap.parse_args()
     y, w = str(args.year), str(args.week)
     py = sys.executable
+    RUN.update(y=args.year, w=args.week, what="refresh (no freeze)" if args.no_freeze else "lock")
 
     print("\n  == site projections")
     archive_site_projections(args.year, args.week)
@@ -141,6 +165,8 @@ def main():
     step("known-case checks", py, "check_projections.py", "--year", y, "--week", w)
     if not args.no_freeze:
         step("freeze", py, "score_week.py", "--year", y, "--week", w, "--freeze")
+    review_book.set_last_run(_what(), ("LOCKED -- frozen for every game not yet started" if not args.no_freeze
+                                       else "OK -- projections updated (not a lock)") + "; all checks passed")
     step_parallel([("model only (no calls)", [py, "project.py", "--year", y, "--week", w, "--live",
                                               "--ignore-sheet", "--out", nocalls]),
                    ("comparison workbook", [py, "build_comparison_xlsx.py", "--year", y, "--week", w]),

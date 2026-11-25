@@ -85,6 +85,19 @@ OLD_HEADERS = {"QB rushes": "QB carries", "QB ypc": "QB yds/carry"}   # a workbo
 SHEET_COLS = {"role": "role", "call": "decision", "note": "note", "rush": "rush", "ypc": "ypc"}
 
 
+LAST_RUN = os.path.join(DATA, "last_run.json")
+
+
+def set_last_run(what, status):
+    """the LAST RUN line on the Calls tab (lock.py / rerun.py)."""
+    with open(LAST_RUN, "w", encoding="utf-8") as fh:
+        json.dump({"what": what, "status": status, "when": f"{datetime.datetime.now():%a %m/%d %I:%M %p} ET"}, fh)
+
+
+def last_run():
+    return json.load(open(LAST_RUN, encoding="utf-8")) if os.path.exists(LAST_RUN) else {}
+
+
 def book_path(year, week):
     return os.path.join(HERE, f"F6P Week {week} Review.xlsx")
 
@@ -901,9 +914,17 @@ def build(year, week, run_model=True):
             "Make calls on the team tabs (one per team, in kickoff order). This tab is a summary -- edits here are ignored.",
             "What every column and call means: the KEY tab (next tab).",
             "Tab colours: orange = a listed player with no call yet, blue = calls made, grey = game started (locked).",
-            "Then save and close the workbook and run 'Rerun projections.bat' (in the ff_weekly_model folder)."), start=2):
+            "Every run reads your calls (GitHub: each morning ~9 AM ET and ~75 min before every kickoff; "
+            "or 'Rerun projections.bat' on the laptop) and rewrites this sheet with the new numbers."), start=2):
         ws.cell(i, 1, line).font = Font(name="Arial", size=10)
     r0 = i + 2
+    # LAST RUN (2026-11-24, Joe away for the Thanksgiving-week locks): did the last lock go through?
+    lr_ = last_run()
+    if lr_:
+        bad_ = "STOPPED" in lr_.get("status", "")
+        c_ = ws.cell(r0, 1, f"LAST RUN: {lr_.get('when', '')} -- {lr_.get('what', '')} -- {lr_.get('status', '')}")
+        c_.font = Font(name="Arial", size=11, bold=True, color="C00000" if bad_ else "375623")
+        r0 += 2
 
     def table(r, title, heads, items):
         ws.cell(r, 1, title).font = Font(name="Arial", size=12, bold=True)
@@ -927,6 +948,50 @@ def build(year, week, run_model=True):
             r += 1
         return r + 1
 
+    # NEXT LOCK -- WHAT NEEDS YOU (2026-11-24): only the teams in the next kickoff window, so on a phone
+    # there is one short list to clear before that lock (~75 min before kickoff)
+    up_ = sorted({g_["kickoff"] for g_ in games.values() if g_["kickoff"] and g_["kickoff"] > now})
+    if up_:
+        k0_ = up_[0]
+        win_ = sorted(t_ for t_, g_ in games.items() if g_["kickoff"] and k0_ <= g_["kickoff"] < k0_ + datetime.timedelta(hours=1))
+        lock_at_ = k0_ - datetime.timedelta(minutes=80)
+        rv2_ = {r["player_id"]: r for r in _read_csv(os.path.join(DATA, f"review_{year}_wk{week:02d}.csv"), "utf-8-sig")}
+        pj2_ = {r["player_id"]: r for r in _read_csv(os.path.join(DATA, f"projections_{year}_wk{week:02d}_nocalls.csv"), "utf-8-sig")}
+        need_, seen_ = [], set()
+        try:
+            import espn_injuries
+            inj_, _ = espn_injuries.load(year)
+        except Exception:
+            inj_ = {}
+        for pid_, v_ in inj_.items():
+            p_ = pj2_.get(pid_)
+            tm_ = (p_ or {}).get("team") or v_["team"]
+            if tm_ not in win_ or v_["status"] in ("Active",) or not p_:
+                continue
+            call_ = (rv2_.get(pid_) or {}).get("decision", "")
+            if v_["status"] in ("Injured Reserve", "Suspension") and call_.upper() == "OUT":
+                continue                                   # already switched
+            if call_ and v_["status"] not in ("Out", "Doubtful"):
+                continue                                   # a call is made
+            need_.append((tm_, v_["player"], p_.get("pos", ""), f"ESPN: {v_['status']}" + (f" (your call: {call_})" if call_ else ""),
+                          round(float(p_["half_ppr"]), 1), v_["comment"][:160]))
+            seen_.add(pid_)
+        for tm_, pid_, v_ in todo:
+            if tm_ in win_ and pid_ not in seen_:
+                need_.append((tm_, v_["Player"], v_["Pos"], f"listed: {v_['Status']}", v_["Model pts"],
+                              f"{v_.get('Practice') or ''} {v_.get('Injury') or ''}".strip()))
+        for tm_, nm_, why_ in problems:
+            if tm_ in win_:
+                need_.append((tm_, nm_, "", "call not used", "", why_))
+        for g_ in _read_csv(os.path.join(DATA, f"gap_report_{year}_wk{week:02d}.csv"), "utf-8-sig"):
+            if g_.get("team") in win_:
+                need_.append((g_["team"], g_["player"], g_.get("pos", ""),
+                              f"3+ pts off consensus (ours {g_.get('ours')} vs {g_.get('consensus')})",
+                              round(float(g_["ours"]), 1) if g_.get("ours") else "", g_.get("why (ours vs consensus)", "")))
+        need_.sort(key=lambda x: (x[0], -(x[4] if isinstance(x[4], (int, float)) else 0)))
+        r0 = table(r0, f"NEXT LOCK -- {', '.join(win_)} -- locks about {lock_at_:%a %I:%M %p} ET "
+                       f"(kickoff {k0_:%a %I:%M %p}): WHAT NEEDS YOU",
+                   ["Team", "Player", "Pos", "Why", "Model pts", "Detail"], need_)
     if problems:
         r0 = table(r0, "CHECK THESE -- calls the model could not use", ["Team", "Player", "Problem"], problems)
     # BIG GAPS (Joe 2026-11-04: "it can look bad to be so much higher or lower on a

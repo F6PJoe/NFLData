@@ -158,6 +158,12 @@ def refresh_sheet(year, week):
     refresh_sleeper()
     run("news.py", "--year", str(year))
     ok = run("build_review_queue.py", "--year", str(year), "--week", str(week))
+    # ESPN's live injury list: IR / suspended -> OUT (espn_injuries.py, 2026-11-24); never fails the refresh
+    try:
+        import espn_injuries
+        espn_injuries.apply(year, week)
+    except Exception as e:
+        print(f"  WARN  ESPN injuries      skipped ({type(e).__name__}: {str(e)[:120]})")
     ok = run("player_log.py", "--year", str(year), "--week", str(week)) and ok
     if not ok:
         print("  !!! the status sheet was NOT fully updated -- see above")
