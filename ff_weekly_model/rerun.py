@@ -176,6 +176,7 @@ def main():
     run("rankings files", "site_rankings_export.py", "--year", ys, "--week", ws)
     # the customer projections workbook (Joe 2026-11-20); a failure here never fails the run
     run("customer sheet", "customer_sheet.py", "--year", ys, "--week", ws)
+    run("projections sheet", "projections_gsheet.py", "--year", ys, "--week", ws, "--what", "laptop rerun")
     # Sabotage stat projections (Joe 2026-11-23), in Documents/SabotageFantasy; never fails the run
     sab = os.path.join(os.path.dirname(os.path.dirname(HERE)), "SabotageFantasy", "weekly_stats", "project_stats.py")
     if os.path.exists(sab):

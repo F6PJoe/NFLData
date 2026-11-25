@@ -175,6 +175,8 @@ def main():
     if not os.environ.get("GITHUB_ACTIONS"):   # laptop only (Joe 2026-11-24: not needed on GitHub)
         step("rankings files", py, "site_rankings_export.py", "--year", y, "--week", w, fatal=False)
     step("customer sheet", py, "customer_sheet.py", "--year", y, "--week", w, fatal=False)
+    step("projections Google Sheet", py, "projections_gsheet.py", "--year", y, "--week", w,
+         "--what", _what(), fatal=False)
     sab = os.path.join(os.path.dirname(os.path.dirname(HERE)), "SabotageFantasy", "weekly_stats", "project_stats.py")
     if os.path.exists(sab):
         step("sabotage stats", py, sab, "--year", y, "--week", w, fatal=False)
