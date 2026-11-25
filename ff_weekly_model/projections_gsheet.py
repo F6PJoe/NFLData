@@ -5,7 +5,8 @@ process").
 
 Tabs (same names every week, so links and readers never change):
   Projections  data/projections_<yr>_wk<NN>.csv as it stands after the latest run (with Joe's calls) --
-               exactly the CSV's columns, so ff_rankings/model_source.py can read it in place of the file
+               the CSV's columns minus player_id, so ff_rankings/model_source.py can read it in place of the file
+  QB/RB/WR/TE  the customer-sheet layout of the latest run (stat line, Half / PPR / STD points)
   Locked       the frozen lock (projections_<yr>_wk<NN>_final.csv) -- what gets scored
   Info         season, week, when each tab was written, and by which run
 
@@ -34,12 +35,16 @@ def _sheets():
 
 
 def _vals(path):
+    """the CSV without player_id (Joe 2026-11-24: "I don't need that in the projections output")."""
     out = []
     with open(path, newline="", encoding="utf-8-sig") as fh:
+        drop = None
         for i, row in enumerate(csv.reader(fh)):
             if i == 0:
-                out.append(row)
+                drop = row.index("player_id") if "player_id" in row else None
+                out.append([x for j, x in enumerate(row) if j != drop])
                 continue
+            row = [x for j, x in enumerate(row) if j != drop]
             r = []
             for x in row:
                 try:
@@ -64,7 +69,7 @@ def push(year, week, what="run"):
             reqs.append({"updateSheetProperties": {"properties": {"sheetId": tabs.pop("Sheet1"), "title": "Projections"},
                                                    "fields": "title"}})
             tabs["Projections"] = None
-        for t in ("Projections", "Locked", "Info"):
+        for t in ("Projections", "QB", "RB", "WR", "TE", "Locked", "Info"):
             if t not in tabs:
                 reqs.append({"addSheet": {"properties": {"title": t}}})
         if reqs:
@@ -92,6 +97,22 @@ def push(year, week, what="run"):
             if tab == "Locked":
                 info["Locked file"] = f"{os.path.getmtime(path):.0f}"
             done.append(f"{tab} {len(v) - 1}")
+        # QB / RB / WR / TE: the customer-sheet layout (stat line, Half / PPR / STD points), latest run
+        if os.path.exists(base + ".csv"):
+            import customer_sheet as cs
+            rows_ = list(csv.DictReader(open(base + ".csv", encoding="utf-8")))
+            opp_ = cs.opponents(year, week)
+            for tab_, pos_, cols_ in cs.TABS:
+                v_ = [[pos_, "Team", "Opp"] + [c[0] for c in cols_]]
+                rs_ = sorted((r for r in rows_ if r["pos"] == pos_ and cs.f(r["half_ppr"]) >= cs.MIN_PTS),
+                             key=lambda r: (-cs.f(r["half_ppr"]), r["player"]))
+                for r in rs_:
+                    v_.append([r["player"], r["team"], opp_.get(r["team"], "")] +
+                              [round(k(r) if callable(k) else cs.f(r.get(k)), nd) for _, k, nd in cols_])
+                s.spreadsheets().values().clear(spreadsheetId=sid, range=tab_).execute()
+                s.spreadsheets().values().update(spreadsheetId=sid, range=f"{tab_}!A1", valueInputOption="RAW",
+                                                 body={"values": v_}).execute()
+            done.append("QB/RB/WR/TE tabs")
         if not os.path.exists(base + "_final.csv") and info.get("Week") != str(week):
             s.spreadsheets().values().clear(spreadsheetId=sid, range="Locked").execute()
             info["Locked written"] = "(no lock yet this week)"
