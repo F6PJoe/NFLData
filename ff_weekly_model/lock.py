@@ -99,7 +99,9 @@ def step_parallel(jobs, fatal=True):
 
 def archive_site_projections(year, week):
     """Newest CI artifact -> weekly/<yr>-wk<NN>, verified against the schedule."""
-    run_id = subprocess.run(["gh", "run", "list", "--workflow", "fetch_weekly_projections.yml",
+    # newest FINISHED run (2026-11-25: a rerun at 4:10 PM caught the scrape still running -- "no valid
+    # artifacts found to download" -- and kept the older copy)
+    run_id = subprocess.run(["gh", "run", "list", "--workflow", "fetch_weekly_projections.yml", "--status", "success",
                              "--limit", "1", "--json", "databaseId", "--jq", ".[0].databaseId"],
                             capture_output=True, text=True, cwd=ROOT).stdout.strip()
     if not run_id:
