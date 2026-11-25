@@ -1690,3 +1690,21 @@ ALL FAIL. Why: team misses do not carry over. 2026 team miss wks 2-6 vs wks 7-10
 CIN never qualified: share misses -2/+10/+19/-9/0/+14/-6/+9 (5 of 8 more). Its run overshoot (Brown) is plays and game
 flow, not a steady pass lean. Wk11 the list would have moved CAR +0.7, DET -2.4, LAC -2.9, PHI +3.3 pts of pass share.
 TEAMX* left in the code, off. Withdrew the CIN pass_rate 68 suggestion; Brown stays a player-level watch-list item.
+
+## 2026-11-25 EXCEPTION LIST CUT SIDE ON ITS OWN (EXLIST_HI) -- FAILS, off
+Joe on BTJ ("2 or fewer targets in 4 straight"): "why not make this part of the exceptions". The EXLIST rules
+mirrored for players OVER-projected on targets (WR/RB), with the adopted low side on. vs cur6, ALL 2024/2025/2026:
+  .33 +.0011/+.0007/+.0015   .5 +.0025/+.0015/+.0027   1.0 +.0103/+.0056/+.0074
+  .5 add after 4 games +.0005/+.0016/+.0054   .5 avg miss 1.5+ +.0023/+.0013/+.0015
+Worse every season at every setting (WR worst: .5 +.0070/+.0016/+.0068). Cold target streaks revert -- the
+watch list's suggested call stays Joe's to use.
+
+## 2026-11-25 QB PASSING-TD RATE (QB_PTD_W) -- FAILS, off
+Joe on Cam Ward: "TDs are being spread around too much and maybe not enough of a TD rate". Team passing TDs x
+(1 + W x (starter's TD/att, shrunk 250 att, / league - 1)). vs cur6 ALL / QB, 2024/2025/2026:
+  W .5        -.000/+.015/-.001   QB -.002/+.075/-.005
+  W .5 HL4    +.000/+.011/-.002   QB -.001/+.050/-.009   (2026 QB by week: 8 -.07, 9 -.04, 10 -.08, 11 +.04)
+  W .5 shift  +.005/+.013/+.001   W 1 +.008/+.035/+.002   W 1 HL4 +.006/+.024/+.001   W 1 HL4 shift +.011/+.021/+.002
+2025 QBs much worse at every setting; only 2026 wks 8-10 help (a 2026-only signal -- re-test after wk13).
+Ward himself goes DOWN under it (season TD rate 2.8% < league): wk11 16.7 -> 16.3. The QB pass TDs CALL
+(review sheet) is the lever for a QB Joe believes in.

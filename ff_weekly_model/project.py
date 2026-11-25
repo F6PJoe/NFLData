@@ -508,6 +508,13 @@ EXLIST_N = 6
 EXLIST_REM = 1
 EXLIST_MIN_PTS = 3.0
 EXLIST_POS = ("WR", "RB")
+# THE CUT SIDE ON ITS OWN (test, 2026-11-25, Joe on BTJ: "why not make this part of the exceptions"). The same
+# rules mirrored: ON after EXLIST_HI_ADD[0]+ games UNDER his projected targets in [1]+ of them by [2]+ on
+# average; while on, - EXLIST_HI x his average miss over the last EXLIST_N games; OFF after one game over.
+# (2026-11-18 both sides together failed 2024/25.) None = off.
+EXLIST_HI = None
+EXLIST_HI_ADD = (5, 0.75, 1.0)
+EXLIST_HI_POS = ("WR", "RB")
 EXLIST_SKIP_EXITS = False   # games he was knocked out of (pbp injury exits) do not count toward add / remove
 EXLIST_REM_MODE = "streak"  # "streak" = off after EXLIST_REM straight games under; "mean" = off when his average
                             # miss over his last EXLIST_N games is no longer positive (one bad game rarely does it)
@@ -594,6 +601,15 @@ LG_QB_EFF_K = None
 # to the team's own TDs per game this season, shrunk by TEAM_TD_OWN_K games.
 TEAM_TD_OWN_W = None
 TEAM_TD_OWN_K = 4.0
+# QB PASSING-TD RATE (test, 2026-11-25, Joe on Cam Ward: "kinda feels like the TDs are being spread around too
+# much and maybe not enough of a TD rate for Cam Ward"). The team's passing TDs x (1 + W x (r / league - 1)),
+# r = the starter's passing TDs per attempt in his games for this team, shrunk to the league rate by K attempts;
+# QB_PTD_HL = half-life in games (recent games count more), None = every game alike. QB_PTD_SHIFT: the extra
+# passing TDs come OUT of the team's rushing TDs (total unchanged) instead of being added. Clamp .7-1.4. None = off.
+QB_PTD_W = None
+QB_PTD_K = 250.0
+QB_PTD_HL = None
+QB_PTD_SHIFT = None
 # OWN SACK RATE (test): dropbacks lost to sacks from the team's starter games,
 # shrunk toward the league rate by SACK_OWN_K dropbacks. None = league rate.
 # ADOPTED 2026-11-04 (Joe) at 100: ALL .000 / -.001 / -.001, QB better every
@@ -3172,7 +3188,7 @@ def teamx_replay(year, week, sets, version):
 
 
 def exlist_new(year=None):
-    st = {"hist": collections.defaultdict(list), "on": {}, "since": {}, "exits": set()}
+    st = {"hist": collections.defaultdict(list), "on": {}, "since": {}, "exits": set(), "on_hi": {}}
     if EXLIST_SKIP_EXITS and year:
         path = os.path.join(DATA, f"injury_exits_{year}.csv")
         if os.path.exists(path):
@@ -3209,6 +3225,23 @@ def exlist_check(st, week, cand):
             mean = sum(last) / len(last)
             if mean > 0:
                 out[pid] = EXLIST * mean
+    if EXLIST_HI:
+        hi = st.setdefault("on_hi", {})
+        for pid, (po, pr) in cand.items():
+            if po not in EXLIST_HI_POS or pr < EXLIST_MIN_PTS or pid in out:
+                continue
+            h = [m for _, m in hist.get(pid, [])]
+            if pid in hi and h and h[-1] > 0:
+                del hi[pid]
+            if pid not in hi and len(h) >= EXLIST_HI_ADD[0]:
+                if (sum(m < 0 for m in h) / len(h) >= EXLIST_HI_ADD[1]
+                        and -sum(h) / len(h) >= EXLIST_HI_ADD[2]):
+                    hi[pid] = week
+            if pid in hi:
+                last = h[-int(EXLIST_N):]
+                mean = sum(last) / len(last)
+                if mean < 0:
+                    out[pid] = EXLIST_HI * mean
     return out
 
 
@@ -3228,7 +3261,7 @@ def exlist_apply(proj, adds):
         if not v or t <= 0:
             continue
         before = points(v, None)
-        f_ = (t + add) / t
+        f_ = max((t + add) / t, 0.3)
         v = dict(v)
         for k in ("targets", "rec", "rec_yds", "rec_td"):
             if k in v:
@@ -3587,6 +3620,8 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                     ret_abs[tm_] |= set(run)
                 run = []
     team_proj = {}
+    _lg_pa = sum(num(h["pass_att"]) for hs_ in tv.values() for h in hs_)
+    _lg_ptd = (sum(num(h["pass_td"]) for hs_ in tv.values() for h in hs_) / _lg_pa) if _lg_pa else None
     for tm, hist in tv.items():
         n = len(hist)
         qhist = ([h for h in hist if int(h["week"]) in starter_wks[tm]]
@@ -3679,6 +3714,23 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
             # the 21% of rushing TDs taken OUT of the backfield belongs to QBs
             "qb_rush_td": tds * (1 - ptf) * lg["qb_rush_td_frac"],
         }
+        if QB_PTD_W and qhist and _lg_ptd:
+            qs_ = sorted(qhist, key=lambda h: int(h["week"]))
+            wt_ = [(0.5 ** ((len(qs_) - 1 - i) / QB_PTD_HL)) if QB_PTD_HL else 1.0 for i in range(len(qs_))]
+            a_ = sum(w_ * num(h["pass_att"]) for w_, h in zip(wt_, qs_))
+            t_ = sum(w_ * num(h["pass_td"]) for w_, h in zip(wt_, qs_))
+            if a_ > 0:
+                r_ = (t_ + QB_PTD_K * _lg_ptd) / (a_ + QB_PTD_K)
+                f_ = min(max(1 + QB_PTD_W * (r_ / _lg_ptd - 1), 0.7), 1.4)
+                tp_ = team_proj[tm]
+                d_ = tp_["pass_td"] * (f_ - 1)
+                tp_["pass_td"] += d_
+                if QB_PTD_SHIFT:
+                    pool_ = tp_["rush_td"] + tp_["qb_rush_td"]
+                    if pool_ > 0:
+                        k_ = max(pool_ - d_, 0.0) / pool_
+                        tp_["rush_td"] *= k_
+                        tp_["qb_rush_td"] *= k_
 
 
     # --- game-level plays (PLAYS_TOTAL_W)
@@ -5048,7 +5100,7 @@ def main():
         if k == "SAME_LINEUP_XTGT":
             globals()[k] = None if v == "None" else tuple(float(x) if i != 1 else x for i, x in enumerate(v.split("/")))
             continue
-        if k in ("QB_CARRY_TRIM", "RISER_KT", "KT_STEADY", "KT_EARLY", "KT_STEADY_FAST", "EXLIST_ADD", "RB_TD_CUR", "TEAMX_ADD"):     # 0.5/4 | 3/0.04
+        if k in ("QB_CARRY_TRIM", "RISER_KT", "KT_STEADY", "KT_EARLY", "KT_STEADY_FAST", "EXLIST_ADD", "RB_TD_CUR", "TEAMX_ADD", "EXLIST_HI_ADD"):     # 0.5/4 | 3/0.04
             globals()[k] = None if v == "None" else tuple(float(x) for x in v.split("/"))
             continue
         if k == "MATCHUP_EPA_BETA_POS":   # TE:0.5,WR:0.3
