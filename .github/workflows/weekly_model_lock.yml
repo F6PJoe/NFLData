@@ -1,6 +1,8 @@
 name: Weekly Model Lock
 #
 # Runs ff_weekly_model on GitHub so locks happen with the laptop off (Joe 2026-11-24).
+# GitHub's own */10 schedule is unreliable (2026-11-25: 3 runs in 24 h, the GB@LA lock never fired), so
+# cron-job.org dispatches this workflow with mode=auto every 10 minutes too -- same as Fetch Weekly Projections.
 # Every 10 minutes a cheap GATE decides whether anything is due (ff_weekly_model/cloud_run.py):
 #   lock     -- a kickoff is 55-85 min away and has no lock yet (inactives post 90 min before):
 #               daily refresh, then lock.py (late news + inactives, projections, checks, FREEZE,
@@ -17,11 +19,11 @@ on:
   workflow_dispatch:
     inputs:
       mode:
-        description: 'lock = freeze now, refresh = no freeze, test = no freeze + no state saved'
+        description: 'auto = the gate decides (cron-job.org every 10 min), lock = freeze now, refresh = no freeze, test = no freeze + no state saved'
         required: true
         default: refresh
         type: choice
-        options: [refresh, lock, test]
+        options: [auto, refresh, lock, test]
 
 concurrency:
   group: weekly-model
@@ -59,7 +61,7 @@ jobs:
         id: gate
         run: |
           python ff_weekly_model/cloud_run.py bootstrap --only games.csv
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.mode }}" != "auto" ]; then
             G="${{ inputs.mode }}"
           else
             G=$(python ff_weekly_model/cloud_run.py gate --private _private)
