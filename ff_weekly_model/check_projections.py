@@ -339,7 +339,7 @@ def regression_tests(year=2026):
         finally:
             RR.DATA = old_data
     res.append((ru_ == {"A": 7.0, "B": 5.0, "C": 4.0} and yp_ == {"A": 6.5, "B": 6.0, "C": 8.0}
-                and RB._edit_tuple(["", "OUT", "n"]) == ("", "OUT", "n", "", "")
+                and RB._edit_tuple(["", "OUT", "n"]) == ("", "OUT", "n", "", "", "")
                 and RB._sheet_num("7") == 7 and RB._sheet_num("6.5") == 6.5 and RB._sheet_num("") is None,
                 "QB carries / QB yds/carry columns read alongside START (old text calls still work)",
                 f"{ru_} {yp_}"))
