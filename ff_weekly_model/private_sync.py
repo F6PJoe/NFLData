@@ -24,6 +24,7 @@ import cloud_run as C  # noqa: E402
 CLONE = os.path.join(os.path.expanduser("~"), "NFLData-private")
 REPO = "F6PJoe/NFLData-private"
 MANIFEST = os.path.join(CLONE, ".laptop_sync.json")
+FORCE_CLOUD = True   # see pull()
 
 
 def _h(p):
@@ -62,7 +63,7 @@ def pull(quiet=False):
     # if Joe's edited workbook is kept, the cloud's newer build state must not be taken, or the
     # next sync reads every cell the cloud changed (an inactive switched OUT) as Joe undoing it
     held = set()
-    for rel in rels:
+    for rel in ([] if FORCE_CLOUD else rels):
         if rel.endswith(" Review.xlsx"):
             src, dst = os.path.join(st, rel), os.path.join(C.ROOT, rel)
             hl, hm = _h(dst), man.get(rel)
@@ -78,7 +79,9 @@ def pull(quiet=False):
         if hp == hl:
             man[rel] = hp
             continue
-        if hl is None or hl == hm:          # laptop copy untouched since the last sync -> take the cloud's
+        # 2026-11-26: calls live on the Google Sheet now, so the laptop holds no edits the cloud lacks --
+        # the cloud's newer copy wins even when both changed (a laptop rerun pushes its own work at the end)
+        if True:
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             with open(src, "rb") as a, open(dst, "wb") as b:
                 b.write(a.read())
