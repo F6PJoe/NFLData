@@ -99,6 +99,8 @@ def main():
     ap.add_argument("--week", type=int, required=True)
     ap.add_argument("--freeze", action="store_true",
                     help="snapshot this week's projections before kickoff")
+    ap.add_argument("--keep-started", action="store_true",
+                    help="put the locked rows back for teams whose game has started (after a rerun)")
     args = ap.parse_args()
 
     base = os.path.join(HERE, "data", f"projections_{args.year}_wk{args.week:02d}")
@@ -106,6 +108,34 @@ def main():
     for name in P.VARIANTS:
         if name != "current" and os.path.exists(f"{base}_{name}.csv"):
             versions[name] = f"{base}_{name}.csv"
+    if os.path.exists(base + "_nocalls.csv"):
+        versions["nocalls"] = base + "_nocalls.csv"        # the review sheet's Model pts
+    if args.keep_started:
+        # STARTED GAMES SHOW THEIR LOCK (2026-11-26, Joe: Christian Watson left the GB@LA game with a
+        # concussion, the next run read him OUT and "it wiped out his projection too from before the game.
+        # It should not do that"). After every rerun, a team whose game has kicked off gets its locked
+        # rows back in the live files, so the review sheet, both Google Sheets, the rankings and the
+        # customer sheet keep showing what was projected before the game.
+        now = datetime.datetime.now()
+        started = {tm for tm, k in kickoffs(args.year, args.week).items() if k <= now}
+        n_ = 0
+        for name, live in versions.items():
+            final = live.replace(".csv", "_final.csv")
+            if not (started and os.path.exists(final) and os.path.exists(live)):
+                continue
+            with open(live, newline="", encoding="utf-8") as fh:
+                rd = csv.DictReader(fh)
+                cols, rows = rd.fieldnames, [r for r in rd if r["team"] not in started]
+            with open(final, newline="", encoding="utf-8") as fh:
+                kept = [r for r in csv.DictReader(fh) if r["team"] in started]
+            with open(live, "w", newline="", encoding="utf-8") as fh:
+                w = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
+                w.writeheader()
+                w.writerows(sorted(kept + rows, key=lambda r: -float(r.get("half_ppr") or 0)))
+            n_ += 1
+        if n_:
+            print(f"  started games keep their lock ({', '.join(sorted(started))}) in {n_} file(s)")
+        return
     if args.freeze:
         now = datetime.datetime.now()
         started = {tm for tm, k in kickoffs(args.year, args.week).items() if k <= now}

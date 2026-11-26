@@ -171,6 +171,7 @@ def main():
                   ("gap report", ["gap_report.py", "--year", ys, "--week", ws])])
     review_book.set_last_run("laptop rerun", "OK -- projections updated (not a lock)" if ok
                              else "finished with problems -- see the laptop window")
+    run("started games keep lock", "score_week.py", "--year", ys, "--week", ws, "--keep-started")
     ok = run("review workbook", "review_book.py", "--year", ys, "--week", ws, "--no-model-run") and ok
     # the three site rankings files, every run (Joe 2026-11-12); a failure here never fails the run
     run("rankings files", "site_rankings_export.py", "--year", ys, "--week", ws)

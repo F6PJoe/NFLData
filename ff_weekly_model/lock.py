@@ -173,6 +173,7 @@ def main():
                                               "--ignore-sheet", "--out", nocalls]),
                    ("comparison workbook", [py, "build_comparison_xlsx.py", "--year", y, "--week", w]),
                    ("gap report", [py, "gap_report.py", "--year", y, "--week", w])], fatal=False)
+    step("started games keep their lock", py, "score_week.py", "--year", y, "--week", w, "--keep-started", fatal=False)
     step("review workbook", py, "review_book.py", "--year", y, "--week", w, "--no-model-run", fatal=False)
     if not os.environ.get("GITHUB_ACTIONS"):   # laptop only (Joe 2026-11-24: not needed on GitHub)
         step("rankings files", py, "site_rankings_export.py", "--year", y, "--week", w, fatal=False)
