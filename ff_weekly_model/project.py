@@ -217,6 +217,12 @@ _NEWQB_CAREER = {}  # QB -> attempts on record (prior seasons loaded + this seas
 WX_SCALE = 0.5  # ADOPTED 2026-10-22 re-test under Joe's rule (6 together: ALL -.002/-.008/-.001)
 WX_CUTS = {"wind15": 0.085, "wind10": 0.06, "cold": 0.015}
 PLAYS_TOTAL_W = 0.65
+# GAME TOTAL -> EFFICIENCY (test, 2026-11-25, Joe: "should we be taking plays away just because its a low total
+# game? both teams still might run a lot of plays, they might just not amount to as many touchdowns"). 2021-26
+# team-games by Vegas total, <40 -> 49+: plays 61.6 -> 63.7 (+3%), yards/play 5.13 -> 6.01 (+17%), TDs 1.84 -> 2.86.
+# EFF_TOTAL_W: every player's passing / rushing / receiving YARDS x (1 + W x (game total / week avg - 1));
+# volume and TDs untouched. Meant with PLAYS_TOTAL_W cut toward the real play effect (~.1). None = off.
+EFF_TOTAL_W = None
 # ADOPTED 2026-09-30 for targets at 0.25 (0.5+ overshoots; carries at any
 # strength were flat to worse -- an RB's snaps swing with game script).
 # RED-ZONE ROLES (redzone.py, 2026-10-01). Touchdowns were split by OVERALL
@@ -5024,6 +5030,18 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 for q in q_by_t.get(tm_, ()):
                     if tot_ > 0:
                         out[q][qk_] = max(out[q][qk_] + d_ * out[q][qk_] / tot_, 0.0)
+    if EFF_TOTAL_W:
+        wk_g = {tm: g for (tm, wk), g in games.items() if wk == week}
+        tot_ = {tm: g["implied"] + wk_g[g["opp"]]["implied"] for tm, g in wk_g.items() if g.get("opp") in wk_g}
+        avg_ = sum(tot_.values()) / len(tot_) if tot_ else 0.0
+        if avg_:
+            for p_, v_ in out.items():
+                tm_ = (raw.get(p_) or (qraw.get(p_) if qb_patt is not None else None) or (None,))[0]
+                if tm_ in tot_:
+                    e_ = 1 + EFF_TOTAL_W * (tot_[tm_] / avg_ - 1)
+                    for k_ in ("pass_yds", "rush_yds", "rec_yds"):
+                        if k_ in v_:
+                            v_[k_] *= e_
     # QB PASS TDs (review sheet, 2026-11-25, Joe on Cam Ward: "maybe not enough of a TD rate" / "guys
     # who have a higher rate should get more trickled down to them"): his passing TDs are set; the
     # difference goes to his team's receivers (WR / TE / RB) in proportion to the receiving TDs each is

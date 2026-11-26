@@ -1708,3 +1708,13 @@ Joe on Cam Ward: "TDs are being spread around too much and maybe not enough of a
 2025 QBs much worse at every setting; only 2026 wks 8-10 help (a 2026-only signal -- re-test after wk13).
 Ward himself goes DOWN under it (season TD rate 2.8% < league): wk11 16.7 -> 16.3. The QB pass TDs CALL
 (review sheet) is the lever for a QB Joe believes in.
+
+## 2026-11-25 GAME TOTAL -> EFFICIENCY instead of plays (EFF_TOTAL_W) -- FAILS, off
+Joe: "should we be taking plays away just because its a low total game? ... they might just not amount to as
+many touchdowns". Data 2021-26 by Vegas total (<40 -> 49+): plays 61.6 -> 63.7, yds/play 5.13 -> 6.01, TDs 1.84
+-> 2.86 -- the total says much more about efficiency than plays. Test: PLAYS_TOTAL_W cut to .1/.3 and every
+player's yards x (1 + W x (total/avg - 1)). vs cur6 ALL 2024/2025/2026:
+  plays .1 only +.0036/+.0040/+.0110   .1 + eff .4 +.0007/+.0023/+.0033   .1 + eff .5 +.0009/+.0029/+.0029
+  .1 + eff .65 +.0021/+.0046/+.0034   .3 + eff .3 +.0007/+.0018/+.0011
+Every version worse every season (WR worst). The current plays rule stays: moving volume with the total fits the
+model's results better than moving yards per play, even though plays themselves barely move with the total.
