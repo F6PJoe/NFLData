@@ -1718,3 +1718,10 @@ player's yards x (1 + W x (total/avg - 1)). vs cur6 ALL 2024/2025/2026:
   .1 + eff .65 +.0021/+.0046/+.0034   .3 + eff .3 +.0007/+.0018/+.0011
 Every version worse every season (WR worst). The current plays rule stays: moving volume with the total fits the
 model's results better than moving yards per play, even though plays themselves barely move with the total.
+
+## 2026-11-26 EXCEPTION LIST, LOWER ADD BAR (Joe on Christian Watson: under-projected on targets 7 of 9 games,
+avg +0.8 -- just under the 1.0 bar). EXLIST_ADD vs cur6 (5 / .75 / 1.0), ALL 2024/2025/2026:
+  5/.75/.75  -.0004/+.0001/+.0003   5/.75/.5  -.0003/-.0001/-.0000 (WR 2026 +.0010, RB 2026 -.0016)
+  5/.70/.75  +.0018/+.0033/+.0006   6/.75/.75  -.0011/+.0014/+.0007
+All within noise. .75 would have added Watson from wk7 (wk7 13.1 -> 13.9, actual 8.2; wk8 12.3 -> 13.0, actual
+13.3). Kept 1.0.
