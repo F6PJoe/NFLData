@@ -170,12 +170,105 @@ def gate(private, force=None):
             print(f"lock {wk} {k:%Y-%m-%d %H:%M}")
             return
     h1, m1, h2, m2 = REFRESH_AT
+    in_season = any(0 < (k - now).total_seconds() < 8 * 86400 for k, _ in kickoffs())
     if datetime.time(h1, m1) <= now.time() <= datetime.time(h2, m2) and f"refresh {now:%Y-%m-%d}" not in runs:
         # only in season: a game within the next 8 days
-        if any(0 < (k - now).total_seconds() < 8 * 86400 for k, _ in kickoffs()):
+        if in_season:
             print("refresh")
             return
+    if not in_season:
+        print("skip")
+        return
+    # Joe 2026-11-25: "it needs to recognize any changes to the sheet everytime. it should be looking for
+    # updated injury news more often than that too incase I miss something"
+    try:
+        why = calls_changed(private)
+        if why:
+            print(f"refresh calls -- {why}")
+            return
+    except Exception as e:
+        print(f"  (calls check skipped: {type(e).__name__}: {str(e)[:100]})", file=sys.stderr)
+    last = max((v for k_, v in runs.items() if k_.startswith(("refresh", "lock"))), default="")
+    if last and (now - datetime.datetime.strptime(last, "%Y-%m-%d %H:%M")).total_seconds() < NEWS_COOLDOWN * 60:
+        print("skip")
+        return
+    try:
+        why = news_changed(private)
+        if why:
+            print(f"refresh news -- {why}")
+            return
+    except Exception as e:
+        print(f"  (news check skipped: {type(e).__name__}: {str(e)[:100]})", file=sys.stderr)
     print("skip")
+
+
+NEWS_COOLDOWN = 20     # minutes between news-triggered refreshes
+NEWS_MIN_PTS = 2.0     # a status change matters for players projected this many half-PPR points
+
+
+def calls_changed(private):
+    """the Google Sheet's calls differ from the ones the last run read -> a short description, else ''."""
+    sys.path.insert(0, HERE)
+    import calls_gsheet as cg
+    st_path = os.path.join(private, "state", "ff_weekly_model", "data", "calls_gsheet_state.json")
+    conf_path = os.path.join(private, "state", "ff_weekly_model", "data", "calls_gsheet.json")
+    if not (os.path.exists(st_path) and os.path.exists(conf_path)):
+        return ""
+    st, conf = json.load(open(st_path)), json.load(open(conf_path))
+    y, w = week_now()
+    if st.get("week") != [y, w]:
+        return ""                     # the sheet still holds last week; the new week's first run rebuilds it
+    tmp = os.path.join(os.environ.get("RUNNER_TEMP", HERE), "gate_calls.xlsx")
+    cg.CONF = conf_path
+    cg._export(conf["id"], tmp)
+    fp = cg._calls(y, w, tmp)
+    return "your calls changed on the Google Sheet" if fp != st.get("read_calls") else ""
+
+
+def news_changed(private):
+    """ESPN's injury list has a new / changed status for a projected player -> description, else ''."""
+    import re
+    import unicodedata
+    import requests
+    nm = lambda s: re.sub(r"[^a-z]", "", re.sub(r"\b(jr|sr|ii|iii|iv|v)\b", "",
+                          unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode().lower()))
+    y, w = week_now()
+    data = os.path.join(private, "state", "ff_weekly_model", "data")
+    saved_p = os.path.join(data, f"espn_injuries_{y}.json")
+    proj_p = os.path.join(data, f"projections_{y}_wk{w:02d}.csv")
+    if not (os.path.exists(saved_p) and os.path.exists(proj_p)):
+        return ""
+    proj = {}
+    for r in csv.DictReader(open(proj_p, encoding="utf-8")):
+        try:
+            if float(r["half_ppr"]) >= NEWS_MIN_PTS:
+                proj[(nm(r["player"]), r["team"])] = r["player"]
+        except ValueError:
+            pass
+    old = {(nm(v["player"]), v["team"]): v["status"] for v in json.load(open(saved_p)).get("players", {}).values()}
+    d = requests.get("https://site.api.espn.com/apis/site/v2/sports/football/nfl/injuries", timeout=30,
+                     headers={"User-Agent": "Mozilla/5.0"}).json()
+    teams = {"WSH": "WAS", "LAR": "LA"}
+    started = {tm for tm, k in _team_kickoffs(y, w).items() if k <= datetime.datetime.now()}
+    hits = []
+    for t in d.get("injuries", []):
+        for i in t.get("injuries", []):
+            a = i.get("athlete") or {}
+            tm = teams.get((a.get("team") or {}).get("abbreviation", ""), (a.get("team") or {}).get("abbreviation", ""))
+            key = (nm(a.get("displayName")), tm)
+            if key in proj and tm not in started and old.get(key, "Active") != i.get("status", ""):
+                hits.append(f"{proj[key]} {old.get(key, 'not listed')} -> {i.get('status')}")
+    return "; ".join(hits[:4])
+
+
+def _team_kickoffs(y, w):
+    out = {}
+    path = os.path.join(ROOT, "ff_weekly_model", "data", "games.csv")
+    for r in csv.DictReader(open(path, encoding="utf-8")):
+        if r["season"] == str(y) and r["week"] == str(w) and r.get("gameday"):
+            k = datetime.datetime.strptime(f"{r['gameday']} {r.get('gametime') or '13:00'}", "%Y-%m-%d %H:%M")
+            out[r["home_team"]] = out[r["away_team"]] = k
+    return out
 
 
 def mark(private, what, key):

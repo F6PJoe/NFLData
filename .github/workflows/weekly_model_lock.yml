@@ -8,7 +8,9 @@ name: Weekly Model Lock
 #               daily refresh, then lock.py (late news + inactives, projections, checks, FREEZE,
 #               workbook, rankings files, customer sheet)
 #   refresh  -- once each morning (9:00-10:30 ET) in season: daily refresh + lock.py --no-freeze
-#   skip     -- nothing due (most runs; ~20 s)
+#   refresh  -- also whenever Joe's calls on the Google Sheet changed since the last run, and when ESPN's
+#               injury list shows a new / changed status for a projected player (news: 20 min apart at most)
+#   skip     -- nothing due (most runs; ~40 s)
 # Joe's calls and every output live in the PRIVATE repo F6PJoe/NFLData-private (deploy key secret
 # PRIVATE_DEPLOY_KEY); this public repo only holds the code.
 # Manual run: Actions tab -> Weekly Model Lock -> Run workflow (mode lock / refresh / test).
@@ -57,6 +59,15 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Python packages
+        run: |
+          pip install -q requests beautifulsoup4 openpyxl google-auth google-api-python-client
+          # service account for the calls Google Sheet (calls_gsheet.py) -- same secret the projections sheet uses
+          printf '%s' "$GSA" > "$RUNNER_TEMP/gsa.json"
+          echo "GOOGLE_SERVICE_ACCOUNT_FILE=$RUNNER_TEMP/gsa.json" >> "$GITHUB_ENV"
+        env:
+          GSA: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+
       - name: Gate
         id: gate
         run: |
@@ -69,16 +80,6 @@ jobs:
           echo "gate: $G"
           echo "what=$(echo $G | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           echo "key=$(echo $G | cut -s -d' ' -f3-)" >> "$GITHUB_OUTPUT"
-
-      - name: Python packages
-        if: steps.gate.outputs.what != 'skip'
-        run: |
-          pip install -q requests beautifulsoup4 openpyxl google-auth google-api-python-client
-          # service account for the calls Google Sheet (calls_gsheet.py) -- same secret the projections sheet uses
-          printf '%s' "$GSA" > "$RUNNER_TEMP/gsa.json"
-          echo "GOOGLE_SERVICE_ACCOUNT_FILE=$RUNNER_TEMP/gsa.json" >> "$GITHUB_ENV"
-        env:
-          GSA: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
 
       - name: Public data cache
         if: steps.gate.outputs.what != 'skip'
