@@ -24,7 +24,7 @@ on:
       mode:
         description: 'auto = the gate decides (cron-job.org every 10 min), lock = freeze now, refresh = no freeze, test = no freeze + no state saved'
         required: true
-        default: refresh
+        default: auto          # cron-job.org's call needs no inputs (2026-11-25: its body had none -> every call refreshed)
         type: choice
         options: [auto, refresh, lock, test]
 
@@ -73,7 +73,7 @@ jobs:
         id: gate
         run: |
           python ff_weekly_model/cloud_run.py bootstrap --only games.csv
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.mode }}" != "auto" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.mode }}" ] && [ "${{ inputs.mode }}" != "auto" ]; then
             G="${{ inputs.mode }}"
           else
             G=$(python ff_weekly_model/cloud_run.py gate --private _private)
