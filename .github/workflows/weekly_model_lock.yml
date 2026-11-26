@@ -4,7 +4,8 @@ name: Weekly Model Lock
 # GitHub's own */10 schedule is unreliable (2026-11-25: 3 runs in 24 h, the GB@LA lock never fired), so
 # cron-job.org dispatches this workflow with mode=auto every 10 minutes too -- same as Fetch Weekly Projections.
 # Every 10 minutes a cheap GATE decides whether anything is due (ff_weekly_model/cloud_run.py):
-#   lock     -- a kickoff is 55-85 min away and has no lock yet (inactives post 90 min before):
+#   lock     -- a kickoff is 55-85 min away and has no lock yet (inactives post 90 min before), a FINAL lock
+#               5-25 min before every kickoff, and a RE-LOCK when calls / injury news change after a lock:
 #               daily refresh, then lock.py (late news + inactives, projections, checks, FREEZE,
 #               workbook, rankings files, customer sheet)
 #   refresh  -- once each morning (9:00-10:30 ET) in season: daily refresh + lock.py --no-freeze
@@ -79,7 +80,7 @@ jobs:
           fi
           echo "gate: $G"
           echo "what=$(echo $G | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
-          echo "key=$(echo $G | cut -s -d' ' -f3-)" >> "$GITHUB_OUTPUT"
+          echo "key=$(echo $G | cut -s -d' ' -f2-)" >> "$GITHUB_OUTPUT"
 
       - name: Public data cache
         if: steps.gate.outputs.what != 'skip'

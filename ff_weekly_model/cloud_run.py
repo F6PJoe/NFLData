@@ -56,6 +56,7 @@ BOOTSTRAP = [
      for y in range(2021, 2027)]
 
 LOCK_BEFORE = (55, 85)     # minutes before a kickoff when a lock runs (game-day inactives post at 90)
+FINAL_BEFORE = (5, 25)     # ...and a final lock just before kickoff (late scratches, last calls)
 REFRESH_AT = (9, 0, 10, 30)  # morning refresh window, ET (h, m, h, m)
 RUNS_FILE = "cloud_runs.json"
 
@@ -169,6 +170,15 @@ def gate(private, force=None):
         if LOCK_BEFORE[0] <= mins <= LOCK_BEFORE[1] and key not in runs:
             print(f"lock {wk} {k:%Y-%m-%d %H:%M}")
             return
+        # FINAL LOCK just before kickoff (Joe 2026-11-25: "It should be allowed to be updated after that incase
+        # there are changes before the games") -- late scratches / last calls
+        if FINAL_BEFORE[0] <= mins <= FINAL_BEFORE[1] and f"lock final {k:%Y-%m-%d %H:%M}" not in runs:
+            print(f"lock final {k:%Y-%m-%d %H:%M}")
+            return
+    # a game already locked and not yet kicked off: a change re-locks (the freeze keeps started games)
+    relock = any(f"lock {k:%Y-%m-%d %H:%M}" in runs and 0 < (k - now).total_seconds() / 60 < LOCK_BEFORE[1] + 5
+                 for k, _ in kickoffs())
+    act = "lock" if relock else "refresh"
     h1, m1, h2, m2 = REFRESH_AT
     in_season = any(0 < (k - now).total_seconds() < 8 * 86400 for k, _ in kickoffs())
     if datetime.time(h1, m1) <= now.time() <= datetime.time(h2, m2) and f"refresh {now:%Y-%m-%d}" not in runs:
@@ -184,7 +194,7 @@ def gate(private, force=None):
     try:
         why = calls_changed(private)
         if why:
-            print(f"refresh calls -- {why}")
+            print(f"{act} calls -- {why}")
             return
     except Exception as e:
         print(f"  (calls check skipped: {type(e).__name__}: {str(e)[:100]})", file=sys.stderr)
@@ -195,7 +205,7 @@ def gate(private, force=None):
     try:
         why = news_changed(private)
         if why:
-            print(f"refresh news -- {why}")
+            print(f"{act} news -- {why}")
             return
     except Exception as e:
         print(f"  (news check skipped: {type(e).__name__}: {str(e)[:100]})", file=sys.stderr)
@@ -272,6 +282,11 @@ def _team_kickoffs(y, w):
 
 
 def mark(private, what, key):
+    """key = the gate's words after `what`: "12 2026-11-26 13:00" (a lock: the week number is dropped),
+    "final 2026-11-26 13:00", "calls -- ..." / "news -- ..." (a triggered run), or "" (today's date)."""
+    t_ = key.split()
+    if t_ and t_[0].isdigit() and len(t_[0]) <= 2:
+        key = " ".join(t_[1:])
     runs = _runs(private)
     runs[f"{what} {key}"] = f"{datetime.datetime.now():%Y-%m-%d %H:%M}"
     # keep the file small: drop entries older than 21 days
