@@ -156,8 +156,7 @@ def main():
     # first, so the freshness check comes AFTER it (2026-10-25: run before it,
     # it saw yesterday's Sleeper file and stopped the lock)
     # WEATHER at kickoff for outdoor games (weather.py, 2026-11-26) -- the wind / cold rules had no live data
-    print("
-  == weather")
+    print("\n  == weather")
     try:
         import weather
         weather.forecast(args.year, args.week)
