@@ -182,6 +182,8 @@ def main():
     sab = os.path.join(os.path.dirname(os.path.dirname(HERE)), "SabotageFantasy", "weekly_stats", "project_stats.py")
     if os.path.exists(sab):
         run("sabotage stats", sab, "--year", ys, "--week", ws)
+        # FantasyPros IDP rankings upload, from the IDP projections just built (Joe 2026-11-26)
+        run("IDP rankings", os.path.join(os.path.dirname(sab), "fp_idp_rankings.py"), "--year", ys, "--week", ws)
     if private_sync:
         try:
             private_sync.push(f"laptop rerun wk{w} ({datetime.datetime.now():%a %I:%M %p})")
