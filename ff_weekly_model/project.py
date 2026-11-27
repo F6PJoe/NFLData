@@ -220,7 +220,7 @@ WX_CUTS = {"wind15": 0.085, "wind10": 0.06, "cold": 0.015}
 # rain over a game's 3 hours (weather.py), 2021-26 outdoor team-games vs the team's own season average, wind <15:
 #   2-6 mm (92): yds/pass .96, yds/carry .96, TDs .92   6+ mm (34): yds/pass .84-.90, yds/carry .91-1.05, TDs .74-.76
 # RAIN_SCALE x these cuts: passing + receiving yards, rushing yards, and every TD (pass / rec / rush). None = off.
-RAIN_SCALE = None
+RAIN_SCALE = 0.5   # ADOPTED 2026-11-26 (Joe: "go for what you recommend"): +.0003/-.0019/-.0057, passes outright
 RAIN_CUTS = {2.0: (0.04, 0.04, 0.08), 6.0: (0.13, 0.07, 0.25)}    # rain mm -> (pass yds, rush yds, TDs)
 PLAYS_TOTAL_W = 0.65
 # GAME TOTAL -> EFFICIENCY (test, 2026-11-25, Joe: "should we be taking plays away just because its a low total
