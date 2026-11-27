@@ -1725,3 +1725,15 @@ avg +0.8 -- just under the 1.0 bar). EXLIST_ADD vs cur6 (5 / .75 / 1.0), ALL 202
   5/.70/.75  +.0018/+.0033/+.0006   6/.75/.75  -.0011/+.0014/+.0007
 All within noise. .75 would have added Watson from wk7 (wk7 13.1 -> 13.9, actual 8.2; wk8 12.3 -> 13.0, actual
 13.3). Kept 1.0.
+
+## 2026-11-26 WEATHER FORECAST FEED + RAIN (RAIN_SCALE)
+Joe on KC@BUF (35 mph gusts, heavy rain): the adopted wind/cold rules read nflverse's wind/temp, filled only AFTER a
+game -- they never fired live. weather.py: Open-Meteo forecast at kickoff for outdoor games (retractable roofs
+skipped), archive for 2021+ (data/weather_hist.csv, 1,043 games); load_games fills missing wind/temp + rain.
+Filling wind/temp from the archive (cur7 vs cur6): +.0004/-.0002/-.0004 -- neutral.
+RAIN (rain mm over the game's 3 hours, vs the team's own season avg, wind <15): 2-6 mm ypa .96 ypc .96 TDs .92;
+6-12 mm ypa .84 TDs .76; 12+ ypa .90 TDs .74. Rule: tiers 2 mm (4% pass yds, 4% rush yds, 8% TDs), 6 mm (13%,
+7%, 25%) x RAIN_SCALE. vs cur7, ALL 2024/2025/2026 (2026 wks 2-6 / 7-11):
+  .5   +.0003/-.0019/-.0057 (-.0027/-.0089)   QB +.006/-.005/-.021
+  .75  +.0007/-.0026/-.0080 (-.0034/-.0129)   QB +.010/-.007/-.030
+  1.0  +.0012/-.0033/-.0098 (-.0035/-.0166)   QB +.014/-.008/-.037

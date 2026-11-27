@@ -158,6 +158,11 @@ def refresh_sheet(year, week):
     refresh_sleeper()
     run("news.py", "--year", str(year))
     ok = run("build_review_queue.py", "--year", str(year), "--week", str(week))
+    try:                                        # game-time weather forecast (weather.py, 2026-11-26)
+        import weather
+        weather.forecast(year, week)
+    except Exception as e:
+        print(f"  WARN  weather            not updated ({type(e).__name__})")
     # ESPN's live injury list: IR / suspended -> OUT (espn_injuries.py, 2026-11-24); never fails the refresh
     try:
         import espn_injuries

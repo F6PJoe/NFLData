@@ -216,6 +216,12 @@ _NEWQB_CAREER = {}  # QB -> attempts on record (prior seasons loaded + this seas
 # forecast.
 WX_SCALE = 0.5  # ADOPTED 2026-10-22 re-test under Joe's rule (6 together: ALL -.002/-.008/-.001)
 WX_CUTS = {"wind15": 0.085, "wind10": 0.06, "cold": 0.015}
+# RAIN (test, 2026-11-26, Joe on KC@BUF / TB / JAX / WAS: "Heavy rain is something to look at"). Open-Meteo archive
+# rain over a game's 3 hours (weather.py), 2021-26 outdoor team-games vs the team's own season average, wind <15:
+#   2-6 mm (92): yds/pass .96, yds/carry .96, TDs .92   6+ mm (34): yds/pass .84-.90, yds/carry .91-1.05, TDs .74-.76
+# RAIN_SCALE x these cuts: passing + receiving yards, rushing yards, and every TD (pass / rec / rush). None = off.
+RAIN_SCALE = None
+RAIN_CUTS = {2.0: (0.04, 0.04, 0.08), 6.0: (0.13, 0.07, 0.25)}    # rain mm -> (pass yds, rush yds, TDs)
 PLAYS_TOTAL_W = 0.65
 # GAME TOTAL -> EFFICIENCY (test, 2026-11-25, Joe: "should we be taking plays away just because its a low total
 # game? both teams still might run a lot of plays, they might just not amount to as many touchdowns"). 2021-26
@@ -1609,6 +1615,11 @@ def load_games(year):
         path = os.path.join(os.path.dirname(HERE), "ff_utilization", "cached",
                             "nflverse", "games.csv")
     out = {}
+    try:
+        import weather as _wx                  # forecast / archive weather (weather.py, 2026-11-26)
+        wx_ = _wx.load(year)
+    except Exception:
+        wx_ = {}
     with open(path, newline="", encoding="utf-8") as fh:
         for r in csv.DictReader(fh):
             if r["season"] != str(year) or r.get("game_type") != "REG":
@@ -1619,10 +1630,20 @@ def load_games(year):
             wk = int(r["week"])
             wind = num(r["wind"], 0.0) if r["roof"] not in ("dome", "closed") else 0.0
             temp = num(r.get("temp"), None) if r["roof"] not in ("dome", "closed") else None
+            # WEATHER BEFORE THE GAME (2026-11-26, Joe on KC@BUF: "I thought we had weather pulling ahead of
+            # time"): nflverse fills wind / temp only AFTER a game, so a live run read no weather at all.
+            # Missing wind / temp now come from weather.py (forecast live; archive for past games). Rain too.
+            w_ = wx_.get((r["home_team"], wk))
+            if w_ and r["roof"] not in ("dome", "closed"):
+                if not (r.get("wind") or "").strip() and w_.get("wind") not in (None, ""):
+                    wind = float(w_["wind"])
+                if not (r.get("temp") or "").strip() and w_.get("temp") not in (None, ""):
+                    temp = float(w_["temp"])
+            rain = float(w_["rain_mm"]) if w_ and w_.get("rain_mm") not in (None, "") and                 r["roof"] not in ("dome", "closed") else 0.0
             # margin = expected points for minus against (positive = favoured)
-            out[(r["home_team"], wk)] = {"implied": tot / 2 + spr / 2, "wind": wind,
+            out[(r["home_team"], wk)] = {"implied": tot / 2 + spr / 2, "wind": wind, "rain": rain,
                                          "temp": temp, "margin": spr, "opp": r["away_team"]}
-            out[(r["away_team"], wk)] = {"implied": tot / 2 - spr / 2, "wind": wind,
+            out[(r["away_team"], wk)] = {"implied": tot / 2 - spr / 2, "wind": wind, "rain": rain,
                                          "temp": temp, "margin": -spr, "opp": r["home_team"]}
     return out
 
@@ -4946,6 +4967,25 @@ def project_week(week, *, teams_cur, games, tgt_cur, car_cur, pos, priors,
                 for k in ("rec_yds", "pass_yds"):
                     if k in v:
                         v[k] *= f_
+    if RAIN_SCALE:
+        for pid, v in out.items():
+            tm_ = (raw.get(pid) or (qraw.get(pid) if qb_patt is not None else None) or (None,))[0]
+            g_ = games.get((tm_, week)) if tm_ else None
+            rn_ = (g_ or {}).get("rain") or 0.0
+            cut_ = None
+            for lim_, c_ in sorted(RAIN_CUTS.items()):
+                if rn_ >= lim_:
+                    cut_ = c_
+            if cut_:
+                py_, ry_, td_ = (1 - RAIN_SCALE * c for c in cut_)
+                for k in ("rec_yds", "pass_yds"):
+                    if k in v:
+                        v[k] *= py_
+                if "rush_yds" in v:
+                    v["rush_yds"] *= ry_
+                for k in ("pass_td", "rec_td", "rush_td"):
+                    if k in v:
+                        v[k] *= td_
     if PASS_RECON_W is not None and qb_patt is not None:
         team_of_out = {pid: raw[pid][0] for pid in raw if pid in out}
         team_of_out.update({pid: qraw[pid][0] for pid in qraw if pid in out})

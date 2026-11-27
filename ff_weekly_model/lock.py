@@ -155,6 +155,14 @@ def main():
     # the late-news check refreshes the injury report, rosters, Sleeper and news
     # first, so the freshness check comes AFTER it (2026-10-25: run before it,
     # it saw yesterday's Sleeper file and stopped the lock)
+    # WEATHER at kickoff for outdoor games (weather.py, 2026-11-26) -- the wind / cold rules had no live data
+    print("
+  == weather")
+    try:
+        import weather
+        weather.forecast(args.year, args.week)
+    except Exception as e:
+        print(f"  WARN  weather            not updated ({type(e).__name__})")
     step("late-news check", py, "late_news.py", "--year", y, "--week", w)
     step("freshness check (lock rules)", py, "check_freshness.py", "--year", y, "--week", w, "--lock")
     import project
